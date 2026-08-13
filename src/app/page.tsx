@@ -1,69 +1,124 @@
-import Image from "next/image";
+import Navbar from "@/components/Navbar";
+import { HeartPulse, ClipboardList, Cpu } from "lucide-react";
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <main className="min-h-screen bg-[#F2F7FB]">
+      <Navbar />
+
+      <section className="mx-auto max-w-7xl px-8 py-20">
+        <div className="grid items-center gap-12 lg:grid-cols-2">
+          {/* Conteúdo do Hero */}
+          <div>
+            <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
+              Saúde e tecnologia
+            </span>
+
+            <h1 className="mt-4 text-5xl font-bold leading-tight text-[#0A2540]">
+              S.A.S.P.I.
+            </h1>
+
+            <h2 className="mt-3 text-2xl font-semibold text-[#1565C0]">
+              Sistema de Acompanhamento de Saúde para Pessoas Idosas
+            </h2>
+
+            <p className="mt-6 max-w-xl text-lg leading-relaxed text-gray-600">
+              Uma solução digital para auxiliar no acompanhamento da saúde de
+              pessoas idosas, aproximando familiares, cuidadores e profissionais
+              da saúde.
+            </p>
+
+            <div className="mt-8 flex flex-wrap gap-4">
+              <a
+                href="#sobre"
+                className="rounded-lg bg-[#1565C0] px-6 py-3 font-medium text-white transition hover:bg-[#0A2540]"
+              >
+                Conheça o S.A.S.P.I.
+              </a>
+
+              <a
+                href="#funcionalidades"
+                className="rounded-lg border border-[#1565C0] px-6 py-3 font-medium text-[#1565C0] transition hover:bg-[#E6F4EF]"
+              >
+                Ver funcionalidades
+              </a>
+            </div>
+          </div>
+
+          {/* Espaço reservado para a ilustração */}
+          <div className="flex min-h-[400px] items-center justify-center rounded-3xl bg-white shadow-sm">
+            <span className="text-gray-400">Ilustração do S.A.S.P.I.</span>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </section>
+      <section id="funcionalidades" className="mx-auto max-w-7xl px-8 pb-20">
+        <div className="grid gap-6 md:grid-cols-3">
+
+          <div className="min-h-[150px] rounded-2xl bg-white p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-md">
+            <div className="flex items-center gap-5">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#E6F4EF] text-[#1565C0]">
+                <HeartPulse size={26} strokeWidth={2} />
+              </div>
+
+              <div className="h-14 w-px bg-gray-200"></div>
+
+              <div>
+                <h3 className="text-lg font-semibold text-[#0A2540]">
+                  Monitoramento
+                </h3>
+
+                <p className="mt-1 text-sm leading-relaxed text-gray-600">
+                  Acompanhe a saúde de forma remota e contínua, com mais
+                  segurança e tranquilidade.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="min-h-[150px] rounded-2xl bg-white p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-md">
+            <div className="flex items-center gap-5">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#E6F4EF] text-[#26A69A]">
+                <ClipboardList size={26} strokeWidth={2} />
+              </div>
+
+              <div className="h-14 w-px bg-gray-200"></div>
+
+              <div>
+                <h3 className="text-lg font-semibold text-[#0A2540]">
+                  Organização
+                </h3>
+
+                <p className="mt-1 text-sm leading-relaxed text-gray-600">
+                  Centralize informações importantes em um único lugar,
+                  facilitando o acesso e o acompanhamento.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="min-h-[150px] rounded-2xl bg-white p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-md">
+            <div className="flex items-center gap-5">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#E6F4EF] text-[#26A69A]">
+                <Cpu size={26} strokeWidth={2} />
+              </div>
+
+              <div className="h-14 w-px bg-gray-200"></div>
+
+              <div>
+                <h3 className="text-lg font-semibold text-[#0A2540]">
+                  Tecnologia
+                </h3>
+
+                <p className="mt-1 text-sm leading-relaxed text-gray-600">
+                  Integração entre aplicativo mobile, plataforma web e
+                  dispositivos inteligentes para um cuidado mais eficiente.
+                </p>
+              </div>
+            </div>
+          </div>
+          
         </div>
-      </main>
-    </div>
+      </section>
+    </main>
   );
 }
