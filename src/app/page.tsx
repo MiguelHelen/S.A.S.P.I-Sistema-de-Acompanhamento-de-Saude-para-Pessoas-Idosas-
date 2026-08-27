@@ -1,5 +1,13 @@
 import Navbar from "@/components/Navbar";
-import { HeartPulse, ClipboardList, Cpu } from "lucide-react";
+import {
+  HeartPulse,
+  ClipboardList,
+  Cpu,
+  Monitor,
+  Smartphone,
+  Database,
+  Watch,
+} from "lucide-react";
 
 export default function Home() {
   return (
@@ -46,9 +54,30 @@ export default function Home() {
           </div>
 
           {/* Espaço reservado para a ilustração */}
-          <div className="flex min-h-[260px] items-center justify-center rounded-3xl bg-white shadow-sm md:min-h-[400px]">
+          <div className="flex min-h-65 items-center justify-center rounded-3xl bg-white shadow-sm md:min-h-100">
             <span className="text-gray-400">Ilustração do S.A.S.P.I.</span>
           </div>
+        </div>
+      </section>
+      <section
+        id="sobre"
+        className="mx-auto max-w-7xl px-4 py-12 md:px-8 md:py-16"
+      >
+        <div className="rounded-3xl bg-white p-8 shadow-sm md:p-12">
+          <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
+            Sobre o projeto
+          </span>
+
+          <h2 className="mt-3 text-3xl font-bold text-[#0A2540]">
+            Tecnologia para um acompanhamento mais organizado
+          </h2>
+
+          <p className="mt-5 max-w-3xl leading-relaxed text-gray-600">
+            O S.A.S.P.I. é uma solução digital desenvolvida para auxiliar no
+            acompanhamento da saúde de pessoas idosas, centralizando informações
+            e aproximando idosos, familiares, cuidadores e profissionais de
+            saúde.
+          </p>
         </div>
       </section>
       <section
@@ -56,7 +85,7 @@ export default function Home() {
         className="mx-auto max-w-7xl px-4 pb-12 md:px-8 md:pb-20"
       >
         <div className="grid gap-6 md:grid-cols-3">
-          <div className="min-h-[150px] rounded-2xl bg-white p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-md">
+          <div className="min-h-37.5 rounded-2xl bg-white p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-md">
             <div className="flex items-start gap-4 sm:items-center sm:gap-5">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#E6F4EF] text-[#1565C0] sm:h-14 sm:w-14">
                 <HeartPulse size={22} strokeWidth={2} />
@@ -77,7 +106,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="min-h-[150px] rounded-2xl bg-white p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-md">
+          <div className="min-h-37.5 rounded-2xl bg-white p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-md">
             <div className="flex items-start gap-4 sm:items-center sm:gap-5">
               <div className="flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-full bg-[#E6F4EF] text-[#26A69A]">
                 <ClipboardList size={22} strokeWidth={2} />
@@ -98,7 +127,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="min-h-[150px] rounded-2xl bg-white p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-md">
+          <div className="min-h-37.5 rounded-2xl bg-white p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-md">
             <div className="flex items-start gap-4 sm:items-center sm:gap-5">
               <div className="flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-full bg-[#E6F4EF] text-[#26A69A]">
                 <Cpu size={22} strokeWidth={2} />
@@ -117,6 +146,119 @@ export default function Home() {
                 </p>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-4 py-12 md:px-8 md:py-16">
+        <div className="mb-8">
+          <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
+            Como funciona
+          </span>
+
+          <h2 className="mt-3 text-2xl font-bold text-[#0A2540] md:text-3xl">
+            Informações conectadas em um único fluxo
+          </h2>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-2xl bg-white p-6 shadow-sm">
+            <span className="text-sm font-semibold text-[#1565C0]">01</span>
+            <h3 className="mt-3 font-semibold text-[#0A2540]">
+              Coleta de dados
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed text-gray-600">
+              Informações podem ser registradas manualmente ou obtidas por
+              dispositivos.
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-white p-6 shadow-sm">
+            <span className="text-sm font-semibold text-[#1565C0]">02</span>
+            <h3 className="mt-3 font-semibold text-[#0A2540]">Centralização</h3>
+            <p className="mt-2 text-sm leading-relaxed text-gray-600">
+              Os dados são organizados para facilitar o acesso e o
+              acompanhamento.
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-white p-6 shadow-sm">
+            <span className="text-sm font-semibold text-[#1565C0]">03</span>
+            <h3 className="mt-3 font-semibold text-[#0A2540]">
+              Acompanhamento
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed text-gray-600">
+              Usuários autorizados acompanham as informações da pessoa idosa.
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-white p-6 shadow-sm">
+            <span className="text-sm font-semibold text-[#1565C0]">04</span>
+            <h3 className="mt-3 font-semibold text-[#0A2540]">
+              Alertas e histórico
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed text-gray-600">
+              O sistema mantém o histórico e auxilia no acompanhamento de
+              situações importantes.
+            </p>
+          </div>
+        </div>
+      </section>
+      <section className="mx-auto max-w-7xl px-4 py-12 md:px-8 md:py-16">
+        <div className="mb-8">
+          <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
+            Tecnologias
+          </span>
+
+          <h2 className="mt-3 text-2xl font-bold text-[#0A2540] md:text-3xl">
+            Um sistema integrado
+          </h2>
+
+          <p className="mt-3 max-w-2xl text-gray-600">
+            Diferentes tecnologias trabalham em conjunto para apoiar o
+            acompanhamento da saúde da pessoa idosa.
+          </p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-2xl bg-white p-6 shadow-sm">
+            <Monitor className="text-[#1565C0]" size={26} />
+            <h3 className="mt-4 font-semibold text-[#0A2540]">
+              Plataforma Web
+            </h3>
+            <p className="mt-2 text-sm text-gray-600">
+              Visualização e acompanhamento das informações.
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-white p-6 shadow-sm">
+            <Smartphone className="text-[#26A69A]" size={26} />
+            <h3 className="mt-4 font-semibold text-[#0A2540]">
+              Aplicativo Mobile
+            </h3>
+            <p className="mt-2 text-sm text-gray-600">
+              Registro e acesso às informações pelo celular.
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-white p-6 shadow-sm">
+            <Database className="text-[#1565C0]" size={26} />
+            <h3 className="mt-4 font-semibold text-[#0A2540]">
+              Banco de Dados
+            </h3>
+            <p className="mt-2 text-sm text-gray-600">
+              Organização e armazenamento das informações.
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-white p-6 shadow-sm">
+            <Watch className="text-[#26A69A]" size={26} />
+            <h3 className="mt-4 font-semibold text-[#0A2540]">
+              Dispositivos Vestíveis
+            </h3>
+            <p className="mt-2 text-sm text-gray-600">
+              Apoio à coleta automática de dados de saúde.
+            </p>
           </div>
         </div>
       </section>
