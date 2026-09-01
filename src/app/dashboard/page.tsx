@@ -106,6 +106,41 @@ export default function Dashboard() {
             </div>
           </div>
         </section>
+        <div className="mt-8 grid gap-6 lg:grid-cols-3">
+          <section className="rounded-2xl bg-white p-6 shadow-sm lg:col-span-2">
+            <div>
+              <h2 className="text-lg font-semibold text-[#0A2540]">
+                Evolução da frequência cardíaca
+              </h2>
+
+              <p className="mt-1 text-sm text-gray-500">Registros recentes</p>
+            </div>
+
+            <div className="mt-6 flex min-h-64 items-center justify-center rounded-xl bg-[#F8FAFC]">
+              <p className="text-sm text-gray-400">Gráfico será exibido aqui</p>
+            </div>
+          </section>
+
+          <section className="rounded-2xl bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-[#0A2540]">Lembretes</h2>
+
+            <div className="mt-6 space-y-4">
+              <div className="rounded-xl border border-gray-200 p-4">
+                <p className="font-medium text-[#0A2540]">Tomar Losartana</p>
+
+                <p className="mt-1 text-sm text-gray-500">Hoje às 20:00</p>
+              </div>
+
+              <div className="rounded-xl border border-gray-200 p-4">
+                <p className="font-medium text-[#0A2540]">
+                  Consulta com cardiologista
+                </p>
+
+                <p className="mt-1 text-sm text-gray-500">05/09 às 14:00</p>
+              </div>
+            </div>
+          </section>
+        </div>
       </div>
     </main>
   );
