@@ -1,0 +1,112 @@
+import DashboardNavbar from "@/components/DashboardNavbar";
+export default function Dashboard() {
+  return (
+    <main className="min-h-screen bg-[#F2F7FB]">
+      <DashboardNavbar />
+      <div className="mx-auto max-w-7xl px-4 py-8 md:px-8">
+        <h1 className="text-2xl font-bold text-[#0A2540] md:text-3xl">
+          Dashboard
+        </h1>
+
+        <p className="mt-2 text-gray-600">
+          Acompanhe as principais informações de saúde.
+        </p>
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-2xl bg-white p-6 shadow-sm">
+            <p className="text-sm text-gray-600">Frequência cardíaca</p>
+
+            <div className="mt-3">
+              <span className="text-3xl font-bold text-[#0A2540]">72</span>
+              <span className="ml-2 text-sm text-gray-500">bpm</span>
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-white p-6 shadow-sm">
+            <p className="text-sm text-gray-600">Oxigenação</p>
+
+            <div className="mt-3">
+              <span className="text-3xl font-bold text-[#0A2540]">97</span>
+              <span className="ml-1 text-sm text-gray-500">%</span>
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-white p-6 shadow-sm">
+            <p className="text-sm text-gray-600">Próximo medicamento</p>
+
+            <div className="mt-3">
+              <p className="text-lg font-semibold text-[#0A2540]">Losartana</p>
+
+              <p className="mt-1 text-sm text-gray-500">Hoje às 20:00</p>
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-white p-6 shadow-sm">
+            <p className="text-sm text-gray-600">Próxima consulta</p>
+
+            <div className="mt-3">
+              <p className="text-lg font-semibold text-[#0A2540]">
+                Cardiologista
+              </p>
+
+              <p className="mt-1 text-sm text-gray-500">05/09 às 14:00</p>
+            </div>
+          </div>
+        </div>
+        <section className="mt-8 rounded-2xl bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-[#0A2540]">
+                Histórico recente
+              </h2>
+
+              <p className="mt-1 text-sm text-gray-500">
+                Últimos registros de saúde
+              </p>
+            </div>
+
+            <a
+              href="/dashboard/historico"
+              className="text-sm font-medium text-[#1565C0] hover:underline"
+            >
+              Ver histórico
+            </a>
+          </div>
+
+          <div className="mt-6 divide-y divide-gray-100">
+            <div className="flex items-center justify-between py-4">
+              <div>
+                <p className="font-medium text-[#0A2540]">
+                  Frequência cardíaca
+                </p>
+
+                <p className="mt-1 text-sm text-gray-500">Hoje, 16:30</p>
+              </div>
+
+              <p className="font-semibold text-[#0A2540]">72 bpm</p>
+            </div>
+
+            <div className="flex items-center justify-between py-4">
+              <div>
+                <p className="font-medium text-[#0A2540]">Oxigenação</p>
+
+                <p className="mt-1 text-sm text-gray-500">Hoje, 15:45</p>
+              </div>
+
+              <p className="font-semibold text-[#0A2540]">97%</p>
+            </div>
+
+            <div className="flex items-center justify-between py-4">
+              <div>
+                <p className="font-medium text-[#0A2540]">Pressão arterial</p>
+
+                <p className="mt-1 text-sm text-gray-500">Ontem, 20:10</p>
+              </div>
+
+              <p className="font-semibold text-[#0A2540]">120/80 mmHg</p>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+}
