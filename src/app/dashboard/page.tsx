@@ -1,6 +1,7 @@
 import DashboardNavbar from "@/components/DashboardNavbar";
 import MetricCard from "@/components/MetricCard";
 import InfoCard from "@/components/InfoCard";
+import { Activity, CalendarDays, HeartPulse, Pill } from "lucide-react";
 
 export default function Dashboard() {
   return (
@@ -8,7 +9,11 @@ export default function Dashboard() {
       <DashboardNavbar />
 
       <div className="mx-auto max-w-7xl px-4 py-8 md:px-8">
-        <h1 className="text-3xl font-bold tracking-tight text-[#0A2540] md:text-4xl">
+        <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
+          Visão geral
+        </span>
+
+        <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0A2540] md:text-4xl">
           Dashboard
         </h1>
 
@@ -21,24 +26,28 @@ export default function Dashboard() {
             title="Frequência cardíaca"
             value="72"
             unit="bpm"
+            icon={<HeartPulse size={22} />}
           />
 
           <MetricCard
             title="Oxigenação"
             value="97"
             unit="%"
+            icon={<Activity size={22} />}
           />
 
           <InfoCard
             label="Próximo medicamento"
             title="Losartana"
             subtitle="Hoje às 20:00"
+            icon={<Pill size={22} />}
           />
 
           <InfoCard
             label="Próxima consulta"
             title="Cardiologista"
             subtitle="05/09 às 14:00"
+            icon={<CalendarDays size={22} />}
           />
         </div>
 
@@ -69,46 +78,30 @@ export default function Dashboard() {
                   Frequência cardíaca
                 </p>
 
-                <p className="mt-1 text-sm text-gray-500">
-                  Hoje, 16:30
-                </p>
+                <p className="mt-1 text-sm text-gray-500">Hoje, 16:30</p>
               </div>
 
-              <p className="font-semibold text-[#0A2540]">
-                72 bpm
-              </p>
+              <p className="font-semibold text-[#0A2540]">72 bpm</p>
             </div>
 
             <div className="flex items-center justify-between py-4">
               <div>
-                <p className="font-medium text-[#0A2540]">
-                  Oxigenação
-                </p>
+                <p className="font-medium text-[#0A2540]">Oxigenação</p>
 
-                <p className="mt-1 text-sm text-gray-500">
-                  Hoje, 15:45
-                </p>
+                <p className="mt-1 text-sm text-gray-500">Hoje, 15:45</p>
               </div>
 
-              <p className="font-semibold text-[#0A2540]">
-                97%
-              </p>
+              <p className="font-semibold text-[#0A2540]">97%</p>
             </div>
 
             <div className="flex items-center justify-between py-4">
               <div>
-                <p className="font-medium text-[#0A2540]">
-                  Pressão arterial
-                </p>
+                <p className="font-medium text-[#0A2540]">Pressão arterial</p>
 
-                <p className="mt-1 text-sm text-gray-500">
-                  Ontem, 20:10
-                </p>
+                <p className="mt-1 text-sm text-gray-500">Ontem, 20:10</p>
               </div>
 
-              <p className="font-semibold text-[#0A2540]">
-                120/80 mmHg
-              </p>
+              <p className="font-semibold text-[#0A2540]">120/80 mmHg</p>
             </div>
           </div>
         </section>
@@ -120,9 +113,7 @@ export default function Dashboard() {
                 Evolução da frequência cardíaca
               </h2>
 
-              <p className="mt-1 text-sm text-gray-500">
-                Registros recentes
-              </p>
+              <p className="mt-1 text-sm text-gray-500">Registros recentes</p>
             </div>
 
             <div className="mt-6 rounded-xl border border-dashed border-gray-200 bg-[#F8FAFC] p-6">
@@ -147,19 +138,13 @@ export default function Dashboard() {
           </section>
 
           <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-[#0A2540]">
-              Lembretes
-            </h2>
+            <h2 className="text-lg font-semibold text-[#0A2540]">Lembretes</h2>
 
             <div className="mt-6 space-y-4">
               <div className="rounded-xl border border-gray-200 bg-[#FAFCFE] p-4 transition hover:border-[#BFD8F2] hover:bg-white">
-                <p className="font-medium text-[#0A2540]">
-                  Tomar Losartana
-                </p>
+                <p className="font-medium text-[#0A2540]">Tomar Losartana</p>
 
-                <p className="mt-1 text-sm text-gray-500">
-                  Hoje às 20:00
-                </p>
+                <p className="mt-1 text-sm text-gray-500">Hoje às 20:00</p>
               </div>
 
               <div className="rounded-xl border border-gray-200 bg-[#FAFCFE] p-4 transition hover:border-[#BFD8F2] hover:bg-white">
@@ -167,9 +152,7 @@ export default function Dashboard() {
                   Consulta com cardiologista
                 </p>
 
-                <p className="mt-1 text-sm text-gray-500">
-                  05/09 às 14:00
-                </p>
+                <p className="mt-1 text-sm text-gray-500">05/09 às 14:00</p>
               </div>
             </div>
           </section>
