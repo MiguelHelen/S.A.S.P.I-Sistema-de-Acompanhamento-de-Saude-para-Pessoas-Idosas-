@@ -1,5 +1,6 @@
 import DashboardNavbar from "@/components/DashboardNavbar";
 import MetricCard from "@/components/MetricCard";
+import InfoCard from "@/components/InfoCard";
 export default function Dashboard() {
   return (
     <main className="min-h-screen bg-[#F2F7FB]">
@@ -13,31 +14,29 @@ export default function Dashboard() {
           Acompanhe as principais informações de saúde.
         </p>
         <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard title="Frequência cardíaca" value="72" unit="bpm" />
+          <MetricCard 
+          title="Frequência cardíaca" 
+          value="72" 
+          unit="bpm" 
+          />
 
-          <MetricCard title="Oxigenação" value="97" unit="%" />
+          <MetricCard 
+          title="Oxigenação" 
+          value="97" 
+          unit="%" 
+          />
 
-          <div className="rounded-2xl bg-white p-6 shadow-sm">
-            <p className="text-sm text-gray-600">Próximo medicamento</p>
+          <InfoCard
+            label="Próximo medicamento"
+            title="Losartana"
+            subtitle="Hoje às 20:00"
+          />
 
-            <div className="mt-3">
-              <p className="text-lg font-semibold text-[#0A2540]">Losartana</p>
-
-              <p className="mt-1 text-sm text-gray-500">Hoje às 20:00</p>
-            </div>
-          </div>
-
-          <div className="rounded-2xl bg-white p-6 shadow-sm">
-            <p className="text-sm text-gray-600">Próxima consulta</p>
-
-            <div className="mt-3">
-              <p className="text-lg font-semibold text-[#0A2540]">
-                Cardiologista
-              </p>
-
-              <p className="mt-1 text-sm text-gray-500">05/09 às 14:00</p>
-            </div>
-          </div>
+          <InfoCard
+            label="Próxima consulta"
+            title="Cardiologista"
+            subtitle="05/09 às 14:00"
+          />
         </div>
         <section className="mt-8 rounded-2xl bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between">
