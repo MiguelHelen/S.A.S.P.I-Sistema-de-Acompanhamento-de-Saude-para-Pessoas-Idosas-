@@ -10,7 +10,7 @@ export default function InfoCard({
   subtitle,
 }: InfoCardProps) {
   return (
-    <div className="rounded-2xl bg-white p-6 shadow-sm">
+    <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
       <p className="text-sm text-gray-600">
         {label}
       </p>
