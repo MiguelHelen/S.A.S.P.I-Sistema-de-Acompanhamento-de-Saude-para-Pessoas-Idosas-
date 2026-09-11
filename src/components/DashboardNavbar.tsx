@@ -1,159 +1,168 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Bell, LogOut, Menu, UserRound, X } from "lucide-react";
 import { useState } from "react";
 
+const navItems = [
+  {
+    label: "Dashboard",
+    href: "/dashboard",
+  },
+  {
+    label: "Minha Saúde",
+    href: "/dashboard/saude",
+  },
+  {
+    label: "Medicamentos",
+    href: "/dashboard/medicamentos",
+  },
+  {
+    label: "Consultas",
+    href: "/dashboard/consultas",
+  },
+  {
+    label: "Histórico",
+    href: "/dashboard/historico",
+  },
+];
+
 export default function DashboardNavbar() {
+  const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
 
+  function isActive(href: string) {
+    if (href === "/dashboard") {
+      return pathname === "/dashboard";
+    }
+
+    return pathname === href || pathname.startsWith(`${href}/`);
+  }
+
   return (
-    <nav className="border-b border-gray-200 bg-white">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 md:px-8">
-        <div className="flex items-center gap-8">
-          <a href="/dashboard" className="flex items-center">
-            <img
-              src="/logo.png"
-              alt="S.A.S.P.I."
-              className="h-12 w-auto"
-            />
-          </a>
+    <header className="border-b border-gray-100 bg-white">
+      <div className="mx-auto flex h-18 max-w-7xl items-center justify-between px-4 md:px-8">
+        <Link
+          href="/dashboard"
+          className="flex items-center"
+          onClick={() => setMenuOpen(false)}
+        >
+          <img
+            src="/logo.png"
+            alt="S.A.S.P.I."
+            className="h-10 w-auto"
+          />
+        </Link>
 
-          <div className="hidden items-center gap-6 lg:flex">
-            <a
-              href="/dashboard"
-              className="text-sm font-medium text-[#1565C0]"
-            >
-              Dashboard
-            </a>
+        <nav className="hidden items-center gap-1 lg:flex">
+          {navItems.map((item) => {
+            const active = isActive(item.href);
 
-            <a
-              href="/dashboard/saude"
-              className="text-sm font-medium text-gray-600 transition hover:text-[#1565C0]"
-            >
-              Minha Saúde
-            </a>
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+                  active
+                    ? "bg-[#E8F1FB] text-[#1565C0]"
+                    : "text-gray-600 hover:bg-gray-50 hover:text-[#0A2540]"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
 
-            <a
-              href="/dashboard/medicamentos"
-              className="text-sm font-medium text-gray-600 transition hover:text-[#1565C0]"
-            >
-              Medicamentos
-            </a>
-
-            <a
-              href="/dashboard/consultas"
-              className="text-sm font-medium text-gray-600 transition hover:text-[#1565C0]"
-            >
-              Consultas
-            </a>
-
-            <a
-              href="/dashboard/historico"
-              className="text-sm font-medium text-gray-600 transition hover:text-[#1565C0]"
-            >
-              Histórico
-            </a>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
+        <div className="hidden items-center gap-2 lg:flex">
           <button
             type="button"
-            className="rounded-lg p-2 text-gray-600 transition hover:bg-gray-100 hover:text-[#1565C0]"
             aria-label="Notificações"
+            className="flex h-10 w-10 items-center justify-center rounded-xl text-gray-500 transition hover:bg-gray-50 hover:text-[#1565C0]"
           >
             <Bell size={20} />
           </button>
 
-          <a
+          <Link
             href="/dashboard/perfil"
-            className="hidden items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-[#0A2540] transition hover:bg-gray-100 sm:flex"
+            className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${
+              pathname === "/dashboard/perfil"
+                ? "bg-[#E8F1FB] text-[#1565C0]"
+                : "text-gray-600 hover:bg-gray-50 hover:text-[#0A2540]"
+            }`}
           >
             <UserRound size={18} />
             João
-          </a>
-
-          <a
-            href="/"
-            className="hidden items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-100 hover:text-red-600 sm:flex"
-          >
-            <LogOut size={18} />
-            Sair
-          </a>
+          </Link>
 
           <button
             type="button"
-            onClick={() => setMenuOpen(!menuOpen)}
-            className="rounded-lg p-2 text-[#0A2540] transition hover:bg-gray-100 lg:hidden"
-            aria-label={menuOpen ? "Fechar menu" : "Abrir menu"}
-            aria-expanded={menuOpen}
+            className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-gray-500 transition hover:bg-red-50 hover:text-red-600"
           >
-            {menuOpen ? <X size={24} /> : <Menu size={24} />}
+            <LogOut size={18} />
+            Sair
           </button>
         </div>
+
+        <button
+          type="button"
+          aria-label={menuOpen ? "Fechar menu" : "Abrir menu"}
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen(!menuOpen)}
+          className="flex h-10 w-10 items-center justify-center rounded-xl text-[#0A2540] transition hover:bg-gray-100 lg:hidden"
+        >
+          {menuOpen ? <X size={23} /> : <Menu size={23} />}
+        </button>
       </div>
 
       {menuOpen && (
-        <div className="border-t border-gray-200 bg-white px-4 py-4 lg:hidden">
-          <div className="mx-auto flex max-w-7xl flex-col gap-2">
-            <a
-              href="/dashboard"
-              onClick={() => setMenuOpen(false)}
-              className="rounded-lg px-3 py-2 text-sm font-medium text-[#1565C0] hover:bg-gray-50"
-            >
-              Dashboard
-            </a>
+        <div className="border-t border-gray-100 bg-white px-4 py-4 lg:hidden">
+          <nav className="mx-auto flex max-w-7xl flex-col gap-1">
+            {navItems.map((item) => {
+              const active = isActive(item.href);
 
-            <a
-              href="/dashboard/saude"
-              onClick={() => setMenuOpen(false)}
-              className="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
-            >
-              Minha Saúde
-            </a>
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMenuOpen(false)}
+                  className={`rounded-xl px-4 py-3 text-sm font-medium transition ${
+                    active
+                      ? "bg-[#E8F1FB] text-[#1565C0]"
+                      : "text-gray-600 hover:bg-gray-50 hover:text-[#0A2540]"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
 
-            <a
-              href="/dashboard/medicamentos"
-              onClick={() => setMenuOpen(false)}
-              className="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
-            >
-              Medicamentos
-            </a>
+            <div className="my-2 border-t border-gray-100" />
 
-            <a
-              href="/dashboard/consultas"
-              onClick={() => setMenuOpen(false)}
-              className="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
-            >
-              Consultas
-            </a>
-
-            <a
-              href="/dashboard/historico"
-              onClick={() => setMenuOpen(false)}
-              className="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
-            >
-              Histórico
-            </a>
-
-            <a
+            <Link
               href="/dashboard/perfil"
               onClick={() => setMenuOpen(false)}
-              className="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 sm:hidden"
+              className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition ${
+                pathname === "/dashboard/perfil"
+                  ? "bg-[#E8F1FB] text-[#1565C0]"
+                  : "text-gray-600 hover:bg-gray-50"
+              }`}
             >
+              <UserRound size={18} />
               Perfil
-            </a>
+            </Link>
 
-            <a
-              href="/"
-              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-red-600 sm:hidden"
+            <button
+              type="button"
+              className="flex items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium text-gray-600 transition hover:bg-red-50 hover:text-red-600"
             >
               <LogOut size={18} />
               Sair
-            </a>
-          </div>
+            </button>
+          </nav>
         </div>
       )}
-    </nav>
+    </header>
   );
 }
