@@ -1,10 +1,6 @@
 import DashboardNavbar from "@/components/DashboardNavbar";
-import {
-  Activity,
-  Gauge,
-  HeartPulse,
-  TrendingUp,
-} from "lucide-react";
+import { Activity, Gauge, HeartPulse, TrendingUp } from "lucide-react";
+import HealthChart from "@/components/HealthChart";
 
 export default function MinhaSaude() {
   return (
@@ -68,18 +64,14 @@ export default function MinhaSaude() {
               </span>
             </div>
 
-            <p className="mt-6 text-sm font-medium text-gray-600">
-              Oxigenação
-            </p>
+            <p className="mt-6 text-sm font-medium text-gray-600">Oxigenação</p>
 
             <div className="mt-2">
               <span className="text-3xl font-bold tracking-tight text-[#0A2540]">
                 97
               </span>
 
-              <span className="ml-1 text-sm font-medium text-gray-500">
-                %
-              </span>
+              <span className="ml-1 text-sm font-medium text-gray-500">%</span>
             </div>
 
             <p className="mt-3 text-xs text-gray-400">
@@ -146,26 +138,8 @@ export default function MinhaSaude() {
           </div>
 
           {/* Gráfico temporário */}
-          <div className="mt-8 rounded-2xl border border-dashed border-gray-200 bg-[#F8FAFC] p-6">
-            <div className="flex min-h-64 items-end gap-3">
-              <div className="h-24 flex-1 rounded-t-lg bg-[#DCEAF8]" />
-              <div className="h-32 flex-1 rounded-t-lg bg-[#BFD8F2]" />
-              <div className="h-28 flex-1 rounded-t-lg bg-[#9FC6EB]" />
-              <div className="h-40 flex-1 rounded-t-lg bg-[#7FB3E4]" />
-              <div className="h-36 flex-1 rounded-t-lg bg-[#5F9FDB]" />
-              <div className="h-44 flex-1 rounded-t-lg bg-[#3E8BD2]" />
-              <div className="h-38 flex-1 rounded-t-lg bg-[#2378C2]" />
-            </div>
-
-            <div className="mt-4 flex justify-between text-xs text-gray-400">
-              <span>Seg</span>
-              <span>Ter</span>
-              <span>Qua</span>
-              <span>Qui</span>
-              <span>Sex</span>
-              <span>Sáb</span>
-              <span>Dom</span>
-            </div>
+          <div className="mt-6 rounded-2xl border border-gray-100 bg-[#F8FAFC] p-4 md:p-6">
+            <HealthChart />
           </div>
 
           <p className="mt-4 text-xs text-gray-400">
