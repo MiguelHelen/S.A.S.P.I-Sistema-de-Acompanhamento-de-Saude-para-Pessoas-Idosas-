@@ -12,6 +12,7 @@ import {
   UserPlus,
   UserRound,
 } from "lucide-react";
+import { notFound } from "next/navigation";
 
 const publicRoutes = [
   {
@@ -120,22 +121,22 @@ function RouteCard({
         </span>
       </div>
 
-      <h3 className="mt-5 font-semibold text-[#0A2540]">
-        {title}
-      </h3>
+      <h3 className="mt-5 font-semibold text-[#0A2540]">{title}</h3>
 
       <p className="mt-2 text-sm leading-relaxed text-gray-500">
         {description}
       </p>
 
-      <p className="mt-4 break-all font-mono text-xs text-[#1565C0]">
-        {href}
-      </p>
+      <p className="mt-4 break-all font-mono text-xs text-[#1565C0]">{href}</p>
     </Link>
   );
 }
 
 export default function DevPage() {
+  if (process.env.NODE_ENV === "production") {
+    notFound();
+  }
+
   return (
     <main className="min-h-screen bg-[#F2F7FB]">
       <div className="mx-auto max-w-7xl px-4 py-8 md:px-8 md:py-12">
@@ -271,9 +272,7 @@ export default function DevPage() {
                 Build
               </p>
 
-              <p className="mt-2 font-semibold text-[#20877E]">
-                Funcionando
-              </p>
+              <p className="mt-2 font-semibold text-[#20877E]">Funcionando</p>
             </div>
 
             <div className="rounded-xl bg-[#F8FBFE] p-4">
@@ -281,9 +280,7 @@ export default function DevPage() {
                 Vulnerabilidades
               </p>
 
-              <p className="mt-2 font-semibold text-[#20877E]">
-                0 encontradas
-              </p>
+              <p className="mt-2 font-semibold text-[#20877E]">0 encontradas</p>
             </div>
 
             <div className="rounded-xl bg-[#F8FBFE] p-4">
