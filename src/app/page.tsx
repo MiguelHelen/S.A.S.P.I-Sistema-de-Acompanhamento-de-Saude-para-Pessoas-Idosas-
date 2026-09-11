@@ -12,6 +12,10 @@ import {
   Pill,
   ShieldCheck,
   Users,
+  FolderHeart,
+  DatabaseZap,
+  UsersRound,
+  BellRing,
 } from "lucide-react";
 
 export default function Home() {
@@ -318,115 +322,179 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-4 py-12 md:px-8 md:py-16">
-        <div className="mb-8">
-          <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
-            Como funciona
-          </span>
+      <section className="bg-white py-20 md:py-24">
+        <div className="mx-auto max-w-7xl px-4 md:px-8">
+          <div className="mx-auto max-w-2xl text-center">
+            <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
+              Como funciona
+            </span>
 
-          <h2 className="mt-3 text-2xl font-bold text-[#0A2540] md:text-3xl">
-            Informações conectadas em um único fluxo
-          </h2>
-        </div>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#0A2540] md:text-4xl">
+              Informações conectadas em um único fluxo
+            </h2>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-2xl bg-white p-6 shadow-sm">
-            <span className="text-sm font-semibold text-[#1565C0]">01</span>
-            <h3 className="mt-3 font-semibold text-[#0A2540]">
-              Coleta de dados
-            </h3>
-            <p className="mt-2 text-sm leading-relaxed text-gray-600">
-              Informações podem ser registradas manualmente ou obtidas por
-              dispositivos.
+            <p className="mt-4 leading-relaxed text-gray-600">
+              Os dados são registrados, organizados e apresentados de forma
+              simples para facilitar o acompanhamento da saúde.
             </p>
           </div>
 
-          <div className="rounded-2xl bg-white p-6 shadow-sm">
-            <span className="text-sm font-semibold text-[#1565C0]">02</span>
-            <h3 className="mt-3 font-semibold text-[#0A2540]">Centralização</h3>
-            <p className="mt-2 text-sm leading-relaxed text-gray-600">
-              Os dados são organizados para facilitar o acesso e o
-              acompanhamento.
-            </p>
-          </div>
+          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            <article className="group rounded-2xl border border-gray-100 bg-[#F8FBFE] p-6 transition hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-950/5">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#E8F1FB] text-[#1565C0] transition group-hover:bg-[#1565C0] group-hover:text-white">
+                <FolderHeart size={24} />
+              </div>
 
-          <div className="rounded-2xl bg-white p-6 shadow-sm">
-            <span className="text-sm font-semibold text-[#1565C0]">03</span>
-            <h3 className="mt-3 font-semibold text-[#0A2540]">
-              Acompanhamento
-            </h3>
-            <p className="mt-2 text-sm leading-relaxed text-gray-600">
-              Usuários autorizados acompanham as informações da pessoa idosa.
-            </p>
-          </div>
+              <span className="mt-5 block text-xs font-semibold uppercase tracking-wider text-[#1565C0]">
+                Etapa 01
+              </span>
 
-          <div className="rounded-2xl bg-white p-6 shadow-sm">
-            <span className="text-sm font-semibold text-[#1565C0]">04</span>
-            <h3 className="mt-3 font-semibold text-[#0A2540]">
-              Alertas e histórico
-            </h3>
-            <p className="mt-2 text-sm leading-relaxed text-gray-600">
-              O sistema mantém o histórico e auxilia no acompanhamento de
-              situações importantes.
-            </p>
+              <h3 className="mt-2 text-lg font-semibold text-[#0A2540]">
+                Coleta de dados
+              </h3>
+
+              <p className="mt-3 text-sm leading-relaxed text-gray-600">
+                Informações podem ser registradas manualmente ou obtidas por
+                dispositivos integrados.
+              </p>
+            </article>
+
+            <article className="group rounded-2xl border border-gray-100 bg-[#F8FBFE] p-6 transition hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-950/5">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#E6F4EF] text-[#26A69A] transition group-hover:bg-[#26A69A] group-hover:text-white">
+                <DatabaseZap size={24} />
+              </div>
+
+              <span className="mt-5 block text-xs font-semibold uppercase tracking-wider text-[#26A69A]">
+                Etapa 02
+              </span>
+
+              <h3 className="mt-2 text-lg font-semibold text-[#0A2540]">
+                Centralização
+              </h3>
+
+              <p className="mt-3 text-sm leading-relaxed text-gray-600">
+                Os dados são organizados em um único ambiente para facilitar o
+                acesso às informações.
+              </p>
+            </article>
+
+            <article className="group rounded-2xl border border-gray-100 bg-[#F8FBFE] p-6 transition hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-950/5">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#E8F1FB] text-[#1565C0] transition group-hover:bg-[#1565C0] group-hover:text-white">
+                <UsersRound size={24} />
+              </div>
+
+              <span className="mt-5 block text-xs font-semibold uppercase tracking-wider text-[#1565C0]">
+                Etapa 03
+              </span>
+
+              <h3 className="mt-2 text-lg font-semibold text-[#0A2540]">
+                Acompanhamento
+              </h3>
+
+              <p className="mt-3 text-sm leading-relaxed text-gray-600">
+                Usuários autorizados podem acompanhar as informações
+                relacionadas à pessoa idosa.
+              </p>
+            </article>
+
+            <article className="group rounded-2xl border border-gray-100 bg-[#F8FBFE] p-6 transition hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-950/5">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#E6F4EF] text-[#26A69A] transition group-hover:bg-[#26A69A] group-hover:text-white">
+                <BellRing size={24} />
+              </div>
+
+              <span className="mt-5 block text-xs font-semibold uppercase tracking-wider text-[#26A69A]">
+                Etapa 04
+              </span>
+
+              <h3 className="mt-2 text-lg font-semibold text-[#0A2540]">
+                Histórico e alertas
+              </h3>
+
+              <p className="mt-3 text-sm leading-relaxed text-gray-600">
+                O sistema mantém registros anteriores e auxilia no
+                acompanhamento de situações importantes.
+              </p>
+            </article>
           </div>
         </div>
       </section>
-      <section className="mx-auto max-w-7xl px-4 py-12 md:px-8 md:py-16">
-        <div className="mb-8">
-          <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
-            Tecnologias
-          </span>
 
-          <h2 className="mt-3 text-2xl font-bold text-[#0A2540] md:text-3xl">
-            Um sistema integrado
-          </h2>
+      <section className="bg-[#F2F7FB] py-20 md:py-24">
+        <div className="mx-auto max-w-7xl px-4 md:px-8">
+          <div className="mx-auto max-w-2xl text-center">
+            <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
+              Tecnologias
+            </span>
 
-          <p className="mt-3 max-w-2xl text-gray-600">
-            Diferentes tecnologias trabalham em conjunto para apoiar o
-            acompanhamento da saúde da pessoa idosa.
-          </p>
-        </div>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#0A2540] md:text-4xl">
+              Um sistema integrado
+            </h2>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-2xl bg-white p-6 shadow-sm">
-            <Monitor className="text-[#1565C0]" size={26} />
-            <h3 className="mt-4 font-semibold text-[#0A2540]">
-              Plataforma Web
-            </h3>
-            <p className="mt-2 text-sm text-gray-600">
-              Visualização e acompanhamento das informações.
+            <p className="mt-4 leading-relaxed text-gray-600">
+              Diferentes tecnologias trabalham em conjunto para apoiar o
+              acompanhamento da saúde da pessoa idosa.
             </p>
           </div>
 
-          <div className="rounded-2xl bg-white p-6 shadow-sm">
-            <Smartphone className="text-[#26A69A]" size={26} />
-            <h3 className="mt-4 font-semibold text-[#0A2540]">
-              Aplicativo Mobile
-            </h3>
-            <p className="mt-2 text-sm text-gray-600">
-              Registro e acesso às informações pelo celular.
-            </p>
-          </div>
+          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            <article className="group rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-950/5">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#E8F1FB] text-[#1565C0] transition group-hover:bg-[#1565C0] group-hover:text-white">
+                <Monitor size={24} />
+              </div>
 
-          <div className="rounded-2xl bg-white p-6 shadow-sm">
-            <Database className="text-[#1565C0]" size={26} />
-            <h3 className="mt-4 font-semibold text-[#0A2540]">
-              Banco de Dados
-            </h3>
-            <p className="mt-2 text-sm text-gray-600">
-              Organização e armazenamento das informações.
-            </p>
-          </div>
+              <h3 className="mt-6 text-lg font-semibold text-[#0A2540]">
+                Plataforma Web
+              </h3>
 
-          <div className="rounded-2xl bg-white p-6 shadow-sm">
-            <Watch className="text-[#26A69A]" size={26} />
-            <h3 className="mt-4 font-semibold text-[#0A2540]">
-              Dispositivos Vestíveis
-            </h3>
-            <p className="mt-2 text-sm text-gray-600">
-              Apoio à coleta automática de dados de saúde.
-            </p>
+              <p className="mt-3 text-sm leading-relaxed text-gray-600">
+                Visualização e acompanhamento das principais informações de
+                saúde.
+              </p>
+            </article>
+
+            <article className="group rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-950/5">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#E6F4EF] text-[#26A69A] transition group-hover:bg-[#26A69A] group-hover:text-white">
+                <Smartphone size={24} />
+              </div>
+
+              <h3 className="mt-6 text-lg font-semibold text-[#0A2540]">
+                Aplicativo Mobile
+              </h3>
+
+              <p className="mt-3 text-sm leading-relaxed text-gray-600">
+                Registro e acesso às informações por meio de dispositivos
+                móveis.
+              </p>
+            </article>
+
+            <article className="group rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-950/5">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#E8F1FB] text-[#1565C0] transition group-hover:bg-[#1565C0] group-hover:text-white">
+                <Database size={24} />
+              </div>
+
+              <h3 className="mt-6 text-lg font-semibold text-[#0A2540]">
+                Banco de Dados
+              </h3>
+
+              <p className="mt-3 text-sm leading-relaxed text-gray-600">
+                Armazenamento e organização das informações utilizadas pelo
+                sistema.
+              </p>
+            </article>
+
+            <article className="group rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-950/5">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#E6F4EF] text-[#26A69A] transition group-hover:bg-[#26A69A] group-hover:text-white">
+                <Watch size={24} />
+              </div>
+
+              <h3 className="mt-6 text-lg font-semibold text-[#0A2540]">
+                Dispositivos Vestíveis
+              </h3>
+
+              <p className="mt-3 text-sm leading-relaxed text-gray-600">
+                Apoio à coleta automática de determinados indicadores de saúde.
+              </p>
+            </article>
           </div>
         </div>
       </section>
