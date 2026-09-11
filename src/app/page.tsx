@@ -2,11 +2,16 @@ import Navbar from "@/components/Navbar";
 import {
   HeartPulse,
   ClipboardList,
-  Cpu,
   Monitor,
   Smartphone,
   Database,
   Watch,
+  Activity,
+  Bell,
+  CalendarDays,
+  Pill,
+  ShieldCheck,
+  Users,
 } from "lucide-react";
 
 export default function Home() {
@@ -53,99 +58,262 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Espaço reservado para a ilustração */}
-          <div className="flex min-h-65 items-center justify-center rounded-3xl bg-white shadow-sm md:min-h-100">
-            <span className="text-gray-400">Ilustração do S.A.S.P.I.</span>
-          </div>
-        </div>
-      </section>
-      <section
-        id="sobre"
-        className="mx-auto max-w-7xl px-4 py-12 md:px-8 md:py-16"
-      >
-        <div className="rounded-3xl bg-white p-8 shadow-sm md:p-12">
-          <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
-            Sobre o projeto
-          </span>
+          <div className="relative min-h-80 overflow-hidden rounded-3xl border border-gray-100 bg-white p-6 shadow-xl shadow-blue-950/5 md:min-h-105 md:p-8">
+            <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[#E6F4EF]"></div>
+            <div className="absolute -bottom-20 -left-16 h-52 w-52 rounded-full bg-[#E8F1FB]"></div>
 
-          <h2 className="mt-3 text-3xl font-bold text-[#0A2540]">
-            Tecnologia para um acompanhamento mais organizado
-          </h2>
+            <div className="relative">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-[#26A69A]">
+                    Acompanhamento
+                  </span>
 
-          <p className="mt-5 max-w-3xl leading-relaxed text-gray-600">
-            O S.A.S.P.I. é uma solução digital desenvolvida para auxiliar no
-            acompanhamento da saúde de pessoas idosas, centralizando informações
-            e aproximando idosos, familiares, cuidadores e profissionais de
-            saúde.
-          </p>
-        </div>
-      </section>
-      <section
-        id="funcionalidades"
-        className="mx-auto max-w-7xl px-4 pb-12 md:px-8 md:pb-20"
-      >
-        <div className="grid gap-6 md:grid-cols-3">
-          <div className="min-h-37.5 rounded-2xl bg-white p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-md">
-            <div className="flex items-start gap-4 sm:items-center sm:gap-5">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#E6F4EF] text-[#1565C0] sm:h-14 sm:w-14">
-                <HeartPulse size={22} strokeWidth={2} />
+                  <p className="mt-1 font-semibold text-[#0A2540]">
+                    Resumo de saúde
+                  </p>
+                </div>
+
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#E6F4EF] text-[#1565C0]">
+                  <HeartPulse size={22} />
+                </div>
               </div>
 
-              <div className="h-14 w-px bg-gray-200"></div>
+              <div className="mt-8 grid grid-cols-2 gap-4">
+                <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                  <Activity size={20} className="text-[#26A69A]" />
 
-              <div>
-                <h3 className="text-base font-semibold text-[#0A2540] sm:text-lg">
-                  Monitoramento
-                </h3>
+                  <p className="mt-3 text-xs text-gray-500">Oxigenação</p>
 
-                <p className="mt-1 text-sm leading-relaxed text-gray-600">
-                  Acompanhe a saúde de forma remota e contínua, com mais
-                  segurança e tranquilidade.
-                </p>
+                  <p className="mt-1 text-xl font-bold text-[#0A2540]">97%</p>
+                </div>
+
+                <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                  <HeartPulse size={20} className="text-[#1565C0]" />
+
+                  <p className="mt-3 text-xs text-gray-500">Frequência</p>
+
+                  <p className="mt-1 text-xl font-bold text-[#0A2540]">
+                    72 bpm
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-gray-100 bg-[#FAFCFE] p-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#E6F4EF] text-[#26A69A]">
+                    <Pill size={20} />
+                  </div>
+
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-[#0A2540]">
+                      Próximo medicamento
+                    </p>
+
+                    <p className="mt-1 text-xs text-gray-500">
+                      Losartana • 20:00
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 flex items-center justify-between rounded-2xl border border-gray-100 bg-white p-4">
+                <div className="flex items-center gap-3">
+                  <CalendarDays size={20} className="text-[#1565C0]" />
+
+                  <div>
+                    <p className="text-sm font-medium text-[#0A2540]">
+                      Próxima consulta
+                    </p>
+
+                    <p className="text-xs text-gray-500">Cardiologista</p>
+                  </div>
+                </div>
+
+                <ShieldCheck size={20} className="text-[#26A69A]" />
               </div>
             </div>
           </div>
+        </div>
+      </section>
+      <section id="sobre" className="bg-white py-20 md:py-24">
+        <div className="mx-auto max-w-7xl px-4 md:px-8">
+          <div className="grid items-center gap-12 lg:grid-cols-2">
+            <div>
+              <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
+                Sobre o projeto
+              </span>
 
-          <div className="min-h-37.5 rounded-2xl bg-white p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-md">
-            <div className="flex items-start gap-4 sm:items-center sm:gap-5">
-              <div className="flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-full bg-[#E6F4EF] text-[#26A69A]">
-                <ClipboardList size={22} strokeWidth={2} />
+              <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#0A2540] md:text-4xl">
+                Tecnologia para tornar o acompanhamento de saúde mais simples
+              </h2>
+
+              <p className="mt-5 leading-relaxed text-gray-600">
+                O S.A.S.P.I. é uma solução digital desenvolvida para auxiliar no
+                acompanhamento da saúde de pessoas idosas, reunindo informações
+                importantes em um ambiente organizado e acessível.
+              </p>
+
+              <p className="mt-4 leading-relaxed text-gray-600">
+                A proposta é facilitar o registro e a consulta de dados de
+                saúde, medicamentos, consultas e indicadores, permitindo um
+                acompanhamento mais próximo da rotina da pessoa idosa.
+              </p>
+
+              <div className="mt-8 flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#E6F4EF] text-[#26A69A]">
+                  <ShieldCheck size={22} />
+                </div>
+
+                <div>
+                  <p className="font-semibold text-[#0A2540]">
+                    Informação centralizada
+                  </p>
+
+                  <p className="text-sm text-gray-500">
+                    Dados importantes organizados em um único ambiente.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-2xl border border-gray-100 bg-[#F8FBFE] p-6 transition hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-950/5">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-[#1565C0] shadow-sm">
+                  <HeartPulse size={23} />
+                </div>
+
+                <h3 className="mt-5 font-semibold text-[#0A2540]">
+                  Acompanhamento
+                </h3>
+
+                <p className="mt-2 text-sm leading-relaxed text-gray-600">
+                  Visualização de indicadores e registros importantes da saúde.
+                </p>
               </div>
 
-              <div className="h-14 w-px bg-gray-200"></div>
+              <div className="rounded-2xl border border-gray-100 bg-[#F8FBFE] p-6 transition hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-950/5">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-[#26A69A] shadow-sm">
+                  <ClipboardList size={23} />
+                </div>
 
-              <div>
-                <h3 className="text-base font-semibold text-[#0A2540] sm:text-lg">
+                <h3 className="mt-5 font-semibold text-[#0A2540]">
                   Organização
                 </h3>
 
-                <p className="mt-1 text-sm leading-relaxed text-gray-600">
-                  Centralize informações importantes em um único lugar,
-                  facilitando o acesso e o acompanhamento.
+                <p className="mt-2 text-sm leading-relaxed text-gray-600">
+                  Histórico, medicamentos e consultas reunidos em um só lugar.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-gray-100 bg-[#F8FBFE] p-6 transition hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-950/5">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-[#1565C0] shadow-sm">
+                  <Users size={23} />
+                </div>
+
+                <h3 className="mt-5 font-semibold text-[#0A2540]">
+                  Acesso compartilhado
+                </h3>
+
+                <p className="mt-2 text-sm leading-relaxed text-gray-600">
+                  Informações disponíveis para pessoas autorizadas no
+                  acompanhamento.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-gray-100 bg-[#F8FBFE] p-6 transition hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-950/5">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-[#26A69A] shadow-sm">
+                  <Bell size={23} />
+                </div>
+
+                <h3 className="mt-5 font-semibold text-[#0A2540]">Lembretes</h3>
+
+                <p className="mt-2 text-sm leading-relaxed text-gray-600">
+                  Apoio à rotina com lembretes de medicamentos e compromissos.
                 </p>
               </div>
             </div>
           </div>
+        </div>
+      </section>
 
-          <div className="min-h-37.5 rounded-2xl bg-white p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-md">
-            <div className="flex items-start gap-4 sm:items-center sm:gap-5">
-              <div className="flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-full bg-[#E6F4EF] text-[#26A69A]">
-                <Cpu size={22} strokeWidth={2} />
+      <section id="funcionalidades" className="bg-[#F2F7FB] py-20 md:py-24">
+        <div className="mx-auto max-w-7xl px-4 md:px-8">
+          <div className="mx-auto max-w-2xl text-center">
+            <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
+              Funcionalidades
+            </span>
+
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#0A2540] md:text-4xl">
+              Recursos pensados para o acompanhamento diário
+            </h2>
+
+            <p className="mt-4 leading-relaxed text-gray-600">
+              O S.A.S.P.I. reúne recursos importantes para facilitar a
+              organização e o acompanhamento das informações de saúde.
+            </p>
+          </div>
+
+          <div className="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+            <article className="group rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-950/5">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#E8F1FB] text-[#1565C0] transition group-hover:bg-[#1565C0] group-hover:text-white">
+                <Activity size={23} />
               </div>
 
-              <div className="h-14 w-px bg-gray-200"></div>
+              <h3 className="mt-6 text-lg font-semibold text-[#0A2540]">
+                Indicadores de saúde
+              </h3>
 
-              <div>
-                <h3 className="text-base font-semibold text-[#0A2540] sm:text-lg">
-                  Tecnologia
-                </h3>
+              <p className="mt-3 text-sm leading-relaxed text-gray-600">
+                Acompanhamento de informações como frequência cardíaca,
+                oxigenação e outros registros de saúde.
+              </p>
+            </article>
 
-                <p className="mt-1 text-sm leading-relaxed text-gray-600">
-                  Integração entre aplicativo mobile, plataforma web e
-                  dispositivos inteligentes para um cuidado mais eficiente.
-                </p>
+            <article className="group rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-950/5">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#E6F4EF] text-[#26A69A] transition group-hover:bg-[#26A69A] group-hover:text-white">
+                <Pill size={23} />
               </div>
-            </div>
+
+              <h3 className="mt-6 text-lg font-semibold text-[#0A2540]">
+                Medicamentos
+              </h3>
+
+              <p className="mt-3 text-sm leading-relaxed text-gray-600">
+                Organização dos medicamentos utilizados, horários e informações
+                importantes para a rotina.
+              </p>
+            </article>
+
+            <article className="group rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-950/5">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#E8F1FB] text-[#1565C0] transition group-hover:bg-[#1565C0] group-hover:text-white">
+                <CalendarDays size={23} />
+              </div>
+
+              <h3 className="mt-6 text-lg font-semibold text-[#0A2540]">
+                Consultas
+              </h3>
+
+              <p className="mt-3 text-sm leading-relaxed text-gray-600">
+                Registro e organização de consultas para facilitar o
+                acompanhamento de compromissos de saúde.
+              </p>
+            </article>
+
+            <article className="group rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-950/5">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#E6F4EF] text-[#26A69A] transition group-hover:bg-[#26A69A] group-hover:text-white">
+                <ClipboardList size={23} />
+              </div>
+
+              <h3 className="mt-6 text-lg font-semibold text-[#0A2540]">
+                Histórico
+              </h3>
+
+              <p className="mt-3 text-sm leading-relaxed text-gray-600">
+                Consulta de registros anteriores para visualizar informações de
+                forma organizada ao longo do tempo.
+              </p>
+            </article>
           </div>
         </div>
       </section>
