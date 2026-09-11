@@ -1,5 +1,6 @@
 import DashboardNavbar from "@/components/DashboardNavbar";
 import { HeartPulse, Activity, Gauge } from "lucide-react";
+import HealthChart from "@/components/HealthChart";
 
 export default function MinhaSaude() {
   return (
@@ -24,14 +25,10 @@ export default function MinhaSaude() {
                 <HeartPulse size={22} />
               </div>
 
-              <span className="text-xs text-gray-500">
-                Último registro
-              </span>
+              <span className="text-xs text-gray-500">Último registro</span>
             </div>
 
-            <p className="mt-5 text-sm text-gray-600">
-              Frequência cardíaca
-            </p>
+            <p className="mt-5 text-sm text-gray-600">Frequência cardíaca</p>
 
             <div className="mt-2">
               <span className="text-3xl font-bold text-[#0A2540]">72</span>
@@ -45,14 +42,10 @@ export default function MinhaSaude() {
                 <Activity size={22} />
               </div>
 
-              <span className="text-xs text-gray-500">
-                Último registro
-              </span>
+              <span className="text-xs text-gray-500">Último registro</span>
             </div>
 
-            <p className="mt-5 text-sm text-gray-600">
-              Oxigenação
-            </p>
+            <p className="mt-5 text-sm text-gray-600">Oxigenação</p>
 
             <div className="mt-2">
               <span className="text-3xl font-bold text-[#0A2540]">97</span>
@@ -66,19 +59,13 @@ export default function MinhaSaude() {
                 <Gauge size={22} />
               </div>
 
-              <span className="text-xs text-gray-500">
-                Último registro
-              </span>
+              <span className="text-xs text-gray-500">Último registro</span>
             </div>
 
-            <p className="mt-5 text-sm text-gray-600">
-              Pressão arterial
-            </p>
+            <p className="mt-5 text-sm text-gray-600">Pressão arterial</p>
 
             <div className="mt-2">
-              <span className="text-3xl font-bold text-[#0A2540]">
-                120/80
-              </span>
+              <span className="text-3xl font-bold text-[#0A2540]">120/80</span>
               <span className="ml-2 text-sm text-gray-500">mmHg</span>
             </div>
           </div>
@@ -103,11 +90,13 @@ export default function MinhaSaude() {
             </select>
           </div>
 
-          <div className="mt-6 flex min-h-72 items-center justify-center rounded-xl bg-[#F8FAFC]">
-            <p className="text-sm text-gray-400">
-              Gráfico do indicador será exibido aqui
-            </p>
+          <div className="mt-8 rounded-2xl border border-gray-100 bg-[#F8FAFC] p-4 md:p-6">
+            <HealthChart />
           </div>
+
+          <p className="mt-4 text-xs text-gray-400">
+            Dados demonstrativos para apresentação do protótipo.
+          </p>
         </section>
       </div>
     </main>
