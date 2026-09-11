@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, HeartPulse, KeyRound, Mail, UserRound } from "lucide-react";
+import Image from "next/image";
 
 export default function Cadastro() {
   return (
@@ -10,9 +11,11 @@ export default function Cadastro() {
           <section className="relative hidden overflow-hidden bg-[#0A2540] p-12 text-white lg:flex lg:flex-col lg:justify-between">
             <div>
               <Link href="/" className="inline-flex items-center">
-                <img
+                <Image
                   src="/logo.png"
                   alt="S.A.S.P.I."
+                  width={180}
+                  height={48}
                   className="h-12 w-auto brightness-0 invert"
                 />
               </Link>
@@ -54,9 +57,11 @@ export default function Cadastro() {
               </Link>
 
               <div className="mt-8">
-                <img
+                <Image
                   src="/logo.png"
                   alt="S.A.S.P.I."
+                  width={165}
+                  height={44}
                   className="mb-8 h-11 w-auto lg:hidden"
                 />
 

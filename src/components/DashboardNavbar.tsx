@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bell, LogOut, Menu, UserRound, X } from "lucide-react";
 import { useState } from "react";
+import Image from "next/image";
 
 const navItems = [
   {
@@ -48,9 +49,11 @@ export default function DashboardNavbar() {
           className="flex items-center"
           onClick={() => setMenuOpen(false)}
         >
-          <img
+          <Image
             src="/logo.png"
             alt="S.A.S.P.I."
+            width={160}
+            height={40}
             className="h-10 w-auto"
           />
         </Link>
