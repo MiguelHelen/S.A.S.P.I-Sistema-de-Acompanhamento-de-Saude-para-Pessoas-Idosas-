@@ -1,0 +1,20 @@
+import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { RegistroSaudeService } from './registro-saude.service';
+import { AuthGuard } from '../auth/auth.guard';
+import { CreateRegistroSaudeDto } from './dto/create-registro-saude.dto';
+
+@Controller('registro-saude')
+@UseGuards(AuthGuard)
+export class RegistroSaudeController {
+  constructor(private readonly registroSaudeService: RegistroSaudeService) {}
+
+    @Post()
+  create(@Body() body: CreateRegistroSaudeDto) {
+    return this.registroSaudeService.create(body);
+  }
+
+  @Get('idoso/:idosoId')
+  findByIdoso(@Param('idosoId') idosoId: string) {
+    return this.registroSaudeService.findByIdoso(idosoId);
+  }
+}
