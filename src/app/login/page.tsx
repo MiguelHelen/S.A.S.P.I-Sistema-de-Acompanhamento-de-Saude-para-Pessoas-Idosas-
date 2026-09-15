@@ -8,41 +8,48 @@ import Image from "next/image";
 
 export default function Login() {
   const router = useRouter();
-  
+
   // Estados para guardar o que o usuário digita
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
-  
+
   // Estados para controle de tela (carregamento e erro)
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
 
   async function handleLogin(e: React.FormEvent) {
-    e.preventDefault(); // Evita que a página recarregue
+    e.preventDefault();
     setErro("");
     setLoading(true);
 
     try {
-      const res = await fetch("https://perfect-bravery-production-5ce7.up.railway.app/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const res = await fetch(
+        "https://perfect-bravery-production-5ce7.up.railway.app/auth/login",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ email, senha }),
         },
-        body: JSON.stringify({ email, senha }),
-      });
-
-      if (!res.ok) {
-        throw new Error("E-mail ou senha inválidos. Tente novamente.");
-      }
+      );
 
       const data = await res.json();
 
-      // Deu certo! Salvamos o token no navegador
+      if (!res.ok) {
+        throw new Error(
+          data.message || "E-mail ou senha inválidos. Tente novamente.",
+        );
+      }
+
+      // Grava a sessão autenticada
       localStorage.setItem("saspi_token", data.access_token);
-      
-      // E redirecionamos o usuário para o Dashboard
+      localStorage.setItem(
+        "saspi_user",
+        JSON.stringify(data.usuario || { nome: email.split("@")[0], email }),
+      );
+
       router.push("/dashboard");
-      
     } catch (error: any) {
       setErro(error.message);
     } finally {
@@ -54,7 +61,6 @@ export default function Login() {
     <main className="min-h-screen bg-[#F2F7FB] px-4 py-8 md:px-8">
       <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl items-center justify-center">
         <div className="grid w-full overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-xl shadow-blue-950/5 lg:grid-cols-2">
-          
           {/* Área institucional */}
           <section className="relative hidden overflow-hidden bg-[#0A2540] p-12 text-white lg:flex lg:flex-col lg:justify-between">
             <div>
@@ -75,7 +81,8 @@ export default function Login() {
                   Cuidado mais conectado e organizado.
                 </h1>
                 <p className="mt-5 max-w-md leading-relaxed text-blue-100">
-                  Acompanhe informações importantes da saúde de forma simples, segura e acessível.
+                  Acompanhe informações importantes da saúde de forma simples,
+                  segura e acessível.
                 </p>
               </div>
             </div>
@@ -119,7 +126,6 @@ export default function Login() {
 
               {/* Formulário com onSubmit */}
               <form onSubmit={handleLogin} className="mt-8 space-y-5">
-                
                 {/* Exibição de erro */}
                 {erro && (
                   <div className="rounded-xl bg-red-50 p-4 text-sm font-medium text-red-600">
@@ -128,11 +134,17 @@ export default function Login() {
                 )}
 
                 <div>
-                  <label htmlFor="email" className="mb-2 block text-sm font-medium text-[#0A2540]">
+                  <label
+                    htmlFor="email"
+                    className="mb-2 block text-sm font-medium text-[#0A2540]"
+                  >
                     E-mail
                   </label>
                   <div className="relative">
-                    <Mail size={19} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <Mail
+                      size={19}
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+                    />
                     <input
                       id="email"
                       type="email"
@@ -147,15 +159,24 @@ export default function Login() {
 
                 <div>
                   <div className="mb-2 flex items-center justify-between">
-                    <label htmlFor="senha" className="text-sm font-medium text-[#0A2540]">
+                    <label
+                      htmlFor="senha"
+                      className="text-sm font-medium text-[#0A2540]"
+                    >
                       Senha
                     </label>
-                    <button type="button" className="text-xs font-medium text-[#1565C0] hover:underline">
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-[#1565C0] hover:underline"
+                    >
                       Esqueci minha senha
                     </button>
                   </div>
                   <div className="relative">
-                    <KeyRound size={19} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <KeyRound
+                      size={19}
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+                    />
                     <input
                       id="senha"
                       type="password"
@@ -173,14 +194,21 @@ export default function Login() {
                   disabled={loading}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3.5 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0A2540] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0"
                 >
-                  {loading ? <Loader2 size={20} className="animate-spin" /> : "Entrar"}
+                  {loading ? (
+                    <Loader2 size={20} className="animate-spin" />
+                  ) : (
+                    "Entrar"
+                  )}
                 </button>
               </form>
 
               <div className="mt-8 border-t border-gray-100 pt-6 text-center">
                 <p className="text-sm text-gray-600">
                   Ainda não possui uma conta?{" "}
-                  <Link href="/cadastro" className="font-semibold text-[#1565C0] hover:underline">
+                  <Link
+                    href="/cadastro"
+                    className="font-semibold text-[#1565C0] hover:underline"
+                  >
                     Cadastre-se
                   </Link>
                 </p>
