@@ -10,6 +10,7 @@
     "target": "ES2021",
     "sourceMap": true,
     "outDir": "./dist",
+    "rootDir": "./src",  // <-- Adicione esta linha aqui
     "incremental": true,
     "skipLibCheck": true,
     "strictNullChecks": false,
