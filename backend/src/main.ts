@@ -5,6 +5,10 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  
+  // Liberando o CORS para o nosso frontend (porta 3001) conseguir conectar!
+  app.enableCors();
+  
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
