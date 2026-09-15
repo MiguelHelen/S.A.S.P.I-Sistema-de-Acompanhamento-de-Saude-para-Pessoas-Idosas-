@@ -60,7 +60,7 @@ npm run dev
 
 ### 3. Acesse o projeto
 
-[http://localhost:3000](http://localhost:3000)
+[http://localhost:3001](http://localhost:3001)
 
 ## Rotas para testes
 
@@ -68,18 +68,18 @@ Com o servidor em execução, utilize os links abaixo para acessar diretamente c
 
 | Página | Rota |
 | --- | --- |
-| Home | [Abrir](http://localhost:3000/) |
-| Login | [Abrir](http://localhost:3000/login) |
-| Cadastro | [Abrir](http://localhost:3000/cadastro) |
-| Dashboard | [Abrir](http://localhost:3000/dashboard) |
-| Minha Saúde | [Abrir](http://localhost:3000/dashboard/saude) |
-| Medicamentos | [Abrir](http://localhost:3000/dashboard/medicamentos) |
-| Novo medicamento | [Abrir](http://localhost:3000/dashboard/medicamentos/novo) |
-| Consultas | [Abrir](http://localhost:3000/dashboard/consultas) |
-| Nova consulta | [Abrir](http://localhost:3000/dashboard/consultas/nova) |
-| Histórico | [Abrir](http://localhost:3000/dashboard/historico) |
-| Novo registro | [Abrir](http://localhost:3000/dashboard/historico/novo) |
-| Perfil | [Abrir](http://localhost:3000/dashboard/perfil) |
+| Home | [Abrir](http://localhost:3001/) |
+| Login | [Abrir](http://localhost:3001/login) |
+| Cadastro | [Abrir](http://localhost:3001/cadastro) |
+| Dashboard | [Abrir](http://localhost:3001/dashboard) |
+| Minha Saúde | [Abrir](http://localhost:3001/dashboard/saude) |
+| Medicamentos | [Abrir](http://localhost:3001/dashboard/medicamentos) |
+| Novo medicamento | [Abrir](http://localhost:3001/dashboard/medicamentos/novo) |
+| Consultas | [Abrir](http://localhost:3001/dashboard/consultas) |
+| Nova consulta | [Abrir](http://localhost:3001/dashboard/consultas/nova) |
+| Histórico | [Abrir](http://localhost:3001/dashboard/historico) |
+| Novo registro | [Abrir](http://localhost:3001/dashboard/historico/novo) |
+| Perfil | [Abrir](http://localhost:3001/dashboard/perfil) |
 
 ## Estrutura atual do frontend
 
