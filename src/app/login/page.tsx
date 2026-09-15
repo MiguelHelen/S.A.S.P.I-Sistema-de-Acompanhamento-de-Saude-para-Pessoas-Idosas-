@@ -23,9 +23,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      // Fazendo a requisição para o backend do Miguel
-      // Nota: Verifique se o backend está rodando na porta 3001 ou 3000
-      const res = await fetch("http://localhost:3001/auth/login", {
+      const res = await fetch("http://localhost:3000/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
