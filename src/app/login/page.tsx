@@ -23,7 +23,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:3000/auth/login", {
+      const res = await fetch("https://perfect-bravery-production-5ce7.up.railway.app/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
