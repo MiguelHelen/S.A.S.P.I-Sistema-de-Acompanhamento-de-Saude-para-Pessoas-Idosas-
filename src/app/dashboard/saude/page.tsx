@@ -157,7 +157,7 @@ export default function MinhaSaude() {
             </select>
           </div>
 
-          {/* Gráfico temporário */}
+          {/* Gráfico */}
           <div className="mt-6 rounded-2xl border border-gray-100 bg-[#F8FAFC] p-4 md:p-6">
             <HealthChart />
           </div>
