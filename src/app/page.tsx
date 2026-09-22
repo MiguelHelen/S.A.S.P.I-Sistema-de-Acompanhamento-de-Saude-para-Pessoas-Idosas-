@@ -36,7 +36,7 @@ export default function Home() {
             </h1>
 
             <h2 className="mt-3 text-xl font-semibold text-[#1565C0] md:text-2xl">
-              Sistema de Acompanhamento de Saúde para Pessoas Idosas
+              O Sistema de Acompanhamento de Saúde para Pessoas Idosas
             </h2>
 
             <p className="mt-6 max-w-xl text-base leading-relaxed text-gray-600 md:text-lg">
