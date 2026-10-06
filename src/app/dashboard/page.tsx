@@ -5,6 +5,12 @@ import { useRouter } from "next/navigation";
 import DashboardNavbar from "@/components/DashboardNavbar";
 import MetricCard from "@/components/MetricCard";
 import InfoCard from "@/components/InfoCard";
+import {
+  Activity,
+  CalendarDays,
+  HeartPulse,
+  Pill
+} from "lucide-react";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -50,16 +56,30 @@ export default function Dashboard() {
         </p>
 
         <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard title="Frequência cardíaca" value="72" unit="bpm" icon={undefined} />
-          <MetricCard title="Oxigenação" value="97" unit="%" icon={undefined} />
+          <MetricCard 
+            title="Frequência cardíaca" 
+            value="72" 
+            unit="bpm" 
+            icon={<HeartPulse size={22} />} 
+          />
+          <MetricCard 
+            title="Oxigenação" 
+            value="97" 
+            unit="%" 
+            icon={<Activity size={22} />} 
+          />
           <InfoCard
             label="Próximo medicamento"
             title="Losartana"
-            subtitle="Hoje às 20:00" icon={undefined}          />
+            subtitle="Hoje às 20:00" 
+            icon={<Pill size={22} />} 
+          />
           <InfoCard
             label="Próxima consulta"
             title="Cardiologista"
-            subtitle="05/09 às 14:00" icon={undefined}          />
+            subtitle="05/09 às 14:00" 
+            icon={<CalendarDays size={22} />} 
+          />
         </div>
 
         <section className="mt-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
