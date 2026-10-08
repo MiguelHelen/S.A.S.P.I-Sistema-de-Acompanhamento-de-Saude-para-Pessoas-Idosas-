@@ -40,16 +40,32 @@ export default function Login() {
         );
       }
 
-      // Garante a extração seja por data.access_token ou data.token
+      // Grava o token no navegador
       const token = data.access_token || data.token;
       if (token) {
         localStorage.setItem("saspi_token", token);
       }
 
-      // Salva os dados do usuário para o DashboardNavbar e Perfil
+      // Tenta buscar os dados cadastrais completos na tabela usuario
+      let usuarioCompleto = data.usuario || data.user;
+      
+      if (!usuarioCompleto?.nome && usuarioCompleto?.id) {
+        try {
+          const userRes = await fetch(`${apiUrl}/usuario/${usuarioCompleto.id}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (userRes.ok) {
+            usuarioCompleto = await userRes.json();
+          }
+        } catch (e) {
+          console.warn("Nao foi possivel carregar o perfil detalhado, usando dados do token:", e);
+        }
+      }
+
+      // Se ainda assim o backend não devolver o nome, preserva os dados locais ou fallback
       localStorage.setItem(
         "saspi_user",
-        JSON.stringify(data.usuario || data.user || { nome: email.split("@")[0], email }),
+        JSON.stringify(usuarioCompleto || { email, nome: email.split("@")[0] })
       );
 
       router.push("/dashboard");
