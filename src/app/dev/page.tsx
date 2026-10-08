@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -13,6 +15,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { notFound } from "next/navigation";
+import { useEffect, useState } from "react";
 
 const publicRoutes = [
   {
@@ -38,60 +41,45 @@ const publicRoutes = [
 const dashboardRoutes = [
   {
     title: "Dashboard",
-    description: "Visão geral com indicadores, histórico e lembretes.",
+    description: "Visão geral e resumo do acompanhamento.",
     href: "/dashboard",
-    icon: HeartPulse,
+    icon: Home,
   },
   {
     title: "Minha Saúde",
-    description: "Acompanhamento dos principais indicadores de saúde.",
+    description: "Evolução dos indicadores de saúde.",
     href: "/dashboard/saude",
     icon: HeartPulse,
   },
   {
     title: "Medicamentos",
-    description: "Listagem e acompanhamento de medicamentos.",
+    description: "Lista de medicamentos cadastrados.",
     href: "/dashboard/medicamentos",
     icon: Pill,
   },
   {
     title: "Consultas",
-    description: "Agenda e acompanhamento de consultas.",
+    description: "Agenda de compromissos médicos.",
     href: "/dashboard/consultas",
     icon: CalendarDays,
   },
   {
+    title: "Exames",
+    description: "Central de laudos e resultados.",
+    href: "/dashboard/exames",
+    icon: FlaskConical,
+  },
+  {
     title: "Histórico",
-    description: "Registros anteriores de saúde.",
+    description: "Linha do tempo de registros clínicos.",
     href: "/dashboard/historico",
     icon: ClipboardList,
   },
   {
     title: "Perfil",
-    description: "Informações pessoais da conta.",
+    description: "Configurações da conta do usuário.",
     href: "/dashboard/perfil",
     icon: UserRound,
-  },
-];
-
-const formRoutes = [
-  {
-    title: "Novo registro",
-    description: "Formulário para registrar um novo indicador de saúde.",
-    href: "/dashboard/historico/novo",
-    category: "Saúde",
-  },
-  {
-    title: "Novo medicamento",
-    description: "Formulário para cadastrar um novo medicamento.",
-    href: "/dashboard/medicamentos/novo",
-    category: "Medicamentos",
-  },
-  {
-    title: "Nova consulta",
-    description: "Formulário para cadastrar uma nova consulta.",
-    href: "/dashboard/consultas/nova",
-    category: "Consultas",
   },
 ];
 
@@ -133,19 +121,52 @@ function RouteCard({
 }
 
 export default function DevPage() {
-  if (process.env.NODE_ENV === "production") {
-    notFound();
-  }
+  const [apiStatus, setApiStatus] = useState("Verificando...");
+
+  useEffect(() => {
+    // Trava de segurança para produção
+    if (process.env.NODE_ENV === "production") {
+      notFound();
+    }
+
+    // Ping na API para checar conexão e imprimir no F12
+    async function checkBackendConnection() {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://perfect-bravery-production-5ce7.up.railway.app";
+      
+      try {
+        console.log("%c⏳ S.A.S.P.I. -> Tentando conectar com a API na Railway...", "color: #3b82f6; font-weight: bold;");
+        
+        // Fazemos um fetch simples na rota principal
+        const response = await fetch(apiUrl);
+        
+        if (response.ok || response.status === 404 || response.status === 401) {
+          // Se respondeu qualquer coisa (mesmo rota não encontrada/não autorizada), o servidor está online
+          console.log("%c✅ S.A.S.P.I. -> API CONECTADA COM SUCESSO!", "color: #10b981; font-size: 14px; font-weight: bold; background: #ecfdf5; padding: 4px; border-radius: 4px;");
+          setApiStatus("Conectado 🟢");
+        } else {
+          console.log("%c⚠️ S.A.S.P.I. -> A API respondeu com um erro inesperado.", "color: #f59e0b; font-weight: bold;");
+          setApiStatus("Erro na resposta 🟡");
+        }
+      } catch (error) {
+        console.error("%c❌ S.A.S.P.I. -> FALHA NA CONEXÃO. API OFFLINE OU ERRO DE CORS.", "color: #ef4444; font-size: 14px; font-weight: bold; background: #fef2f2; padding: 4px; border-radius: 4px;");
+        console.error(error);
+        setApiStatus("Offline 🔴");
+      }
+    }
+
+    checkBackendConnection();
+  }, []);
 
   return (
     <main className="min-h-screen bg-[#F2F7FB]">
       <div className="mx-auto max-w-7xl px-4 py-8 md:px-8 md:py-12">
-        <div className="flex flex-col gap-6 border-b border-gray-200 pb-8 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="flex items-center gap-2 text-[#26A69A]">
-              <FlaskConical size={18} />
-
-              <span className="text-sm font-semibold uppercase tracking-wider">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0A2540] text-white">
+                <FlaskConical size={20} />
+              </div>
+              <span className="text-sm font-semibold uppercase tracking-wider text-gray-500">
                 Ambiente de desenvolvimento
               </span>
             </div>
@@ -176,11 +197,11 @@ export default function DevPage() {
             </span>
 
             <h2 className="mt-2 text-2xl font-bold text-[#0A2540]">
-              Páginas públicas
+              Páginas de Acesso
             </h2>
 
             <p className="mt-2 text-sm text-gray-500">
-              Telas acessíveis antes da autenticação.
+              Telas institucionais e formulários de entrada.
             </p>
           </div>
 
@@ -213,54 +234,6 @@ export default function DevPage() {
           </div>
         </section>
 
-        <section className="mt-12">
-          <div>
-            <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
-              Formulários
-            </span>
-
-            <h2 className="mt-2 text-2xl font-bold text-[#0A2540]">
-              Fluxos de cadastro
-            </h2>
-
-            <p className="mt-2 text-sm text-gray-500">
-              Acesso direto às telas utilizadas para inserir informações.
-            </p>
-          </div>
-
-          <div className="mt-6 grid gap-4 lg:grid-cols-3">
-            {formRoutes.map((route) => (
-              <Link
-                key={route.href}
-                href={route.href}
-                className="group rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-[#BFD8F2] hover:shadow-lg hover:shadow-blue-950/5"
-              >
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#E6F4EF] text-[#26A69A] transition group-hover:bg-[#26A69A] group-hover:text-white">
-                    <Plus size={21} />
-                  </div>
-
-                  <span className="rounded-full bg-[#F2F7FB] px-3 py-1 text-xs font-medium text-gray-500">
-                    {route.category}
-                  </span>
-                </div>
-
-                <h3 className="mt-5 font-semibold text-[#0A2540]">
-                  {route.title}
-                </h3>
-
-                <p className="mt-2 text-sm leading-relaxed text-gray-500">
-                  {route.description}
-                </p>
-
-                <p className="mt-4 break-all font-mono text-xs text-[#1565C0]">
-                  {route.href}
-                </p>
-              </Link>
-            ))}
-          </div>
-        </section>
-
         <section className="mt-12 rounded-2xl border border-[#DCEAF8] bg-white p-6 shadow-sm md:p-8">
           <h2 className="text-xl font-semibold text-[#0A2540]">
             Estado atual do frontend
@@ -271,7 +244,6 @@ export default function DevPage() {
               <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
                 Build
               </p>
-
               <p className="mt-2 font-semibold text-[#20877E]">Funcionando</p>
             </div>
 
@@ -279,7 +251,6 @@ export default function DevPage() {
               <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
                 Vulnerabilidades
               </p>
-
               <p className="mt-2 font-semibold text-[#20877E]">0 encontradas</p>
             </div>
 
@@ -287,7 +258,6 @@ export default function DevPage() {
               <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
                 Dados
               </p>
-
               <p className="mt-2 font-semibold text-[#1565C0]">
                 Demonstrativos
               </p>
@@ -295,11 +265,10 @@ export default function DevPage() {
 
             <div className="rounded-xl bg-[#F8FBFE] p-4">
               <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-                Backend
+                API Backend
               </p>
-
-              <p className="mt-2 font-semibold text-gray-500">
-                Ainda não integrado
+              <p className={`mt-2 font-semibold ${apiStatus.includes("Conectado") ? "text-emerald-600" : apiStatus.includes("Offline") ? "text-red-500" : "text-amber-500"}`}>
+                {apiStatus}
               </p>
             </div>
           </div>
