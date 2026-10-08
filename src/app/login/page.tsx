@@ -9,11 +9,8 @@ import Image from "next/image";
 export default function Login() {
   const router = useRouter();
 
-  // Estados para guardar o que o usuário digita
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
-
-  // Estados para controle de tela (carregamento e erro)
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -22,17 +19,18 @@ export default function Login() {
     setErro("");
     setLoading(true);
 
+    const apiUrl =
+      process.env.NEXT_PUBLIC_API_URL ||
+      "https://perfect-bravery-production-5ce7.up.railway.app";
+
     try {
-      const res = await fetch(
-        "https://perfect-bravery-production-5ce7.up.railway.app/auth/login",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ email, senha }),
+      const res = await fetch(`${apiUrl}/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      );
+        body: JSON.stringify({ email, senha }),
+      });
 
       const data = await res.json();
 
@@ -42,11 +40,16 @@ export default function Login() {
         );
       }
 
-      // Grava a sessão autenticada
-      localStorage.setItem("saspi_token", data.access_token);
+      // Garante a extração seja por data.access_token ou data.token
+      const token = data.access_token || data.token;
+      if (token) {
+        localStorage.setItem("saspi_token", token);
+      }
+
+      // Salva os dados do usuário para o DashboardNavbar e Perfil
       localStorage.setItem(
         "saspi_user",
-        JSON.stringify(data.usuario || { nome: email.split("@")[0], email }),
+        JSON.stringify(data.usuario || data.user || { nome: email.split("@")[0], email }),
       );
 
       router.push("/dashboard");
@@ -70,7 +73,9 @@ export default function Login() {
                   alt="S.A.S.P.I."
                   width={180}
                   height={48}
-                  className="h-12 w-auto brightness-0 invert"
+                  className="brightness-0 invert"
+                  style={{ width: "auto", height: "auto" }}
+                  priority
                 />
               </Link>
               <div className="mt-16">
@@ -111,7 +116,8 @@ export default function Login() {
                   alt="S.A.S.P.I."
                   width={165}
                   height={44}
-                  className="mb-8 h-11 w-auto lg:hidden"
+                  className="mb-8 lg:hidden"
+                  style={{ width: "auto", height: "auto" }}
                 />
                 <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
                   Bem-vindo de volta
@@ -124,9 +130,7 @@ export default function Login() {
                 </p>
               </div>
 
-              {/* Formulário com onSubmit */}
               <form onSubmit={handleLogin} className="mt-8 space-y-5">
-                {/* Exibição de erro */}
                 {erro && (
                   <div className="rounded-xl bg-red-50 p-4 text-sm font-medium text-red-600">
                     {erro}
