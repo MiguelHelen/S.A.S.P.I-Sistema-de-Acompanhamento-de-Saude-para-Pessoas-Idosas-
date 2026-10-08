@@ -46,8 +46,19 @@ export default function DashboardNavbar() {
   return (
     <header className="border-b border-gray-100 bg-white">
       <div className="mx-auto flex h-18 max-w-7xl items-center justify-between px-4 md:px-8">
-        <Link href="/dashboard" className="flex items-center" onClick={() => setMenuOpen(false)}>
-          <Image src="/logo.png" alt="S.A.S.P.I." width={160} height={40} className="h-10 w-auto" />
+        <Link
+          href="/dashboard"
+          className="flex items-center"
+          onClick={() => setMenuOpen(false)}
+        >
+          <Image
+            src="/logo.png"
+            alt="S.A.S.P.I."
+            width={160}
+            height={40}
+            priority
+            style={{ width: "auto", height: "auto" }}
+          />
         </Link>
 
         <nav className="hidden items-center gap-1 lg:flex">
