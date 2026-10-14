@@ -8,7 +8,7 @@ import Image from "next/image";
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard" },
-  { label: "Minha Saúde", href: "/dashboard/saude" },
+  { label: "Sinais Vitais", href: "/dashboard/saude" },
   { label: "Medicamentos", href: "/dashboard/medicamentos" },
   { label: "Consultas", href: "/dashboard/consultas" },
   { label: "Histórico", href: "/dashboard/historico" },
