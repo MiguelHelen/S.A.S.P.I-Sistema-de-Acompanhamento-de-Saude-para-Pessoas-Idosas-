@@ -1,0 +1,403 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import DashboardNavbar from "@/components/DashboardNavbar";
+import {
+  ArrowLeft,
+  User,
+  Calendar,
+  Save,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  HeartHandshake,
+  Phone,
+  IdCard,
+  MapPin,
+} from "lucide-react";
+
+export default function NovoIdoso() {
+  const router = useRouter();
+  const [salvando, setSalvando] = useState(false);
+  const [sucesso, setSucesso] = useState(false);
+  const [erro, setErro] = useState("");
+
+  const [formData, setFormData] = useState({
+    nome: "",
+    cpf: "",
+    data_nascimento: "",
+    sexo: "Feminino",
+    telefone: "",
+    endereco: "",
+    clinica_id: "",
+  });
+
+  useEffect(() => {
+    // Resgata o UUID da clínica vinculada ao usuário logado
+    const userRaw = localStorage.getItem("saspi_user");
+    if (userRaw) {
+      try {
+        const parsed = JSON.parse(userRaw);
+        const cid =
+          parsed.clinica_id ||
+          parsed.clinicaId ||
+          parsed.clinica?.id ||
+          "e63b19f5-d8e4-4973-bac6-12aba9a0545d"; // Fallback seguro da clínica existente no banco
+        setFormData((prev) => ({ ...prev, clinica_id: cid }));
+      } catch (e) {
+        console.error("Erro ao resgatar clínica da sessão:", e);
+      }
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        clinica_id: "e63b19f5-d8e4-4973-bac6-12aba9a0545d",
+      }));
+    }
+  }, []);
+
+  function calcularIdade(dataNasc: string): number {
+    if (!dataNasc) return 70;
+    const hoje = new Date();
+    const nasc = new Date(dataNasc);
+    let idade = hoje.getFullYear() - nasc.getFullYear();
+    const mes = hoje.getMonth() - nasc.getMonth();
+    if (mes < 0 || (mes === 0 && hoje.getDate() < nasc.getDate())) {
+      idade--;
+    }
+    return idade > 0 ? idade : 70;
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSalvando(true);
+    setErro("");
+    setSucesso(false);
+
+    const apiUrl =
+      process.env.NEXT_PUBLIC_API_URL ||
+      "https://perfect-bravery-production-5ce7.up.railway.app";
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("saspi_token")
+        : null;
+
+    // Payload rigorosamente alinhado com a tabela public.idoso do PostgreSQL
+    const payload = {
+      nome: formData.nome.trim(),
+      cpf: formData.cpf.replace(/\D/g, "") || null,
+      data_nascimento: formData.data_nascimento, // formato YYYY-MM-DD
+      sexo: formData.sexo,
+      telefone: formData.telefone.replace(/\D/g, "") || null,
+      endereco: formData.endereco.trim() || null,
+      clinica_id: formData.clinica_id,
+    };
+
+    console.group("🚀 S.A.S.P.I. -> Cadastrando Idoso no Banco");
+    console.log("Destino:", `${apiUrl}/idoso`);
+    console.log("Payload:", payload);
+    console.groupEnd();
+
+    try {
+      const response = await fetch(`${apiUrl}/idoso`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const resData = await response.json().catch(() => null);
+
+      console.log("📬 Resposta do Servidor:", response.status, resData);
+
+      if (!response.ok) {
+        const errorMsg = Array.isArray(resData?.message)
+          ? resData.message.join(", ")
+          : resData?.message || `Erro ${response.status}: Falha ao registrar idoso no banco.`;
+        throw new Error(errorMsg);
+      }
+
+      // Se salvou com sucesso no banco real:
+      const idReal = resData?.id || String(Date.now());
+      const novoIdoso = {
+        id: idReal,
+        nome: formData.nome,
+        idade: calcularIdade(formData.data_nascimento),
+        quarto: formData.endereco || "Leito padrão",
+      };
+
+      // Atualiza o cache local para o PatientSelector refletir na hora
+      const listaAtualRaw = localStorage.getItem("saspi_elderly_list");
+      let listaAtual = [
+        { id: "1", nome: "Dona Francisca Silva", idade: 78, quarto: "102-A" },
+        { id: "2", nome: "Seu Sebastião Souza", idade: 82, quarto: "105-B" },
+        { id: "3", nome: "Dona Helena Ramos", idade: 75, quarto: "201" },
+      ];
+
+      if (listaAtualRaw) {
+        try {
+          listaAtual = JSON.parse(listaAtualRaw);
+        } catch {}
+      }
+
+      const novaLista = [...listaAtual, novoIdoso];
+      localStorage.setItem("saspi_elderly_list", JSON.stringify(novaLista));
+
+      // Define como paciente ativo imediatamente
+      localStorage.setItem("saspi_active_elderly", JSON.stringify(novoIdoso));
+      window.dispatchEvent(new Event("saspi_elderly_updated"));
+
+      setSucesso(true);
+      setTimeout(() => {
+        router.push("/dashboard");
+      }, 1500);
+    } catch (err: any) {
+      console.error("❌ Erro ao salvar no banco:", err);
+      setErro(err.message || "Erro desconhecido ao conectar com a API.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <main className="min-h-screen bg-[#F2F7FB]">
+      <DashboardNavbar />
+
+      <div className="mx-auto max-w-4xl px-4 py-8 md:px-8">
+        <Link
+          href="/dashboard"
+          className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-[#1565C0]"
+        >
+          <ArrowLeft size={17} />
+          Voltar para o Dashboard
+        </Link>
+
+        <div className="mt-8">
+          <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
+            Gestão de Pacientes
+          </span>
+
+          <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0A2540] md:text-4xl">
+            Novo Idoso
+          </h1>
+
+          <p className="mt-2 max-w-2xl text-gray-600">
+            Cadastre um novo idoso no sistema S.A.S.P.I. Os dados serão gravados diretamente na base de dados da clínica.
+          </p>
+        </div>
+
+        {erro && (
+          <div className="mt-6 flex items-center gap-3 rounded-xl bg-red-50 p-4 text-red-700">
+            <AlertCircle size={20} className="shrink-0 text-red-600" />
+            <p className="text-sm font-medium">{erro}</p>
+          </div>
+        )}
+
+        {sucesso && (
+          <div className="mt-6 flex items-center gap-3 rounded-xl bg-emerald-50 p-4 text-emerald-800">
+            <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
+            <p className="text-sm font-medium">
+              Idoso gravado com sucesso no banco de dados! Redirecionando...
+            </p>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+          <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
+            <div className="flex items-center gap-3 border-b border-gray-100 pb-5">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#E8F1FB] text-[#1565C0]">
+                <HeartHandshake size={22} />
+              </div>
+
+              <div>
+                <h2 className="font-semibold text-[#0A2540]">
+                  Dados Cadastrais do Paciente
+                </h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  Preencha as informações conforme o prontuário de admissão.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-5 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label
+                  htmlFor="nome"
+                  className="mb-2 block text-sm font-medium text-[#0A2540]"
+                >
+                  Nome completo *
+                </label>
+                <div className="relative">
+                  <User
+                    size={18}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+                  />
+                  <input
+                    id="nome"
+                    type="text"
+                    required
+                    value={formData.nome}
+                    onChange={(e) =>
+                      setFormData({ ...formData, nome: e.target.value })
+                    }
+                    placeholder="Ex.: Geraldo Magela da Costa"
+                    className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="cpf"
+                  className="mb-2 block text-sm font-medium text-[#0A2540]"
+                >
+                  CPF (opcional)
+                </label>
+                <div className="relative">
+                  <IdCard
+                    size={18}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+                  />
+                  <input
+                    id="cpf"
+                    type="text"
+                    value={formData.cpf}
+                    onChange={(e) =>
+                      setFormData({ ...formData, cpf: e.target.value })
+                    }
+                    placeholder="000.000.000-00"
+                    className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="data_nascimento"
+                  className="mb-2 block text-sm font-medium text-[#0A2540]"
+                >
+                  Data de nascimento *
+                </label>
+                <div className="relative">
+                  <Calendar
+                    size={18}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+                  />
+                  <input
+                    id="data_nascimento"
+                    type="date"
+                    required
+                    value={formData.data_nascimento}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        data_nascimento: e.target.value,
+                      })
+                    }
+                    className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="sexo"
+                  className="mb-2 block text-sm font-medium text-[#0A2540]"
+                >
+                  Sexo *
+                </label>
+                <select
+                  id="sexo"
+                  value={formData.sexo}
+                  onChange={(e) =>
+                    setFormData({ ...formData, sexo: e.target.value })
+                  }
+                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                >
+                  <option value="Feminino">Feminino</option>
+                  <option value="Masculino">Masculino</option>
+                  <option value="Outro">Outro</option>
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="telefone"
+                  className="mb-2 block text-sm font-medium text-[#0A2540]"
+                >
+                  Telefone / Contato do Responsável
+                </label>
+                <div className="relative">
+                  <Phone
+                    size={18}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+                  />
+                  <input
+                    id="telefone"
+                    type="tel"
+                    value={formData.telefone}
+                    onChange={(e) =>
+                      setFormData({ ...formData, telefone: e.target.value })
+                    }
+                    placeholder="(11) 98888-7777"
+                    className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                  />
+                </div>
+              </div>
+
+              <div className="md:col-span-2">
+                <label
+                  htmlFor="endereco"
+                  className="mb-2 block text-sm font-medium text-[#0A2540]"
+                >
+                  Endereço / Quarto / Observações
+                </label>
+                <div className="relative">
+                  <MapPin
+                    size={18}
+                    className="absolute left-4 top-3.5 text-gray-400"
+                  />
+                  <textarea
+                    id="endereco"
+                    rows={3}
+                    value={formData.endereco}
+                    onChange={(e) =>
+                      setFormData({ ...formData, endereco: e.target.value })
+                    }
+                    placeholder="Ex.: Quarto 104 - Bloco B. Hipertenso, acompanhado pela filha."
+                    className="w-full resize-none rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <Link
+              href="/dashboard"
+              className="rounded-xl border border-gray-300 bg-white px-6 py-3 text-center font-medium text-gray-700 transition hover:bg-gray-50"
+            >
+              Cancelar
+            </Link>
+
+            <button
+              type="submit"
+              disabled={salvando}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-6 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0A2540] hover:shadow-md disabled:opacity-70"
+            >
+              {salvando ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <Save size={18} />
+              )}
+              {salvando ? "Gravando no banco..." : "Cadastrar Idoso"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </main>
+  );
+}
