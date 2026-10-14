@@ -15,6 +15,7 @@ import {
   LogOut,
   ChevronDown,
   Building2,
+  Loader2,
 } from "lucide-react";
 
 interface UsuarioLogado {
@@ -22,27 +23,61 @@ interface UsuarioLogado {
   email: string;
   perfil: string;
   clinica_id?: string;
-  clinica_nome: string;
+  clinica_nome?: string;
 }
-
-// Mapeamento dos registros reais do seu Supabase/PostgreSQL
-const CLINICAS_MAP: Record<string, string> = {
-  "e63b19f5-d8e4-4973-bac6-12aba9a0545d": "Clinica Teste",
-  "f24f8c67-cca5-4546-a5cb-b43a122fddcb": "Clinica Validacao",
-};
 
 export default function DashboardNavbar() {
   const pathname = usePathname();
   const router = useRouter();
   const [dropdownAberto, setDropdownAberto] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
+  const [nomeClinica, setNomeClinica] = useState<string>("");
+  const [buscandoClinica, setBuscandoClinica] = useState(false);
 
   const apiUrl =
     process.env.NEXT_PUBLIC_API_URL ||
     "https://perfect-bravery-production-5ce7.up.railway.app";
 
-  async function carregarUsuario() {
+  async function buscarNomeClinica(cId: string, token: string | null) {
+    if (!cId) return;
+    setBuscandoClinica(true);
+
+    try {
+      const res = await fetch(`${apiUrl}/clinica/${cId}`, {
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.nome) {
+          setNomeClinica(data.nome);
+
+          // Atualiza o cache local para evitar requisições repetidas desnecessárias
+          const userRaw = localStorage.getItem("saspi_user");
+          if (userRaw) {
+            try {
+              const parsed = JSON.parse(userRaw);
+              if (parsed.user) parsed.user.clinica_nome = data.nome;
+              else if (parsed.usuario) parsed.usuario.clinica_nome = data.nome;
+              else parsed.clinica_nome = data.nome;
+              localStorage.setItem("saspi_user", JSON.stringify(parsed));
+            } catch {}
+          }
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn("Aviso ao buscar clínica no backend:", err);
+    } finally {
+      setBuscandoClinica(false);
+    }
+  }
+
+  function carregarUsuario() {
     if (typeof window === "undefined") return;
     const userRaw = localStorage.getItem("saspi_user");
     const token = localStorage.getItem("saspi_token");
@@ -56,40 +91,28 @@ export default function DashboardNavbar() {
           userData.clinica_id ||
           userData.clinicaId ||
           userData.clinica?.id ||
-          "e63b19f5-d8e4-4973-bac6-12aba9a0545d";
+          "";
 
-        // 1. Tenta pegar o nome da clínica pelo objeto, pelo mapa de IDs ou busca remota
-        let cNome =
+        const cNomeInicial =
           userData.clinica?.nome ||
           userData.clinica_nome ||
-          CLINICAS_MAP[cId] ||
-          "Clinica Teste";
+          "";
 
         setUsuario({
-          nome: userData.nome || userData.name || (userData.email ? userData.email.split("@")[0] : "Usuário"),
+          nome:
+            userData.nome ||
+            userData.name ||
+            (userData.email ? userData.email.split("@")[0] : "Usuário"),
           email: userData.email || "",
           perfil: userData.perfil || userData.role || "MEDICO",
           clinica_id: cId,
-          clinica_nome: cNome,
+          clinica_nome: cNomeInicial,
         });
 
-        // 2. Se a API tiver endpoint de clínica, tenta consultar para manter dinâmico
-        if (cId && token && !userData.clinica?.nome && !CLINICAS_MAP[cId]) {
-          try {
-            const resClinica = await fetch(`${apiUrl}/clinica/${cId}`, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            if (resClinica.ok) {
-              const clinicaData = await resClinica.json();
-              if (clinicaData?.nome) {
-                setUsuario((prev) =>
-                  prev ? { ...prev, clinica_nome: clinicaData.nome } : null
-                );
-              }
-            }
-          } catch {
-            // Mantém o nome já definido
-          }
+        if (cNomeInicial) {
+          setNomeClinica(cNomeInicial);
+        } else if (cId) {
+          buscarNomeClinica(cId, token);
         }
       } catch (err) {
         console.error("Erro ao ler dados da sessão na navbar:", err);
@@ -127,6 +150,10 @@ export default function DashboardNavbar() {
     router.push("/login");
   }
 
+const isAdmin =
+  usuario?.perfil === "ADMINISTRADOR" ||
+  usuario?.perfil === "ADMIN";
+
   const links = [
     { href: "/dashboard", label: "Visão Geral", icon: Activity },
     { href: "/dashboard/saude", label: "Sinais Vitais", icon: HeartPulse },
@@ -139,7 +166,7 @@ export default function DashboardNavbar() {
     <header className="sticky top-0 z-40 border-b border-gray-100 bg-white/95 backdrop-blur-md">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 md:px-8">
         
-        {/* LOGO & CLÍNICA REAL DO BANCO */}
+        {/* LOGO & CLÍNICA BUSCADA DO BANCO */}
         <div className="flex items-center gap-3 md:gap-4">
           <Link href="/dashboard" className="flex items-center">
             <Image
@@ -152,12 +179,19 @@ export default function DashboardNavbar() {
             />
           </Link>
 
-          {usuario?.clinica_nome && (
+          {(nomeClinica || buscandoClinica) && (
             <div className="hidden items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs text-gray-700 sm:flex">
               <Building2 size={14} className="text-[#1565C0]" />
-              <span className="font-semibold text-[#0A2540]">
-                {usuario.clinica_nome}
-              </span>
+              {buscandoClinica && !nomeClinica ? (
+                <span className="flex items-center gap-1 text-gray-400">
+                  <Loader2 size={12} className="animate-spin text-[#1565C0]" />
+                  Carregando unidade...
+                </span>
+              ) : (
+                <span className="font-semibold text-[#0A2540]">
+                  {nomeClinica}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -235,9 +269,11 @@ export default function DashboardNavbar() {
               <div className="border-b border-gray-100 px-3 py-2 md:hidden">
                 <p className="text-sm font-semibold text-[#0A2540]">{usuario.nome}</p>
                 <p className="text-xs text-gray-500">{usuario.email}</p>
-                <p className="mt-1 text-xs font-medium text-[#1565C0]">
-                  {usuario.clinica_nome}
-                </p>
+                {nomeClinica && (
+                  <p className="mt-1 text-xs font-medium text-[#1565C0]">
+                    {nomeClinica}
+                  </p>
+                )}
               </div>
 
               <div className="py-1">
@@ -250,14 +286,27 @@ export default function DashboardNavbar() {
                   Meu Perfil
                 </Link>
 
-                <Link
-                  href="/dashboard/usuarios/novo"
-                  onClick={() => setDropdownAberto(false)}
-                  className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-gray-700 transition hover:bg-[#F2F7FB] hover:text-[#1565C0]"
-                >
-                  <UserPlus size={16} className="text-[#26A69A]" />
-                  Cadastrar Novo Usuário
-                </Link>
+                {isAdmin && (
+                  <>
+                    <Link
+                      href="/dashboard/clinica"
+                      onClick={() => setDropdownAberto(false)}
+                      className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-gray-700 transition hover:bg-[#F2F7FB] hover:text-[#1565C0]"
+                    >
+                      <Building2 size={16} className="text-[#1565C0]" />
+                      Dados da Clínica
+                    </Link>
+
+                    <Link
+                      href="/dashboard/usuarios/novo"
+                      onClick={() => setDropdownAberto(false)}
+                      className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-gray-700 transition hover:bg-[#F2F7FB] hover:text-[#1565C0]"
+                    >
+                      <UserPlus size={16} className="text-[#26A69A]" />
+                      Cadastrar Novo Usuário
+                    </Link>
+                  </>
+                )}
               </div>
 
               <div className="border-t border-gray-100 pt-1">
