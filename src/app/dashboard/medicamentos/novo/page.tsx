@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import DashboardNavbar from "@/components/DashboardNavbar";
@@ -11,6 +11,7 @@ import {
   Save,
   Loader2,
   CheckCircle2,
+  UserCheck,
 } from "lucide-react";
 
 export default function NovoMedicamento() {
@@ -18,20 +19,33 @@ export default function NovoMedicamento() {
   const [salvando, setSalvando] = useState(false);
   const [sucesso, setSucesso] = useState(false);
 
-  // Estados alinhados com o backend (Prisma: tabelas medicamento e prescricao)
+  // Estado para armazenar os dados do formulário
   const [formData, setFormData] = useState({
-    nome: "",           // Vai para tabela medicamento.nome
-    dosagem: "",        // Vai para tabela prescricao.dosagem
-    frequencia: "24h",  // Vai para tabela prescricao.frequencia
-    data_inicio: "",    // Vai para tabela prescricao.data_inicio
-    descricao: "",      // Vai para tabela medicamento.descricao (observações)
+    nome: "",
+    dosagem: "",
+    horario_primeira_dose: "",
+    frequencia: "Uma vez ao dia (24h)",
+    orientacoes: "",
   });
+
+ const [idoso, setIdoso] = useState({ id: "1", nome: "Dona Francisca Silva", idade: 78 });
+
+  useEffect(() => {
+    const activeElderly = localStorage.getItem("saspi_active_elderly");
+    if (activeElderly) {
+      try {
+        setIdoso(JSON.parse(activeElderly));
+      } catch (e) {
+        console.error("Erro ao ler idoso ativo:", e);
+      }
+    }
+  }, []);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSalvando(true);
 
-    // Simulação da chamada à API (POST /medicamento e POST /prescricao)
+    // Simulação do envio com estado de loading
     setTimeout(() => {
       setSalvando(false);
       setSucesso(true);
@@ -77,6 +91,21 @@ export default function NovoMedicamento() {
           </div>
         )}
 
+        {/* Banner do paciente vinculado */}
+        <div className="mt-6 flex items-center gap-3 rounded-2xl border border-blue-100 bg-[#E8F1FB] p-4 text-[#0A2540]">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#1565C0] shadow-sm">
+            <UserCheck size={20} />
+          </div>
+          <div>
+            <span className="text-xs font-semibold uppercase tracking-wider text-[#1565C0]">
+              Prescrição vinculada ao paciente:
+            </span>
+            <p className="text-sm font-bold">
+              {idoso.nome} ({idoso.idade} anos)
+            </p>
+          </div>
+        </div>
+
         <form onSubmit={handleSubmit} className="mt-8 space-y-6">
           <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
             <div className="flex items-center gap-3 border-b border-gray-100 pb-5">
@@ -112,7 +141,7 @@ export default function NovoMedicamento() {
 
               <div>
                 <label htmlFor="dosagem" className="mb-2 block text-sm font-medium text-[#0A2540]">
-                  Dosagem *
+                  Dosagem / Concentração *
                 </label>
                 <input
                   id="dosagem"
@@ -126,22 +155,22 @@ export default function NovoMedicamento() {
               </div>
 
               <div>
-                <label htmlFor="data_inicio" className="mb-2 block text-sm font-medium text-[#0A2540]">
-                  Data de Início *
+                <label htmlFor="horario_primeira_dose" className="mb-2 block text-sm font-medium text-[#0A2540]">
+                  Horário da Primeira Dose *
                 </label>
                 <input
-                  id="data_inicio"
-                  type="date"
+                  id="horario_primeira_dose"
+                  type="time"
                   required
-                  value={formData.data_inicio}
-                  onChange={(e) => setFormData({ ...formData, data_inicio: e.target.value })}
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                  value={formData.horario_primeira_dose}
+                  onChange={(e) => setFormData({ ...formData, horario_primeira_dose: e.target.value })}
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 placeholder:text-gray-400 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
               </div>
 
               <div className="md:col-span-2">
                 <label htmlFor="frequencia" className="mb-2 block text-sm font-medium text-[#0A2540]">
-                  Frequência de administração *
+                  Frequência / Intervalo *
                 </label>
                 <select
                   id="frequencia"
@@ -149,23 +178,23 @@ export default function NovoMedicamento() {
                   onChange={(e) => setFormData({ ...formData, frequencia: e.target.value })}
                   className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 >
-                  <option value="24h">A cada 24 horas (1x ao dia)</option>
-                  <option value="12h">A cada 12 horas (2x ao dia)</option>
-                  <option value="8h">A cada 8 horas (3x ao dia)</option>
-                  <option value="6h">A cada 6 horas (4x ao dia)</option>
-                  <option value="continuo">Uso contínuo conforme necessidade</option>
+                  <option value="A cada 8 horas (3x ao dia)">A cada 8 horas (3x ao dia)</option>
+                  <option value="A cada 12 horas (2x ao dia)">A cada 12 horas (2x ao dia)</option>
+                  <option value="Uma vez ao dia (24h)">Uma vez ao dia (24h)</option>
+                  <option value="Antes de dormir">Antes de dormir</option>
+                  <option value="Uso contínuo conforme necessidade">Uso contínuo conforme necessidade</option>
                 </select>
               </div>
 
               <div className="md:col-span-2">
-                <label htmlFor="descricao" className="mb-2 block text-sm font-medium text-[#0A2540]">
-                  Instruções ou observações
+                <label htmlFor="orientacoes" className="mb-2 block text-sm font-medium text-[#0A2540]">
+                  Orientações e Instruções de uso (opcional)
                 </label>
                 <textarea
-                  id="descricao"
+                  id="orientacoes"
                   rows={4}
-                  value={formData.descricao}
-                  onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
+                  value={formData.orientacoes}
+                  onChange={(e) => setFormData({ ...formData, orientacoes: e.target.value })}
                   placeholder="Ex.: Ingerir após o almoço com bastante água..."
                   className="w-full resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 placeholder:text-gray-400 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
