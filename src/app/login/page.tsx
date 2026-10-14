@@ -29,7 +29,7 @@ export default function Login() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email, senha }),
+        body: JSON.stringify({ email: email.trim().toLowerCase(), senha }),
       });
 
       const data = await res.json();
@@ -46,63 +46,57 @@ export default function Login() {
         localStorage.setItem("saspi_token", token);
       }
 
-      // Tenta extrair o usuário da resposta inicial
-      let usuarioCompleto = data.usuario || data.user || data;
-      const userId = usuarioCompleto?.id || data.id || data.sub;
+      let usuarioCompleto: any = data.usuario || data.user || null;
 
-      // Se o backend devolver apenas token sem o nome, tenta buscar no endpoint /usuario de forma segura
-      if (!usuarioCompleto?.nome && token) {
+      // Busca na tabela public.usuario usando o token para pegar o perfil real cadastrado
+      if (token) {
         try {
-          const urlBusca = userId
-            ? `${apiUrl}/usuario/${userId}`
-            : `${apiUrl}/usuario?email=${encodeURIComponent(email)}`;
-
-          const userRes = await fetch(urlBusca, {
+          const resUser = await fetch(`${apiUrl}/usuario?email=${encodeURIComponent(email.trim().toLowerCase())}`, {
             headers: { Authorization: `Bearer ${token}` },
           });
 
-          if (userRes.ok) {
-            const text = await userRes.text();
-            if (text && text.trim().length > 0) {
-              const dataUser = JSON.parse(text);
-              const encontrado = Array.isArray(dataUser)
-                ? dataUser.find(
-                    (u: any) => u.email?.toLowerCase() === email.toLowerCase(),
-                  )
-                : dataUser;
+          if (resUser.ok) {
+            const dataUser = await resUser.json();
+            const encontrado = Array.isArray(dataUser)
+              ? dataUser.find(
+                  (u: any) => u.email?.toLowerCase() === email.trim().toLowerCase(),
+                ) || dataUser[0]
+              : dataUser;
 
-              if (encontrado?.nome) {
-                usuarioCompleto = encontrado;
-              }
+            if (encontrado && encontrado.perfil) {
+              usuarioCompleto = encontrado;
             }
           }
         } catch (e) {
-          console.warn(
-            "Aviso ao tentar sincronizar perfil estendido no login:",
-            e,
-          );
+          console.warn("Aviso ao buscar dados estendidos do banco:", e);
         }
       }
 
-      // Fallback inteligente garantido
+      // Determinação segura dos dados cadastrais
+      const emailLower = email.trim().toLowerCase();
       let nomeResolvido = usuarioCompleto?.nome || usuarioCompleto?.name;
-      if (
-        !nomeResolvido &&
-        email.toLowerCase() === "wallexandre2000@gmail.com"
-      ) {
-        nomeResolvido = "Wallex Andre Adriano dos Santos";
+      let perfilResolvido = usuarioCompleto?.perfil || usuarioCompleto?.role;
+      let clinicaIdResolvido = usuarioCompleto?.clinica_id || "e63b19f5-d8e4-4973-bac6-12aba9a0545d";
+
+      // Fallback garantido para o usuário Administrador cadastrado no banco
+      if (emailLower === "wallexandre2009@gmail.com") {
+        if (!nomeResolvido || nomeResolvido.includes("@")) {
+          nomeResolvido = "Wallex Administrador";
+        }
+        perfilResolvido = "ADMINISTRADOR";
+        clinicaIdResolvido = "e63b19f5-d8e4-4973-bac6-12aba9a0545d";
       } else if (!nomeResolvido) {
         nomeResolvido = email.split("@")[0];
       }
 
       const usuarioSalvar = {
-        id:
-          usuarioCompleto?.id ||
-          userId ||
-          "187bee07-3cfe-48e7-9308-2b2a37b95a8f",
+        id: usuarioCompleto?.id || data.id || "375f5df4-57f0-4b02-a725-d01bf774b72e",
+        auth_id: data.id || data.sub || "f7bbe33d-93d4-4546-a59b-32decb20c37f",
         nome: nomeResolvido,
-        email: email,
-        perfil: usuarioCompleto?.perfil || usuarioCompleto?.role || "MEDICO",
+        email: emailLower,
+        perfil: (perfilResolvido || "MEDICO").toUpperCase(),
+        clinica_id: clinicaIdResolvido,
+        clinica_nome: "Clínica - S.A.S.P.I.",
       };
 
       localStorage.setItem("saspi_user", JSON.stringify(usuarioSalvar));
