@@ -86,17 +86,22 @@ export default function Dashboard() {
     };
   }, []);
 
-  const isAdmin = user.perfil === "ADMINISTRADOR" || user.perfil === "ADMIN";
+  const isAdmin = user?.perfil === "ADMINISTRADOR" || user?.perfil === "ADMIN";
 
   // Formatação dinâmica da saudação de acordo com o perfil
   function obterSaudacao() {
-    const primeiroNome = user.nome ? user.nome.trim().split(" ")[0] : "Profissional";
-    const perfilUpper = (user.perfil || "").toUpperCase();
+    const primeiroNome =
+      user.nome && !user.nome.includes("@")
+        ? user.nome.trim().split(" ")[0]
+        : "Administrador";
 
-    if (perfilUpper === "MEDICO") {
+    if (isAdmin) {
+      return `Olá, ${primeiroNome}!`;
+    }
+    if (user.perfil === "MEDICO") {
       return `Olá, Dr(a). ${primeiroNome}!`;
     }
-    if (perfilUpper === "ENFERMEIRO") {
+    if (user.perfil === "ENFERMEIRO") {
       return `Olá, Enf. ${primeiroNome}!`;
     }
     return `Olá, ${primeiroNome}!`;
@@ -121,8 +126,8 @@ export default function Dashboard() {
               {isAdmin
                 ? "Gestão institucional de profissionais, cuidadores e idosos do S.A.S.P.I."
                 : idosoAtivo
-                ? `Acompanhamento em tempo real dos sinais vitais e da rotina de ${idosoAtivo.nome}.`
-                : "Selecione ou cadastre um idoso para iniciar o monitoramento."}
+                  ? `Acompanhamento em tempo real dos sinais vitais e da rotina de ${idosoAtivo.nome}.`
+                  : "Selecione ou cadastre um idoso para iniciar o monitoramento."}
             </p>
           </div>
 
@@ -195,7 +200,8 @@ export default function Dashboard() {
                 Ações de Gestão Institucional
               </h2>
               <p className="mt-1 text-sm text-gray-500">
-                Atalhos operacionais definidos no módulo de administração do S.A.S.P.I.[cite: 5]
+                Atalhos operacionais definidos no módulo de administração do
+                S.A.S.P.I.[cite: 5]
               </p>
 
               <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -242,7 +248,7 @@ export default function Dashboard() {
                 </Link>
 
                 <Link
-                  href="/dashboard/perfil"
+                  href="/dashboard/clinica"
                   className="group rounded-xl border border-gray-200 bg-[#FAFCFE] p-5 transition hover:border-[#BFD8F2] hover:bg-white hover:shadow-md"
                 >
                   <div className="flex items-center justify-between">
@@ -255,10 +261,10 @@ export default function Dashboard() {
                     />
                   </div>
                   <h3 className="mt-4 font-semibold text-[#0A2540]">
-                    Dados da Conta
+                    Dados da Clínica
                   </h3>
                   <p className="mt-1 text-sm text-gray-500">
-                    Consultar e atualizar informações da clínica e perfil.
+                    Gerenciar razão social, contato e endereço da instituição.
                   </p>
                 </Link>
               </div>
@@ -329,7 +335,8 @@ export default function Dashboard() {
                         Nenhum registro de telemetria recente[cite: 2]
                       </p>
                       <p className="mt-1 text-xs text-gray-500">
-                        Os dados aparecerão assim que a smartband ou uma aferição manual for sincronizada[cite: 2, 5].
+                        Os dados aparecerão assim que a smartband ou uma
+                        aferição manual for sincronizada[cite: 2, 5].
                       </p>
                     </div>
                   </section>
@@ -373,7 +380,8 @@ export default function Dashboard() {
                   Nenhum paciente selecionado
                 </h3>
                 <p className="mt-2 text-sm text-gray-500">
-                  Cadastre um idoso ou selecione um paciente acima para visualizar os dados clínicos.
+                  Cadastre um idoso ou selecione um paciente acima para
+                  visualizar os dados clínicos.
                 </p>
               </div>
             )}

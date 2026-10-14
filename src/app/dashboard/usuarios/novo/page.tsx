@@ -6,99 +6,119 @@ import Link from "next/link";
 import DashboardNavbar from "@/components/DashboardNavbar";
 import {
   ArrowLeft,
+  User,
   Mail,
+  Lock,
   Phone,
-  Save,
-  UserRound,
-  ShieldCheck,
   IdCard,
-  KeyRound,
+  ShieldCheck,
+  Save,
   Loader2,
   CheckCircle2,
-  Users,
   AlertCircle,
+  ShieldAlert,
 } from "lucide-react";
 
 export default function NovoUsuario() {
   const router = useRouter();
   const [salvando, setSalvando] = useState(false);
   const [sucesso, setSucesso] = useState(false);
-  const [erroSessao, setErroSessao] = useState("");
+  const [erro, setErro] = useState("");
+  const [autorizado, setAutorizado] = useState<boolean | null>(null);
 
   const [formData, setFormData] = useState({
     nome: "",
     email: "",
+    senha: "",
     telefone: "",
     cpf: "",
-    senha: "",
-    clinica_id: "",
     perfil: "CUIDADOR",
+    clinica_id: "",
   });
 
+  const apiUrl =
+    process.env.NEXT_PUBLIC_API_URL ||
+    "https://perfect-bravery-production-5ce7.up.railway.app";
+
   useEffect(() => {
+    // Validação de Permissão: Apenas ADMINISTRADOR pode cadastrar novos usuários
     const userRaw = localStorage.getItem("saspi_user");
     if (userRaw) {
       try {
         const parsed = JSON.parse(userRaw);
-        // Resgata o UUID da clinica da sessao do administrador logado
-        // Fallback para a Clinica Teste caso o endpoint de login ainda nao devolva o campo
-        const cid =
-          parsed.clinica_id ||
-          parsed.clinicaId ||
-          parsed.clinica?.id ||
+        const userData = parsed.user || parsed.usuario || parsed;
+        const perfil = (userData.perfil || userData.role || "").toUpperCase();
+
+        if (perfil !== "ADMINISTRADOR" && perfil !== "ADMIN") {
+          setAutorizado(false);
+          return;
+        }
+
+        setAutorizado(true);
+        const cId =
+          userData.clinica_id ||
+          userData.clinicaId ||
+          userData.clinica?.id ||
           "e63b19f5-d8e4-4973-bac6-12aba9a0545d";
 
-        setFormData((prev) => ({ ...prev, clinica_id: cid }));
-      } catch (err) {
-        console.error("Erro ao ler dados da clinica na sessao:", err);
-        setErroSessao("Nao foi possivel carregar a clinica do usuario logado.");
+        setFormData((prev) => ({ ...prev, clinica_id: cId }));
+      } catch {
+        setAutorizado(false);
       }
     } else {
-      // Fallback seguro de desenvolvimento para a clinica validada no Supabase
-      setFormData((prev) => ({
-        ...prev,
-        clinica_id: "e63b19f5-d8e4-4973-bac6-12aba9a0545d",
-      }));
+      setAutorizado(false);
     }
   }, []);
+
+  // Se o usuário não for Administrador (ex: Médico), bloqueia a tela
+  if (autorizado === false) {
+    return (
+      <main className="min-h-screen bg-[#F2F7FB]">
+        <DashboardNavbar />
+        <div className="mx-auto max-w-xl px-4 py-16 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
+            <ShieldAlert size={32} />
+          </div>
+          <h1 className="mt-4 text-2xl font-bold text-[#0A2540]">
+            Acesso Restrito
+          </h1>
+          <p className="mt-2 text-sm text-gray-600">
+            Apenas Administradores têm permissão para cadastrar novos membros ou profissionais na clínica. Médicos e outros profissionais possuem acesso restrito à área assistencial.
+          </p>
+          <div className="mt-6">
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#1565C0] px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#0A2540]"
+            >
+              <ArrowLeft size={16} />
+              Voltar ao Dashboard
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSalvando(true);
+    setErro("");
     setSucesso(false);
 
-    if (!formData.clinica_id) {
-      alert("Erro: ID da clinica nao identificado na sessao.");
-      setSalvando(false);
-      return;
-    }
+    const token = localStorage.getItem("saspi_token");
 
-    const apiUrl =
-      process.env.NEXT_PUBLIC_API_URL ||
-      "https://perfect-bravery-production-5ce7.up.railway.app";
-    const token =
-      typeof window !== "undefined"
-        ? localStorage.getItem("saspi_token")
-        : null;
-
-    // Normalizacao de CPF e Telefone (apenas digitos numericos)
     const payload = {
-      ...formData,
-      cpf: formData.cpf.replace(/\D/g, ""),
-      telefone: formData.telefone.replace(/\D/g, ""),
+      nome: formData.nome.trim(),
+      email: formData.email.trim().toLowerCase(),
+      senha: formData.senha,
+      telefone: formData.telefone.replace(/\D/g, "") || null,
+      cpf: formData.cpf.replace(/\D/g, "") || null,
+      perfil: formData.perfil,
+      clinica_id: formData.clinica_id,
     };
 
-    console.group(
-      "%c🚀 S.A.S.P.I. -> Enviando Cadastro de Usuario",
-      "color: #1565C0; font-weight: bold;",
-    );
-    console.log("📍 Destino:", `${apiUrl}/usuario`);
-    console.log("📦 Dados (Payload):", payload);
-    console.log("🔑 Token:", token ? "Presente" : "Ausente");
-    console.groupEnd();
-
     try {
-      const response = await fetch(`${apiUrl}/usuario`, {
+      const res = await fetch(`${apiUrl}/usuario`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -107,34 +127,18 @@ export default function NovoUsuario() {
         body: JSON.stringify(payload),
       });
 
-      const responseData = await response.json().catch(() => null);
+      const data = await res.json().catch(() => null);
 
-      console.group(
-        "%c📬 Resposta da API Railway",
-        response.ok ? "color: #10b981;" : "color: #ef4444;",
-      );
-      console.log("Status HTTP:", response.status, response.statusText);
-      console.log("Dados retornados:", responseData);
-      console.groupEnd();
-
-      if (!response.ok) {
-        const errorMsg = Array.isArray(responseData?.message)
-          ? responseData.message.join(", ")
-          : responseData?.message || `Erro HTTP: ${response.status}`;
-        throw new Error(errorMsg);
+      if (!res.ok) {
+        throw new Error(data?.message || `Erro ${res.status}: Não foi possível registrar o usuário.`);
       }
 
       setSucesso(true);
       setTimeout(() => {
         router.push("/dashboard");
       }, 1500);
-    } catch (error: any) {
-      console.error(
-        "%c❌ Erro ao cadastrar usuario:",
-        "color: #ef4444; font-weight: bold;",
-        error,
-      );
-      alert(`Falha no cadastro: ${error.message}`);
+    } catch (err: any) {
+      setErro(err.message || "Erro de conexão ao salvar usuário.");
     } finally {
       setSalvando(false);
     }
@@ -155,23 +159,22 @@ export default function NovoUsuario() {
 
         <div className="mt-8">
           <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
-            Gestao de Acessos
+            Gestão de Acessos
           </span>
 
           <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0A2540] md:text-4xl">
-            Novo Usuario
+            Novo Usuário
           </h1>
 
           <p className="mt-2 max-w-2xl text-gray-600">
-            Cadastre membros da rede de apoio ou profissionais clinicos vinculados
-            a esta instituicao[cite: 7].
+            Cadastre membros da rede de apoio ou profissionais clínicos vinculados a esta instituição.
           </p>
         </div>
 
-        {erroSessao && (
-          <div className="mt-6 flex items-center gap-3 rounded-xl bg-amber-50 p-4 text-amber-800">
-            <AlertCircle size={20} className="shrink-0 text-amber-600" />
-            <p className="text-sm font-medium">{erroSessao}</p>
+        {erro && (
+          <div className="mt-6 flex items-center gap-3 rounded-xl bg-red-50 p-4 text-red-700">
+            <AlertCircle size={20} className="shrink-0 text-red-600" />
+            <p className="text-sm font-medium">{erro}</p>
           </div>
         )}
 
@@ -179,25 +182,25 @@ export default function NovoUsuario() {
           <div className="mt-6 flex items-center gap-3 rounded-xl bg-emerald-50 p-4 text-emerald-800">
             <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
             <p className="text-sm font-medium">
-              Usuario cadastrado com sucesso! Redirecionando...
+              Usuário cadastrado com sucesso! Redirecionando...
             </p>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+        {/* autoComplete="off" previne o preenchimento automático das senhas do navegador */}
+        <form onSubmit={handleSubmit} autoComplete="off" className="mt-8 space-y-6">
           <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
             <div className="flex items-center gap-3 border-b border-gray-100 pb-5">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#E8F1FB] text-[#1565C0]">
-                <Users size={22} />
+                <User size={22} />
               </div>
 
               <div>
                 <h2 className="font-semibold text-[#0A2540]">
-                  Dados do Usuario
+                  Dados do Usuário
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Preencha os dados e defina a senha e o nivel de permissao do
-                  usuario[cite: 7].
+                  Preencha os dados e defina a senha e o nível de permissão do usuário.
                 </p>
               </div>
             </div>
@@ -211,7 +214,7 @@ export default function NovoUsuario() {
                   Nome completo *
                 </label>
                 <div className="relative">
-                  <UserRound
+                  <User
                     size={18}
                     className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
                   />
@@ -231,7 +234,7 @@ export default function NovoUsuario() {
 
               <div>
                 <label
-                  htmlFor="email"
+                  htmlFor="user_email"
                   className="mb-2 block text-sm font-medium text-[#0A2540]"
                 >
                   E-mail *
@@ -242,14 +245,15 @@ export default function NovoUsuario() {
                     className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
                   />
                   <input
-                    id="email"
+                    id="user_email"
                     type="email"
                     required
+                    autoComplete="off"
                     value={formData.email}
                     onChange={(e) =>
                       setFormData({ ...formData, email: e.target.value })
                     }
-                    placeholder="usuario@clinica.com"
+                    placeholder="usuario@exemplo.com"
                     className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   />
                 </div>
@@ -257,26 +261,27 @@ export default function NovoUsuario() {
 
               <div>
                 <label
-                  htmlFor="senha"
+                  htmlFor="user_password"
                   className="mb-2 block text-sm font-medium text-[#0A2540]"
                 >
-                  Senha inicial (minimo 6 caracteres) *
+                  Senha inicial (mínimo 6 caracteres) *
                 </label>
                 <div className="relative">
-                  <KeyRound
+                  <Lock
                     size={18}
                     className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
                   />
                   <input
-                    id="senha"
+                    id="user_password"
                     type="password"
                     required
                     minLength={6}
+                    autoComplete="new-password"
                     value={formData.senha}
                     onChange={(e) =>
                       setFormData({ ...formData, senha: e.target.value })
                     }
-                    placeholder="******"
+                    placeholder="••••••••"
                     className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   />
                 </div>
@@ -332,33 +337,31 @@ export default function NovoUsuario() {
                 </div>
               </div>
 
-              <div>
+              <div className="md:col-span-2">
                 <label
                   htmlFor="perfil"
                   className="mb-2 block text-sm font-medium text-[#0A2540]"
                 >
-                  Perfil de Acesso *[cite: 7]
+                  Perfil de Acesso *
                 </label>
                 <div className="relative">
                   <ShieldCheck
                     size={18}
-                    className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#1565C0]"
+                    className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
                   />
                   <select
                     id="perfil"
-                    required
                     value={formData.perfil}
                     onChange={(e) =>
                       setFormData({ ...formData, perfil: e.target.value })
                     }
-                    className="w-full appearance-none rounded-xl border border-gray-300 bg-white py-3 pl-11 pr-4 text-sm font-medium text-[#0A2540] outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                    className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   >
-                    <option value="FAMILIAR">Familiar (Visualizacao)</option>
-                    <option value="CUIDADOR">Cuidador (Apoio na rotina)</option>
-                    <option value="ENFERMEIRO">
-                      Enfermeiro (Registros clinicos)
-                    </option>
-                    <option value="MEDICO">Medico (Gestao clinica)</option>
+                    <option value="MEDICO">Médico (Acompanhamento clínico e prescrições)</option>
+                    <option value="ENFERMEIRO">Enfermeiro (Triagem, rotinas e cuidados)</option>
+                    <option value="CUIDADOR">Cuidador (Apoio na rotina diária)</option>
+                    <option value="FAMILIAR">Familiar (Acompanhamento remoto)</option>
+                    <option value="ADMINISTRADOR">Administrador (Gestão de usuários e clínica)</option>
                   </select>
                 </div>
               </div>
@@ -383,7 +386,7 @@ export default function NovoUsuario() {
               ) : (
                 <Save size={18} />
               )}
-              {salvando ? "Cadastrando..." : "Cadastrar usuario"}
+              {salvando ? "Cadastrando..." : "Cadastrar Usuário"}
             </button>
           </div>
         </form>
