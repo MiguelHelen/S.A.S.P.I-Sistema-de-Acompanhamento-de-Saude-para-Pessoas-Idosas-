@@ -54,14 +54,20 @@ export default function Perfil() {
       // Tenta buscar na API filtrando especificamente pelo e-mail da sessão atual
       if (token) {
         try {
-          const res = await fetch(`${apiUrl}/usuario?email=${encodeURIComponent(currentEmail)}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
+          const res = await fetch(
+            `${apiUrl}/usuario?email=${encodeURIComponent(currentEmail)}`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            },
+          );
 
           if (res.ok) {
             const data = await res.json();
             const usuarioEncontrado = Array.isArray(data)
-              ? data.find((u: any) => u.email?.toLowerCase() === currentEmail.toLowerCase())
+              ? data.find(
+                  (u: any) =>
+                    u.email?.toLowerCase() === currentEmail.toLowerCase(),
+                )
               : data;
 
             if (usuarioEncontrado && usuarioEncontrado.nome) {
@@ -73,13 +79,20 @@ export default function Perfil() {
                 cpf: usuarioEncontrado.cpf || "",
                 perfil: usuarioEncontrado.perfil || "MEDICO",
               });
-              localStorage.setItem("saspi_user", JSON.stringify(usuarioEncontrado));
+              localStorage.setItem(
+                "saspi_user",
+                JSON.stringify(usuarioEncontrado),
+              );
+              window.dispatchEvent(new Event("saspi_user_updated")); // <-- AQUI: Notifica na hora a Dashboard e Navbar
               setCarregando(false);
               return;
             }
           }
         } catch (err) {
-          console.warn("Falha na sincronização remota, mantendo dados do banco validados:", err);
+          console.warn(
+            "Falha na sincronização remota, mantendo dados do banco validados:",
+            err,
+          );
         }
       }
 
@@ -92,6 +105,19 @@ export default function Perfil() {
         cpf: "12345678901",
         perfil: "MEDICO",
       });
+      const dadosValidados = {
+        id: currentId,
+        nome: "Wallex Andre Adriano dos Santos",
+        email: currentEmail,
+        telefone: "11932344867",
+        cpf: "12345678901",
+        perfil: "MEDICO",
+      };
+
+      setFormData(dadosValidados);
+      localStorage.setItem("saspi_user", JSON.stringify(dadosValidados)); // <-- AQUI: Corrige o saspi_user
+      window.dispatchEvent(new Event("saspi_user_updated")); // <-- AQUI: Avisa o sistema imediatamente
+      setCarregando(false);
       setCarregando(false);
     }
 
@@ -168,7 +194,9 @@ export default function Perfil() {
         {salvo && (
           <div className="mt-6 flex items-center gap-3 rounded-xl bg-emerald-50 p-4 text-emerald-800">
             <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
-            <p className="text-sm font-medium">Informações salvas e sincronizadas com sucesso!</p>
+            <p className="text-sm font-medium">
+              Informações salvas e sincronizadas com sucesso!
+            </p>
           </div>
         )}
 
@@ -212,16 +240,17 @@ export default function Perfil() {
             </div>
           </aside>
 
-          <form onSubmit={handleSave} className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
+          <form
+            onSubmit={handleSave}
+            className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm md:p-8"
+          >
             <div className="flex items-center gap-3 border-b border-gray-100 pb-5">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#E6F4EF] text-[#26A69A]">
                 <UserRound size={22} />
               </div>
 
               <div>
-                <h2 className="font-semibold text-[#0A2540]">
-                  Dados Pessoais
-                </h2>
+                <h2 className="font-semibold text-[#0A2540]">Dados Pessoais</h2>
                 <p className="mt-1 text-sm text-gray-500">
                   Edite os dados cadastrais da sua credencial clínica.
                 </p>
@@ -230,28 +259,42 @@ export default function Perfil() {
 
             <div className="mt-6 grid gap-5 md:grid-cols-2">
               <div className="md:col-span-2">
-                <label htmlFor="nome" className="mb-2 block text-sm font-medium text-[#0A2540]">
+                <label
+                  htmlFor="nome"
+                  className="mb-2 block text-sm font-medium text-[#0A2540]"
+                >
                   Nome completo
                 </label>
                 <div className="relative">
-                  <UserRound size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <UserRound
+                    size={18}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+                  />
                   <input
                     id="nome"
                     type="text"
                     required
                     value={formData.nome}
-                    onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, nome: e.target.value })
+                    }
                     className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   />
                 </div>
               </div>
 
               <div>
-                <label htmlFor="email" className="mb-2 block text-sm font-medium text-[#0A2540]">
+                <label
+                  htmlFor="email"
+                  className="mb-2 block text-sm font-medium text-[#0A2540]"
+                >
                   E-mail
                 </label>
                 <div className="relative">
-                  <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <Mail
+                    size={18}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+                  />
                   <input
                     id="email"
                     type="email"
@@ -263,43 +306,65 @@ export default function Perfil() {
               </div>
 
               <div>
-                <label htmlFor="telefone" className="mb-2 block text-sm font-medium text-[#0A2540]">
+                <label
+                  htmlFor="telefone"
+                  className="mb-2 block text-sm font-medium text-[#0A2540]"
+                >
                   Telefone
                 </label>
                 <div className="relative">
-                  <Phone size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <Phone
+                    size={18}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+                  />
                   <input
                     id="telefone"
                     type="tel"
                     value={formData.telefone}
-                    onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, telefone: e.target.value })
+                    }
                     className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   />
                 </div>
               </div>
 
               <div>
-                <label htmlFor="cpf" className="mb-2 block text-sm font-medium text-[#0A2540]">
+                <label
+                  htmlFor="cpf"
+                  className="mb-2 block text-sm font-medium text-[#0A2540]"
+                >
                   CPF
                 </label>
                 <div className="relative">
-                  <IdCard size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <IdCard
+                    size={18}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+                  />
                   <input
                     id="cpf"
                     type="text"
                     value={formData.cpf}
-                    onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, cpf: e.target.value })
+                    }
                     className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   />
                 </div>
               </div>
 
               <div>
-                <label htmlFor="perfil" className="mb-2 block text-sm font-medium text-[#0A2540]">
+                <label
+                  htmlFor="perfil"
+                  className="mb-2 block text-sm font-medium text-[#0A2540]"
+                >
                   Nível de Acesso (Perfil)
                 </label>
                 <div className="relative">
-                  <ShieldCheck size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <ShieldCheck
+                    size={18}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+                  />
                   <input
                     id="perfil"
                     type="text"
@@ -317,7 +382,11 @@ export default function Perfil() {
                 disabled={salvando}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-6 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0A2540] hover:shadow-md disabled:opacity-70 sm:w-auto"
               >
-                {salvando ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                {salvando ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : (
+                  <Save size={18} />
+                )}
                 {salvando ? "Salvando..." : "Salvar alterações"}
               </button>
             </div>
