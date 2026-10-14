@@ -1,25 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import DashboardNavbar from "@/components/DashboardNavbar";
 import {
   ArrowLeft,
   CalendarDays,
+  Clock,
   MapPin,
+  UserCheck,
   Save,
-  Stethoscope,
   Loader2,
   CheckCircle2,
+  Stethoscope,
 } from "lucide-react";
 
 export default function NovaConsulta() {
   const router = useRouter();
   const [salvando, setSalvando] = useState(false);
   const [sucesso, setSucesso] = useState(false);
+  const [idoso, setIdoso] = useState({
+    id: "1",
+    nome: "Dona Francisca Silva",
+    idade: 78,
+  });
 
-  // Estados preparados para a futura tabela 'consulta' no Prisma
   const [formData, setFormData] = useState({
     especialidade: "",
     profissional: "",
@@ -29,11 +35,22 @@ export default function NovaConsulta() {
     observacao: "",
   });
 
+  useEffect(() => {
+    const activeElderly = localStorage.getItem("saspi_active_elderly");
+    if (activeElderly) {
+      try {
+        setIdoso(JSON.parse(activeElderly));
+      } catch (e) {
+        console.error("Erro ao ler idoso ativo:", e);
+      }
+    }
+  }, []);
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSalvando(true);
 
-    // Simula o tempo de requisição para a API
+    // Simulação do salvamento vinculando a consulta ao idoso ativo
     setTimeout(() => {
       setSalvando(false);
       setSucesso(true);
@@ -79,6 +96,22 @@ export default function NovaConsulta() {
           </div>
         )}
 
+        {idoso && (
+          <div className="mt-6 flex items-center gap-3 rounded-2xl border border-blue-100 bg-[#E8F1FB] p-4 text-[#0A2540]">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#1565C0] shadow-sm">
+              <UserCheck size={20} />
+            </div>
+            <div>
+              <span className="text-xs font-semibold uppercase tracking-wider text-[#1565C0]">
+                Agendamento vinculado ao paciente:
+              </span>
+              <p className="text-sm font-bold">
+                {idoso.nome} ({idoso.idade} anos)
+              </p>
+            </div>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="mt-8 space-y-6">
           <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
             <div className="flex items-center gap-3 border-b border-gray-100 pb-5">
@@ -90,7 +123,6 @@ export default function NovaConsulta() {
                 <h2 className="font-semibold text-[#0A2540]">
                   Informações da consulta
                 </h2>
-
                 <p className="mt-1 text-sm text-gray-500">
                   Preencha os dados principais do atendimento.
                 </p>
@@ -99,7 +131,10 @@ export default function NovaConsulta() {
 
             <div className="mt-6 grid gap-5 md:grid-cols-2">
               <div>
-                <label htmlFor="especialidade" className="mb-2 block text-sm font-medium text-[#0A2540]">
+                <label
+                  htmlFor="especialidade"
+                  className="mb-2 block text-sm font-medium text-[#0A2540]"
+                >
                   Especialidade *
                 </label>
                 <input
@@ -107,14 +142,19 @@ export default function NovaConsulta() {
                   type="text"
                   required
                   value={formData.especialidade}
-                  onChange={(e) => setFormData({ ...formData, especialidade: e.target.value })}
-                  placeholder="Ex.: Cardiologista"
+                  onChange={(e) =>
+                    setFormData({ ...formData, especialidade: e.target.value })
+                  }
+                  placeholder="Ex.: Cardiologia, Geriatria, Oftalmologia"
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 placeholder:text-gray-400 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
               </div>
 
               <div>
-                <label htmlFor="profissional" className="mb-2 block text-sm font-medium text-[#0A2540]">
+                <label
+                  htmlFor="profissional"
+                  className="mb-2 block text-sm font-medium text-[#0A2540]"
+                >
                   Profissional *
                 </label>
                 <input
@@ -122,14 +162,19 @@ export default function NovaConsulta() {
                   type="text"
                   required
                   value={formData.profissional}
-                  onChange={(e) => setFormData({ ...formData, profissional: e.target.value })}
-                  placeholder="Ex.: Dr. Carlos Almeida"
+                  onChange={(e) =>
+                    setFormData({ ...formData, profissional: e.target.value })
+                  }
+                  placeholder="Ex.: Dr. Roberto Faria"
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 placeholder:text-gray-400 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
               </div>
 
               <div>
-                <label htmlFor="data" className="mb-2 block text-sm font-medium text-[#0A2540]">
+                <label
+                  htmlFor="data"
+                  className="mb-2 block text-sm font-medium text-[#0A2540]"
+                >
                   Data *
                 </label>
                 <input
@@ -137,13 +182,18 @@ export default function NovaConsulta() {
                   type="date"
                   required
                   value={formData.data}
-                  onChange={(e) => setFormData({ ...formData, data: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, data: e.target.value })
+                  }
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
               </div>
 
               <div>
-                <label htmlFor="horario" className="mb-2 block text-sm font-medium text-[#0A2540]">
+                <label
+                  htmlFor="horario"
+                  className="mb-2 block text-sm font-medium text-[#0A2540]"
+                >
                   Horário *
                 </label>
                 <input
@@ -151,39 +201,54 @@ export default function NovaConsulta() {
                   type="time"
                   required
                   value={formData.horario}
-                  onChange={(e) => setFormData({ ...formData, horario: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, horario: e.target.value })
+                  }
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
               </div>
 
               <div className="md:col-span-2">
-                <label htmlFor="local" className="mb-2 block text-sm font-medium text-[#0A2540]">
+                <label
+                  htmlFor="local"
+                  className="mb-2 block text-sm font-medium text-[#0A2540]"
+                >
                   Local da consulta *
                 </label>
                 <div className="relative">
-                  <MapPin size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <MapPin
+                    size={18}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+                  />
                   <input
                     id="local"
                     type="text"
                     required
                     value={formData.local}
-                    onChange={(e) => setFormData({ ...formData, local: e.target.value })}
-                    placeholder="Ex.: Clínica Vida - Sala 302"
+                    onChange={(e) =>
+                      setFormData({ ...formData, local: e.target.value })
+                    }
+                    placeholder="Ex.: Hospital Central - Bloco B"
                     className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 placeholder:text-gray-400 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   />
                 </div>
               </div>
 
               <div className="md:col-span-2">
-                <label htmlFor="observacao" className="mb-2 block text-sm font-medium text-[#0A2540]">
-                  Observações
+                <label
+                  htmlFor="observacao"
+                  className="mb-2 block text-sm font-medium text-[#0A2540]"
+                >
+                  Observações e Preparos
                 </label>
                 <textarea
                   id="observacao"
                   rows={4}
                   value={formData.observacao}
-                  onChange={(e) => setFormData({ ...formData, observacao: e.target.value })}
-                  placeholder="Ex.: Levar resultados dos últimos exames..."
+                  onChange={(e) =>
+                    setFormData({ ...formData, observacao: e.target.value })
+                  }
+                  placeholder="Ex.: Levar exames recentes de sangue e ECG. Jejum de 8h"
                   className="w-full resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 placeholder:text-gray-400 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
               </div>
@@ -210,7 +275,11 @@ export default function NovaConsulta() {
               disabled={salvando}
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-6 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0A2540] hover:shadow-md disabled:opacity-70"
             >
-              {salvando ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+              {salvando ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <Save size={18} />
+              )}
               {salvando ? "Agendando..." : "Salvar consulta"}
             </button>
           </div>
