@@ -5,14 +5,15 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import DashboardNavbar from "@/components/DashboardNavbar";
 import {
-  Activity,
   ArrowLeft,
-  ClipboardList,
-  Gauge,
   HeartPulse,
   Save,
   Loader2,
   CheckCircle2,
+  UserCheck,
+  Activity,
+  Clock,
+  ClipboardList,
 } from "lucide-react";
 
 export default function NovoRegistro() {
