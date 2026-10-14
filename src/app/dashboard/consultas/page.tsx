@@ -1,13 +1,92 @@
+"use client";
+
+import React, { useEffect, useState } from "react";
 import DashboardNavbar from "@/components/DashboardNavbar";
+import PatientSelector, { Idoso } from "@/components/PatientSelector";
+import Link from "next/link";
 import {
   CalendarDays,
   Clock3,
   MapPin,
-  Plus,
   Stethoscope,
+  Plus,
 } from "lucide-react";
 
-export default function Consultas() {
+interface Consulta {
+  id: string;
+  especialidade: string;
+  medico: string;
+  dataHora: string;
+  localizacao: string;
+  status: "Agendada" | "Confirmada" | "Realizada";
+}
+
+const CONSULTAS_POR_IDOSO: Record<string, Consulta[]> = {
+  "1": [
+    {
+      id: "c1",
+      especialidade: "Cardiologia",
+      medico: "Dr. Roberto Faria",
+      dataHora: "18/10 às 14:00",
+      localizacao: "Hospital Central - Bloco B",
+      status: "Agendada",
+    },
+    {
+      id: "c2",
+      especialidade: "Geriatria de Rotina",
+      medico: "Dra. Camila Torres",
+      dataHora: "25/10 às 09:30",
+      localizacao: "Clínica Bem Viver",
+      status: "Confirmada",
+    },
+  ],
+  "2": [
+    {
+      id: "c3",
+      especialidade: "Endocrinologia",
+      medico: "Dr. Marcos Souza",
+      dataHora: "20/10 às 10:00",
+      localizacao: "Centro Médico Sul",
+      status: "Agendada",
+    },
+  ],
+  "3": [
+    {
+      id: "c4",
+      especialidade: "Oftalmologia",
+      medico: "Dra. Helena Ramos",
+      dataHora: "05/11 às 15:30",
+      localizacao: "Instituto da Visão",
+      status: "Agendada",
+    },
+  ],
+};
+
+export default function ConsultasPage() {
+  const [activeElderly, setActiveElderly] = useState<Idoso>({
+    id: "1",
+    nome: "Dona Francisca Silva",
+    idade: 78,
+  });
+
+  useEffect(() => {
+    const storedElderly = localStorage.getItem("saspi_active_elderly");
+    if (storedElderly) {
+      try {
+        setActiveElderly(JSON.parse(storedElderly));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, []);
+
+  function handleSelectElderly(novo: Idoso) {
+    setActiveElderly(novo);
+    localStorage.setItem("saspi_active_elderly", JSON.stringify(novo));
+  }
+
+  const consultas = CONSULTAS_POR_IDOSO[activeElderly.id] || [];
+
   return (
     <main className="min-h-screen bg-[#F2F7FB]">
       <DashboardNavbar />
@@ -24,155 +103,112 @@ export default function Consultas() {
             </h1>
 
             <p className="mt-2 max-w-2xl text-gray-600">
-              Acompanhe consultas agendadas, profissionais e informações
-              importantes dos próximos atendimentos.
+              Acompanhe consultas e atendimentos agendados para{" "}
+              <strong className="text-[#0A2540]">{activeElderly.nome}</strong>.
             </p>
           </div>
 
-          <a
+          <Link
             href="/dashboard/consultas/nova"
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0A2540] hover:shadow-md"
           >
             <Plus size={19} />
             Nova consulta
-          </a>
+          </Link>
         </div>
 
-        <section className="mt-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
-          <div>
-            <h2 className="text-xl font-semibold text-[#0A2540]">
-              Próximas consultas
-            </h2>
+        {/* Seletor do paciente ativo */}
+        <div className="mt-6">
+          <PatientSelector
+            onSelect={handleSelectElderly}
+            selectedId={activeElderly.id}
+          />
+        </div>
 
+        {consultas.length > 0 ? (
+          <section className="mt-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
+            <div>
+              <h2 className="text-xl font-semibold text-[#0A2540]">
+                Próximas consultas ({consultas.length})
+              </h2>
+
+              <p className="mt-1 text-sm text-gray-500">
+                Compromissos clínicos confirmados deste paciente.
+              </p>
+            </div>
+
+            <div className="mt-8 grid gap-5 lg:grid-cols-2">
+              {consultas.map((consulta) => (
+                <article
+                  key={consulta.id}
+                  className="group rounded-2xl border border-gray-100 bg-[#FAFCFE] p-6 transition hover:-translate-y-0.5 hover:border-[#BFD8F2] hover:bg-white hover:shadow-md"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#E8F1FB] text-[#1565C0] transition group-hover:bg-[#1565C0] group-hover:text-white">
+                      <Stethoscope size={24} />
+                    </div>
+
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        consulta.status === "Agendada"
+                          ? "bg-[#E8F1FB] text-[#1565C0]"
+                          : "bg-emerald-50 text-emerald-700"
+                      }`}
+                    >
+                      {consulta.status}
+                    </span>
+                  </div>
+
+                  <div className="mt-6">
+                    <h3 className="text-xl font-semibold text-[#0A2540]">
+                      {consulta.especialidade}
+                    </h3>
+
+                    <p className="mt-1 text-sm font-medium text-gray-500">
+                      {consulta.medico}
+                    </p>
+                  </div>
+
+                  <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                    <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-3.5">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#E8F1FB] text-[#1565C0]">
+                        <CalendarDays size={18} />
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Data e Horário</p>
+                        <p className="mt-0.5 text-sm font-semibold text-[#0A2540]">
+                          {consulta.dataHora}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-3.5">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#E6F4EF] text-[#26A69A]">
+                        <MapPin size={18} />
+                      </div>
+                      <div className="overflow-hidden">
+                        <p className="text-xs text-gray-500">Local</p>
+                        <p className="mt-0.5 truncate text-sm font-semibold text-[#0A2540]">
+                          {consulta.localizacao}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : (
+          <div className="mt-8 rounded-2xl border border-dashed border-gray-200 bg-white p-12 text-center">
+            <Stethoscope size={36} className="mx-auto text-gray-300" />
+            <p className="mt-3 text-base font-semibold text-[#0A2540]">
+              Nenhuma consulta agendada
+            </p>
             <p className="mt-1 text-sm text-gray-500">
-              Consulte os próximos compromissos de saúde cadastrados.
+              Não há agendamentos cadastrados para {activeElderly.nome}.
             </p>
           </div>
-
-          <div className="mt-8 grid gap-5 lg:grid-cols-2">
-            <article className="group rounded-2xl border border-gray-100 bg-[#FAFCFE] p-6 transition hover:-translate-y-0.5 hover:border-[#BFD8F2] hover:bg-white hover:shadow-lg hover:shadow-blue-950/5">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#E8F1FB] text-[#1565C0] transition group-hover:bg-[#1565C0] group-hover:text-white">
-                  <Stethoscope size={24} />
-                </div>
-
-                <span className="rounded-full bg-[#E6F4EF] px-3 py-1 text-xs font-semibold text-[#20877E]">
-                  Próxima
-                </span>
-              </div>
-
-              <div className="mt-6">
-                <h3 className="text-xl font-semibold text-[#0A2540]">
-                  Cardiologista
-                </h3>
-
-                <p className="mt-1 text-sm font-medium text-gray-500">
-                  Dr. Carlos Almeida
-                </p>
-              </div>
-
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-4">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#E8F1FB] text-[#1565C0]">
-                    <CalendarDays size={18} />
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-gray-500">
-                      Data
-                    </p>
-
-                    <p className="mt-1 font-semibold text-[#0A2540]">
-                      05/09/2026
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-4">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#E6F4EF] text-[#26A69A]">
-                    <Clock3 size={18} />
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-gray-500">
-                      Horário
-                    </p>
-
-                    <p className="mt-1 font-semibold text-[#0A2540]">
-                      14:00
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 flex items-center gap-3 text-sm text-gray-500">
-                <MapPin size={17} className="text-[#26A69A]" />
-                Clínica Vida
-              </div>
-            </article>
-
-            <article className="group rounded-2xl border border-gray-100 bg-[#FAFCFE] p-6 transition hover:-translate-y-0.5 hover:border-[#BFD8F2] hover:bg-white hover:shadow-lg hover:shadow-blue-950/5">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#E6F4EF] text-[#26A69A] transition group-hover:bg-[#26A69A] group-hover:text-white">
-                  <Stethoscope size={24} />
-                </div>
-
-                <span className="rounded-full bg-[#E8F1FB] px-3 py-1 text-xs font-semibold text-[#1565C0]">
-                  Agendada
-                </span>
-              </div>
-
-              <div className="mt-6">
-                <h3 className="text-xl font-semibold text-[#0A2540]">
-                  Geriatra
-                </h3>
-
-                <p className="mt-1 text-sm font-medium text-gray-500">
-                  Dra. Ana Martins
-                </p>
-              </div>
-
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-4">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#E8F1FB] text-[#1565C0]">
-                    <CalendarDays size={18} />
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-gray-500">
-                      Data
-                    </p>
-
-                    <p className="mt-1 font-semibold text-[#0A2540]">
-                      12/09/2026
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-4">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#E6F4EF] text-[#26A69A]">
-                    <Clock3 size={18} />
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-gray-500">
-                      Horário
-                    </p>
-
-                    <p className="mt-1 font-semibold text-[#0A2540]">
-                      10:30
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 flex items-center gap-3 text-sm text-gray-500">
-                <MapPin size={17} className="text-[#26A69A]" />
-                Centro Médico Sênior
-              </div>
-            </article>
-          </div>
-        </section>
+        )}
       </div>
     </main>
   );
