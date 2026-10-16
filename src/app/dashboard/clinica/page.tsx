@@ -98,18 +98,28 @@ export default function ClinicaPage() {
     setErro("");
     setSucesso(false);
 
-    const token = localStorage.getItem("saspi_token");
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("saspi_token")
+        : null;
 
-    const payload = {
+    const payload: Record<string, any> = {
       nome: formData.nome.trim(),
-      cnpj: formData.cnpj.replace(/\D/g, "") || null,
-      telefone: formData.telefone.replace(/\D/g, "") || null,
-      email: formData.email.trim() || null,
-      endereco: formData.endereco.trim() || null,
+      cnpj: formData.cnpj?.replace(/\D/g, "") || null,
+      telefone: formData.telefone?.replace(/\D/g, "") || null,
+      email: formData.email?.trim() || null,
+      endereco: formData.endereco?.trim() || null,
     };
 
     try {
-      const res = await fetch(`${apiUrl}/clinica/${clinicaId}`, {
+      console.log(
+        "Tentando atualizar clínica em:",
+        `${apiUrl}/clinica/${clinicaId}`,
+      );
+      console.log("Payload a enviar:", payload);
+
+      // 1. Tenta via PUT
+      let res = await fetch(`${apiUrl}/clinica/${clinicaId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -118,24 +128,40 @@ export default function ClinicaPage() {
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) {
-        // Tenta com PATCH se o backend usar PATCH
-        const resPatch = await fetch(`${apiUrl}/clinica/${clinicaId}`, {
-          method: "PATCH",
+      // 2. Se o servidor disser 404 (rota não encontrada) para PUT, tenta com POST
+      if (res.status === 404) {
+        console.warn(
+          "PUT não suportado (404). A tentar alternativa com POST...",
+        );
+        res = await fetch(`${apiUrl}/clinica/${clinicaId}`, {
+          method: "POST",
           headers: {
             "Content-Type": "application/json",
             ...(token && { Authorization: `Bearer ${token}` }),
           },
           body: JSON.stringify(payload),
         });
-
-        if (!resPatch.ok) {
-          const dataErr = await resPatch.json().catch(() => null);
-          throw new Error(dataErr?.message || "Não foi possível atualizar a clínica.");
-        }
       }
 
-      // Atualiza o nome da clínica na sessão local para a Navbar reagir imediatamente
+      const respostaTexto = await res.text();
+      console.log(
+        `Resposta do Servidor (Status ${res.status}):`,
+        respostaTexto,
+      );
+
+      if (!res.ok) {
+        let mensagemErro = `Erro ${res.status}: `;
+        try {
+          const jsonErr = JSON.parse(respostaTexto);
+          mensagemErro +=
+            jsonErr.message || jsonErr.error || JSON.stringify(jsonErr);
+        } catch {
+          mensagemErro += respostaTexto || res.statusText;
+        }
+        throw new Error(mensagemErro);
+      }
+
+      // Atualiza os dados da sessão local para a Navbar reagir de imediato
       const userRaw = localStorage.getItem("saspi_user");
       if (userRaw) {
         try {
@@ -146,12 +172,15 @@ export default function ClinicaPage() {
 
           localStorage.setItem("saspi_user", JSON.stringify(parsed));
           window.dispatchEvent(new Event("saspi_user_updated"));
-        } catch {}
+        } catch (e) {
+          console.error("Erro ao atualizar localStorage:", e);
+        }
       }
 
       setSucesso(true);
     } catch (err: any) {
-      setErro(err.message || "Erro de conexão ao salvar a clínica.");
+      console.error("Erro completo na requisição:", err);
+      setErro(err.message || "Erro inesperado ao contactar a API.");
     } finally {
       setSalvando(false);
     }
@@ -180,7 +209,8 @@ export default function ClinicaPage() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-gray-600">
-            Atualize as informações cadastrais e de contato da sua instituição de saúde.
+            Atualize as informações cadastrais e de contato da sua instituição
+            de saúde.
           </p>
         </div>
 
@@ -218,7 +248,8 @@ export default function ClinicaPage() {
                     Identificação da Unidade
                   </h2>
                   <p className="mt-1 text-sm text-gray-500">
-                    ID do Registro: <span className="font-mono text-xs">{clinicaId}</span>
+                    ID do Registro:{" "}
+                    <span className="font-mono text-xs">{clinicaId}</span>
                   </p>
                 </div>
               </div>
