@@ -15,7 +15,21 @@ export class UsuarioIdosoService {
     });
   }
 
-  // Lista todos os idosos que um usuário específico pode acompanhar
+  // Traz a lista de vínculos e inclui os objetos para o frontend mostrar os Nomes
+  findAll(usuarioId?: string, idosoId?: string) {
+    const where: any = {};
+    if (usuarioId) where.usuario_id = usuarioId;
+    if (idosoId) where.idoso_id = idosoId;
+
+    return this.prisma.usuario_idoso.findMany({
+      where,
+      include: {
+        usuario: true, // Garante que a extração do nome do usuário funcione no React
+        idoso: true,   // Garante que a extração do nome do idoso funcione no React
+      },
+    });
+  }
+
   findIdososDoUsuario(usuarioId: string) {
     return this.prisma.usuario_idoso.findMany({
       where: { usuario_id: usuarioId },
@@ -23,11 +37,17 @@ export class UsuarioIdosoService {
     });
   }
 
-  // Lista todos os usuários vinculados a um idoso específico
   findUsuariosDoIdoso(idosoId: string) {
     return this.prisma.usuario_idoso.findMany({
       where: { idoso_id: idosoId },
       include: { usuario: true },
+    });
+  }
+
+  // Remove o vínculo pelo ID único de registro
+  remove(id: string) {
+    return this.prisma.usuario_idoso.delete({
+      where: { id },
     });
   }
 }
