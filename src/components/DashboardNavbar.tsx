@@ -12,6 +12,8 @@ import {
   History,
   User,
   UserPlus,
+  Users,
+  HeartHandshake,
   LogOut,
   ChevronDown,
   Building2,
@@ -31,12 +33,20 @@ const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   "https://perfect-bravery-production-5ce7.up.railway.app";
 
-const NAV_LINKS = [
+const CLINICAL_NAV_LINKS = [
   { href: "/dashboard", label: "Visão Geral", icon: Activity },
   { href: "/dashboard/saude", label: "Sinais Vitais", icon: HeartPulse },
   { href: "/dashboard/medicamentos", label: "Medicamentos", icon: Pill },
   { href: "/dashboard/consultas", label: "Consultas", icon: CalendarDays },
   { href: "/dashboard/historico", label: "Histórico", icon: History },
+];
+
+const ADMIN_NAV_LINKS = [
+  { href: "/dashboard", label: "Painel", icon: Activity },
+  { href: "/dashboard/usuarios", label: "Usuários", icon: Users },
+  { href: "/dashboard/idosos", label: "Idosos", icon: HeartHandshake },
+  { href: "/dashboard/vinculos", label: "Vínculos", icon: Link2 },
+  { href: "/dashboard/clinica", label: "Clínica", icon: Building2 },
 ];
 
 export default function DashboardNavbar() {
@@ -49,40 +59,41 @@ export default function DashboardNavbar() {
   const [nomeClinica, setNomeClinica] = useState<string>("");
   const [buscandoClinica, setBuscandoClinica] = useState(false);
 
-  const buscarNomeClinica = useCallback(async (cId: string, token: string | null) => {
-    if (!cId) return;
-    setBuscandoClinica(true);
+  const buscarNomeClinica = useCallback(
+    async (cId: string, token: string | null) => {
+      if (!cId) return;
+      setBuscandoClinica(true);
 
-    try {
-      const res = await fetch(`${API_URL}/clinica/${cId}`, {
-        headers: {
-          ...(token && { Authorization: `Bearer ${token}` }),
-        },
-      });
+      try {
+        const res = await fetch(`${API_URL}/clinica/${cId}`, {
+          headers: {
+            ...(token && { Authorization: `Bearer ${token}` }),
+          },
+        });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.nome) {
-          setNomeClinica(data.nome);
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.nome) {
+            setNomeClinica(data.nome);
 
-          const userRaw = localStorage.getItem("saspi_user");
-          if (userRaw) {
-            try {
-              const parsed = JSON.parse(userRaw);
-              if (parsed.user) parsed.user.clinica_nome = data.nome;
-              else if (parsed.usuario) parsed.usuario.clinica_nome = data.nome;
-              else parsed.clinica_nome = data.nome;
-              localStorage.setItem("saspi_user", JSON.stringify(parsed));
-            } catch {}
+            const userRaw = localStorage.getItem("saspi_user");
+            if (userRaw) {
+              try {
+                const parsed = JSON.parse(userRaw);
+                if (parsed.user) parsed.user.clinica_nome = data.nome;
+                else if (parsed.usuario) parsed.usuario.clinica_nome = data.nome;
+                else parsed.clinica_nome = data.nome;
+                localStorage.setItem("saspi_user", JSON.stringify(parsed));
+              } catch {}
+            }
           }
         }
+      } catch {} finally {
+        setBuscandoClinica(false);
       }
-    } catch {
-      // Silencioso para evitar poluição no console em caso de rede instável
-    } finally {
-      setBuscandoClinica(false);
-    }
-  }, []);
+    },
+    []
+  );
 
   const carregarUsuario = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -158,6 +169,7 @@ export default function DashboardNavbar() {
 
   const isAdmin =
     usuario?.perfil === "ADMINISTRADOR" || usuario?.perfil === "ADMIN";
+  const navLinksAtivos = isAdmin ? ADMIN_NAV_LINKS : CLINICAL_NAV_LINKS;
 
   return (
     <header className="sticky top-0 z-40 border-b border-gray-100 bg-white/95 backdrop-blur-md">
@@ -192,7 +204,7 @@ export default function DashboardNavbar() {
         </div>
 
         <nav className="hidden items-center gap-1 md:flex">
-          {NAV_LINKS.map((link) => {
+          {navLinksAtivos.map((link) => {
             const Icon = link.icon;
             const ativo =
               link.href === "/dashboard"
@@ -284,6 +296,33 @@ export default function DashboardNavbar() {
                 {isAdmin && (
                   <>
                     <Link
+                      href="/dashboard/usuarios"
+                      onClick={() => setDropdownAberto(false)}
+                      className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-gray-700 transition hover:bg-[#F2F7FB] hover:text-[#1565C0]"
+                    >
+                      <Users size={16} className="text-[#1565C0]" />
+                      Gerenciar Usuários
+                    </Link>
+
+                    <Link
+                      href="/dashboard/idosos"
+                      onClick={() => setDropdownAberto(false)}
+                      className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-gray-700 transition hover:bg-[#F2F7FB] hover:text-[#1565C0]"
+                    >
+                      <HeartHandshake size={16} className="text-[#26A69A]" />
+                      Gerenciar Idosos
+                    </Link>
+
+                    <Link
+                      href="/dashboard/vinculos"
+                      onClick={() => setDropdownAberto(false)}
+                      className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-gray-700 transition hover:bg-[#F2F7FB] hover:text-[#1565C0]"
+                    >
+                      <Link2 size={16} className="text-[#1565C0]" />
+                      Gerenciar Vínculos
+                    </Link>
+
+                    <Link
                       href="/dashboard/clinica"
                       onClick={() => setDropdownAberto(false)}
                       className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-gray-700 transition hover:bg-[#F2F7FB] hover:text-[#1565C0]"
@@ -298,25 +337,7 @@ export default function DashboardNavbar() {
                       className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-gray-700 transition hover:bg-[#F2F7FB] hover:text-[#1565C0]"
                     >
                       <UserPlus size={16} className="text-[#26A69A]" />
-                      Cadastrar Novo Usuário
-                    </Link>
-
-                    <Link
-                      href="/dashboard/vinculos/novo"
-                      onClick={() => setDropdownAberto(false)}
-                      className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-gray-700 transition hover:bg-[#F2F7FB] hover:text-[#1565C0]"
-                    >
-                      <Link2 size={16} className="text-[#1565C0]" />
-                      Atribuir Vínculos
-                    </Link>
-
-                    <Link
-                      href="/dashboard/vinculos"
-                      onClick={() => setDropdownAberto(false)}
-                      className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-gray-700 transition hover:bg-[#F2F7FB] hover:text-[#1565C0]"
-                    >
-                      <Link2 size={16} className="text-[#1565C0]" />
-                      Listar Vínculos
+                      Novo Usuário
                     </Link>
                   </>
                 )}

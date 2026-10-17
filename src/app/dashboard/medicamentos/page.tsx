@@ -4,7 +4,14 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import DashboardNavbar from "@/components/DashboardNavbar";
 import PatientSelector, { Idoso } from "@/components/PatientSelector";
-import { Pill, Plus, Loader2 } from "lucide-react";
+import {
+  Pill,
+  Plus,
+  Loader2,
+  Ban,
+  CheckCircle2,
+  AlertCircle,
+} from "lucide-react";
 
 interface Prescricao {
   id: string;
@@ -21,6 +28,7 @@ interface Prescricao {
   frequencia?: string;
   status?: string;
   data_inicio?: string;
+  data_fim?: string;
 }
 
 const API_URL =
@@ -32,6 +40,9 @@ export default function MedicamentosPage() {
   const [prescricoes, setPrescricoes] = useState<Prescricao[]>([]);
   const [carregando, setCarregando] = useState(false);
   const [perfilUsuario, setPerfilUsuario] = useState("");
+  const [encerrandoId, setEncerrandoId] = useState<string | null>(null);
+  const [mensagem, setMensagem] = useState("");
+  const [erro, setErro] = useState("");
 
   const carregarPrescricoes = useCallback(async (idosoId: string) => {
     setCarregando(true);
@@ -39,23 +50,15 @@ export default function MedicamentosPage() {
     const headers = { ...(token && { Authorization: `Bearer ${token}` }) };
 
     try {
-      let res = await fetch(`${API_URL}/prescricao/idoso/${idosoId}`, {
+      const res = await fetch(`${API_URL}/prescricao/idoso/${idosoId}`, {
         headers,
       });
-
-      if (!res.ok) {
-        res = await fetch(`${API_URL}/prescricao?idoso_id=${idosoId}`, {
-          headers,
-        });
-      }
 
       if (res.ok) {
         const data = await res.json();
         const lista = Array.isArray(data) ? data : data.data || [];
         setPrescricoes(
-          lista.filter(
-            (p: any) => !p.idoso_id || p.idoso_id === idosoId
-          )
+          lista.filter((p: any) => !p.idoso_id || p.idoso_id === idosoId)
         );
       } else {
         setPrescricoes([]);
@@ -98,11 +101,43 @@ export default function MedicamentosPage() {
     }
   }
 
+  async function encerrarPrescricao(idPrescricao: string) {
+    setEncerrandoId(idPrescricao);
+    setErro("");
+    const token = localStorage.getItem("saspi_token");
+
+    try {
+      const res = await fetch(
+        `${API_URL}/prescricao/${idPrescricao}/encerrar`,
+        {
+          method: "PATCH",
+          headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+        }
+      );
+
+      if (!res.ok) {
+        throw new Error("Não foi possível encerrar a prescrição.");
+      }
+
+      setPrescricoes((prev) =>
+        prev.map((p) =>
+          p.id === idPrescricao ? { ...p, status: "ENCERRADA" } : p
+        )
+      );
+      setMensagem(
+        "Prescrição encerrada com sucesso! O registro foi preservado no histórico clínico."
+      );
+      setTimeout(() => setMensagem(""), 4000);
+    } catch (err: any) {
+      setErro(err.message || "Falha ao encerrar prescrição.");
+    } finally {
+      setEncerrandoId(null);
+    }
+  }
+
+  // Apenas Medico e Enfermeiro podem criar ou encerrar prescricoes
   const podePrescrever =
-    perfilUsuario === "MEDICO" ||
-    perfilUsuario === "ENFERMEIRO" ||
-    perfilUsuario === "ADMINISTRADOR" ||
-    perfilUsuario === "ADMIN";
+    perfilUsuario === "MEDICO" || perfilUsuario === "ENFERMEIRO";
 
   return (
     <main className="min-h-screen bg-[#F2F7FB]">
@@ -119,7 +154,7 @@ export default function MedicamentosPage() {
             </h1>
             <p className="mt-2 text-gray-600">
               {idosoAtivo
-                ? `Prescrições ativas e horários de dosagem de ${idosoAtivo.nome}.`
+                ? `Prescrições e horários de dosagem de ${idosoAtivo.nome}.`
                 : "Selecione um paciente para visualizar a medicação."}
             </p>
           </div>
@@ -135,6 +170,20 @@ export default function MedicamentosPage() {
           )}
         </div>
 
+        {mensagem && (
+          <div className="mt-6 flex items-center gap-3 rounded-xl bg-emerald-50 p-4 text-emerald-800">
+            <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
+            <p className="text-sm font-medium">{mensagem}</p>
+          </div>
+        )}
+
+        {erro && (
+          <div className="mt-6 flex items-center gap-3 rounded-xl bg-red-50 p-4 text-red-700">
+            <AlertCircle size={20} className="shrink-0 text-red-600" />
+            <p className="text-sm font-medium">{erro}</p>
+          </div>
+        )}
+
         <div className="mt-8 space-y-6">
           <PatientSelector
             onSelect={handleSelectPatient}
@@ -148,7 +197,7 @@ export default function MedicamentosPage() {
                   <Pill size={20} />
                 </div>
                 <h2 className="text-lg font-semibold text-[#0A2540]">
-                  Prescrições Médicas Ativas
+                  Prescrições Médicas Registradas
                 </h2>
               </div>
               <span className="rounded-lg bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
@@ -187,10 +236,8 @@ export default function MedicamentosPage() {
               ) : (
                 <div className="divide-y divide-gray-100">
                   {prescricoes.map((p) => {
-                    const statusFormatado =
-                      String(p.status || "ATIVA").toUpperCase() === "ATIVA"
-                        ? "Ativa"
-                        : p.status;
+                    const isAtiva =
+                      String(p.status || "ATIVA").toUpperCase() === "ATIVA";
 
                     return (
                       <div
@@ -211,9 +258,34 @@ export default function MedicamentosPage() {
                             </p>
                           )}
                         </div>
-                        <span className="inline-flex w-fit rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                          {statusFormatado}
-                        </span>
+
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                              isAtiva
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "bg-gray-100 text-gray-600"
+                            }`}
+                          >
+                            {isAtiva ? "Ativa" : "Encerrada"}
+                          </span>
+
+                          {podePrescrever && isAtiva && (
+                            <button
+                              type="button"
+                              disabled={encerrandoId === p.id}
+                              onClick={() => encerrarPrescricao(p.id)}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
+                            >
+                              {encerrandoId === p.id ? (
+                                <Loader2 size={13} className="animate-spin" />
+                              ) : (
+                                <Ban size={13} />
+                              )}
+                              Encerrar
+                            </button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}

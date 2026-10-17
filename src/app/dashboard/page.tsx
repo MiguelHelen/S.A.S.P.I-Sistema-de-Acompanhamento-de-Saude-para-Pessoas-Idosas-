@@ -31,9 +31,17 @@ export default function Dashboard() {
   const [user, setUser] = useState<{
     nome: string;
     perfil: string;
+    clinica_id: string;
   }>({
     nome: "",
     perfil: "",
+    clinica_id: "e63b19f5-d8e4-4973-bac6-12aba9a0545d",
+  });
+
+  const [contadoresAdmin, setContadoresAdmin] = useState({
+    usuarios: 0,
+    idosos: 0,
+    vinculos: 0,
   });
 
   const [idosoAtivo, setIdosoAtivo] = useState<Idoso | null>(null);
@@ -42,6 +50,8 @@ export default function Dashboard() {
     spo2: "--",
     proximoMedTitulo: "Nenhuma prescrição ativa",
     proximoMedSub: "Sem agendamento",
+    proximaConsultaTitulo: "Sem agendamento",
+    proximaConsultaSub: "Consulte a agenda clínica",
   });
 
   const carregarUsuario = useCallback(() => {
@@ -57,6 +67,10 @@ export default function Dashboard() {
             data.name ||
             (data.email ? data.email.split("@")[0] : "Profissional"),
           perfil: (data.perfil || data.role || "MEDICO").toUpperCase(),
+          clinica_id:
+            data.clinica_id ||
+            data.clinicaId ||
+            "e63b19f5-d8e4-4973-bac6-12aba9a0545d",
         });
       } catch {}
     }
@@ -95,17 +109,55 @@ export default function Dashboard() {
     };
   }, [carregarUsuario]);
 
+  const perfilUpper = user.perfil;
+  const isAdmin = perfilUpper === "ADMINISTRADOR" || perfilUpper === "ADMIN";
+  const isMedicoOuEnfermeiro =
+    perfilUpper === "MEDICO" || perfilUpper === "ENFERMEIRO";
+  const isLeituraSomente =
+    perfilUpper === "FAMILIAR" || perfilUpper === "CUIDADOR";
+
+  // Carrega contadores reais para o Painel Administrativo
+  useEffect(() => {
+    if (!isAdmin) return;
+    const token = localStorage.getItem("saspi_token");
+    const headers = { ...(token && { Authorization: `Bearer ${token}` }) };
+
+    Promise.all([
+      fetch(`${API_URL}/usuario?clinica_id=${user.clinica_id}`, {
+        headers,
+      }).then((r) => (r.ok ? r.json() : [])),
+      fetch(`${API_URL}/idoso?clinica_id=${user.clinica_id}`, {
+        headers,
+      }).then((r) => (r.ok ? r.json() : [])),
+      fetch(`${API_URL}/usuario-idoso`, { headers }).then((r) =>
+        r.ok ? r.json() : []
+      ),
+    ])
+      .then(([uList, iList, vList]) => {
+        setContadoresAdmin({
+          usuarios: Array.isArray(uList) ? uList.length : 0,
+          idosos: Array.isArray(iList) ? iList.length : 0,
+          vinculos: Array.isArray(vList) ? vList.length : 0,
+        });
+      })
+      .catch(() => {});
+  }, [isAdmin, user.clinica_id]);
+
+  // Carrega os dados reais do paciente ativo usando as rotas dedicadas /idoso/:id
   useEffect(() => {
     async function carregarResumoPaciente(idosoId: string) {
       const token = localStorage.getItem("saspi_token");
       const headers = { ...(token && { Authorization: `Bearer ${token}` }) };
 
       try {
-        const [resReg, resPresc] = await Promise.all([
-          fetch(`${API_URL}/registro-saude?idoso_id=${idosoId}`, {
+        const [resReg, resPresc, resCons] = await Promise.all([
+          fetch(`${API_URL}/registro-saude/idoso/${idosoId}`, {
             headers,
           }).catch(() => null),
-          fetch(`${API_URL}/prescricao?idoso_id=${idosoId}`, {
+          fetch(`${API_URL}/prescricao/idoso/${idosoId}`, {
+            headers,
+          }).catch(() => null),
+          fetch(`${API_URL}/consulta?idoso_id=${idosoId}`, {
             headers,
           }).catch(() => null),
         ]);
@@ -114,23 +166,23 @@ export default function Dashboard() {
         let spo2Val = "--";
         let medTitulo = "Nenhuma prescrição ativa";
         let medSub = "Sem agendamento";
+        let consTitulo = "Sem agendamento";
+        let consSub = "Consulte a agenda clínica";
 
         if (resReg?.ok) {
           const regs = await resReg.json();
           if (Array.isArray(regs)) {
-            const doIdoso = regs.filter(
-              (r: any) => !r.idoso_id || r.idoso_id === idosoId
-            );
-            const fcReg = doIdoso.find((r: any) =>
+            const fcReg = regs.find((r: any) =>
               String(r.indicador_saude?.nome || r.indicador_nome || "")
                 .toLowerCase()
                 .includes("card")
             );
-            const spo2Reg = doIdoso.find((r: any) =>
-              String(r.indicador_saude?.nome || r.indicador_nome || "")
-                .toLowerCase()
-                .includes("oxig")
-            );
+            const spo2Reg = regs.find((r: any) => {
+              const n = String(
+                r.indicador_saude?.nome || r.indicador_nome || ""
+              ).toLowerCase();
+              return n.includes("oxig") || n.includes("spo");
+            });
 
             if (fcReg) {
               fcVal = String(
@@ -155,9 +207,7 @@ export default function Dashboard() {
           const prescs = await resPresc.json();
           if (Array.isArray(prescs) && prescs.length > 0) {
             const ativas = prescs.filter(
-              (p: any) =>
-                (!p.idoso_id || p.idoso_id === idosoId) &&
-                String(p.status || "ATIVA").toUpperCase() === "ATIVA"
+              (p: any) => String(p.status || "ATIVA").toUpperCase() === "ATIVA"
             );
             if (ativas.length > 0) {
               const p = ativas[0];
@@ -167,26 +217,41 @@ export default function Dashboard() {
           }
         }
 
+        if (resCons?.ok) {
+          const consultas = await resCons.json();
+          if (Array.isArray(consultas) && consultas.length > 0) {
+            const ativas = consultas.filter(
+              (c: any) =>
+                c.status !== "Cancelada" && c.status !== "Realizada"
+            );
+            if (ativas.length > 0) {
+              const c = ativas[0];
+              const dataBr = c.data
+                ? new Date(c.data).toLocaleDateString("pt-BR", {
+                    timeZone: "UTC",
+                  })
+                : "";
+              consTitulo = c.especialidade;
+              consSub = `${dataBr} às ${c.horario || ""} • ${c.medico || ""}`;
+            }
+          }
+        }
+
         setResumoClinico({
           fc: fcVal,
           spo2: spo2Val,
           proximoMedTitulo: medTitulo,
           proximoMedSub: medSub,
+          proximaConsultaTitulo: consTitulo,
+          proximaConsultaSub: consSub,
         });
       } catch {}
     }
 
-    if (idosoAtivo?.id) {
+    if (idosoAtivo?.id && !isAdmin) {
       carregarResumoPaciente(idosoAtivo.id);
     }
-  }, [idosoAtivo?.id]);
-
-  const perfilUpper = user.perfil;
-  const isAdmin = perfilUpper === "ADMINISTRADOR" || perfilUpper === "ADMIN";
-  const isMedicoOuEnfermeiro =
-    perfilUpper === "MEDICO" || perfilUpper === "ENFERMEIRO";
-  const isLeituraSomente =
-    perfilUpper === "FAMILIAR" || perfilUpper === "CUIDADOR";
+  }, [idosoAtivo?.id, isAdmin]);
 
   function obterSaudacao() {
     const primeiroNome =
@@ -234,7 +299,7 @@ export default function Dashboard() {
 
             <p className="mt-2 max-w-2xl text-gray-600">
               {isAdmin
-                ? "Gestão institucional de profissionais, cuidadores e idosos do S.A.S.P.I."
+                ? "Gestão institucional de profissionais, cuidadores, familiares e idosos do S.A.S.P.I."
                 : idosoAtivo
                   ? `Acompanhamento em tempo real dos sinais vitais e da rotina de ${idosoAtivo.nome}.`
                   : "Selecione um paciente vinculado para iniciar o monitoramento."}
@@ -255,7 +320,10 @@ export default function Dashboard() {
         {isAdmin ? (
           <div className="mt-8 space-y-8">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+              <Link
+                href="/dashboard/usuarios"
+                className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition hover:border-[#BFD8F2] hover:shadow-md"
+              >
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#E8F1FB] text-[#1565C0]">
                   <Users size={22} />
                 </div>
@@ -263,11 +331,14 @@ export default function Dashboard() {
                   Equipe e Usuários
                 </p>
                 <p className="mt-1 text-2xl font-bold text-[#0A2540]">
-                  Gerenciados
+                  {contadoresAdmin.usuarios} cadastrados
                 </p>
-              </div>
+              </Link>
 
-              <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+              <Link
+                href="/dashboard/idosos"
+                className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition hover:border-[#BFD8F2] hover:shadow-md"
+              >
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#E6F4EF] text-[#26A69A]">
                   <ClipboardList size={22} />
                 </div>
@@ -275,21 +346,24 @@ export default function Dashboard() {
                   Idosos Registrados
                 </p>
                 <p className="mt-1 text-2xl font-bold text-[#0A2540]">
-                  Centralizados
+                  {contadoresAdmin.idosos} pacientes
                 </p>
-              </div>
+              </Link>
 
-              <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+              <Link
+                href="/dashboard/vinculos"
+                className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition hover:border-[#BFD8F2] hover:shadow-md"
+              >
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#E8F1FB] text-[#1565C0]">
                   <UserCheck size={22} />
                 </div>
                 <p className="mt-4 text-sm font-medium text-gray-500">
-                  Rede de Apoio
+                  Rede de Apoio Ativa
                 </p>
                 <p className="mt-1 text-2xl font-bold text-[#0A2540]">
-                  Atribuições
+                  {contadoresAdmin.vinculos} vínculos
                 </p>
-              </div>
+              </Link>
 
               <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#E6F4EF] text-[#26A69A]">
@@ -309,18 +383,17 @@ export default function Dashboard() {
                 Ações de Gestão Institucional
               </h2>
               <p className="mt-1 text-sm text-gray-500">
-                Atalhos operacionais definidos no módulo de administração do
-                S.A.S.P.I.
+                Gerencie usuários, pacientes e vínculos de acesso da clínica.
               </p>
 
-              <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <Link
-                  href="/dashboard/usuarios/novo"
+                  href="/dashboard/usuarios"
                   className="group rounded-xl border border-gray-200 bg-[#FAFCFE] p-5 transition hover:border-[#BFD8F2] hover:bg-white hover:shadow-md"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#E8F1FB] text-[#1565C0]">
-                      <UserPlus size={20} />
+                      <Users size={20} />
                     </div>
                     <ArrowRight
                       size={18}
@@ -328,15 +401,16 @@ export default function Dashboard() {
                     />
                   </div>
                   <h3 className="mt-4 font-semibold text-[#0A2540]">
-                    Registrar Usuário
+                    Gerenciar Usuários
                   </h3>
                   <p className="mt-1 text-sm text-gray-500">
-                    Cadastrar médicos, cuidadores ou familiares.
+                    Listar, cadastrar, editar ou remover membros da equipe e
+                    familiares.
                   </p>
                 </Link>
 
                 <Link
-                  href="/dashboard/idosos/novo"
+                  href="/dashboard/idosos"
                   className="group rounded-xl border border-gray-200 bg-[#FAFCFE] p-5 transition hover:border-[#BFD8F2] hover:bg-white hover:shadow-md"
                 >
                   <div className="flex items-center justify-between">
@@ -349,31 +423,11 @@ export default function Dashboard() {
                     />
                   </div>
                   <h3 className="mt-4 font-semibold text-[#0A2540]">
-                    Registrar Paciente
+                    Gerenciar Pacientes (Idosos)
                   </h3>
                   <p className="mt-1 text-sm text-gray-500">
-                    Admitir novo idoso na instituição.
-                  </p>
-                </Link>
-
-                <Link
-                  href="/dashboard/vinculos/novo"
-                  className="group rounded-xl border border-gray-200 bg-[#FAFCFE] p-5 transition hover:border-[#BFD8F2] hover:bg-white hover:shadow-md"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#E6F4EF] text-[#26A69A]">
-                      <UserCheck size={20} />
-                    </div>
-                    <ArrowRight
-                      size={18}
-                      className="text-gray-400 transition group-hover:translate-x-1 group-hover:text-[#1565C0]"
-                    />
-                  </div>
-                  <h3 className="mt-4 font-semibold text-[#0A2540]">
-                    Atribuir Vínculo
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-500">
-                    Vincular pacientes aos profissionais autorizados.
+                    Listar, admitir novos idosos, corrigir dados cadastrais e
+                    leitos.
                   </p>
                 </Link>
 
@@ -391,10 +445,54 @@ export default function Dashboard() {
                     />
                   </div>
                   <h3 className="mt-4 font-semibold text-[#0A2540]">
-                    Listar Vínculos
+                    Gerenciar Vínculos
                   </h3>
                   <p className="mt-1 text-sm text-gray-500">
-                    Visualizar e revogar associações ativas.
+                    Associar ou revogar o vínculo entre profissionais, familiares
+                    e idosos.
+                  </p>
+                </Link>
+
+                <Link
+                  href="/dashboard/usuarios/novo"
+                  className="group rounded-xl border border-gray-200 bg-[#FAFCFE] p-5 transition hover:border-[#BFD8F2] hover:bg-white hover:shadow-md"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#E8F1FB] text-[#1565C0]">
+                      <UserPlus size={20} />
+                    </div>
+                    <ArrowRight
+                      size={18}
+                      className="text-gray-400 transition group-hover:translate-x-1 group-hover:text-[#1565C0]"
+                    />
+                  </div>
+                  <h3 className="mt-4 font-semibold text-[#0A2540]">
+                    Cadastrar Novo Usuário
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Criar nova credencial de acesso para a instituição.
+                  </p>
+                </Link>
+
+                <Link
+                  href="/dashboard/vinculos/novo"
+                  className="group rounded-xl border border-gray-200 bg-[#FAFCFE] p-5 transition hover:border-[#BFD8F2] hover:bg-white hover:shadow-md"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#E6F4EF] text-[#26A69A]">
+                      <UserCheck size={20} />
+                    </div>
+                    <ArrowRight
+                      size={18}
+                      className="text-gray-400 transition group-hover:translate-x-1 group-hover:text-[#1565C0]"
+                    />
+                  </div>
+                  <h3 className="mt-4 font-semibold text-[#0A2540]">
+                    Novo Vínculo
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Atribuir um paciente a um médico, enfermeiro, cuidador ou
+                    familiar.
                   </p>
                 </Link>
 
@@ -415,7 +513,7 @@ export default function Dashboard() {
                     Dados da Clínica
                   </h3>
                   <p className="mt-1 text-sm text-gray-500">
-                    Gerenciar razão social, contato e endereço.
+                    Gerenciar razão social, CNPJ, contato e endereço.
                   </p>
                 </Link>
               </div>
@@ -454,8 +552,8 @@ export default function Dashboard() {
 
                   <InfoCard
                     label="Próxima Consulta"
-                    title="Sem agendamento"
-                    subtitle="Consulte a agenda clínica"
+                    title={resumoClinico.proximaConsultaTitulo}
+                    subtitle={resumoClinico.proximaConsultaSub}
                     icon={<CalendarDays size={22} />}
                   />
                 </div>
@@ -468,7 +566,7 @@ export default function Dashboard() {
                           Evolução dos Sinais Vitais — {idosoAtivo.nome}
                         </h2>
                         <p className="mt-1 text-sm text-gray-500">
-                          Monitoramento contínuo das últimas 24 horas
+                          Monitoramento contínuo das últimas aferições
                         </p>
                       </div>
 
@@ -538,7 +636,8 @@ export default function Dashboard() {
                   Nenhum paciente selecionado
                 </h3>
                 <p className="mt-2 text-sm text-gray-500">
-                  Selecione um paciente acima para visualizar os dados clínicos.
+                  Selecione um paciente vinculado acima para visualizar os dados
+                  clínicos.
                 </p>
               </div>
             )}

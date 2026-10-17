@@ -29,6 +29,7 @@ export default function NovaConsulta() {
   const [erro, setErro] = useState("");
   const [idoso, setIdoso] = useState<Idoso | null>(null);
   const [autorizado, setAutorizado] = useState<boolean | null>(null);
+  const [usuarioId, setUsuarioId] = useState<string>("");
 
   const [formData, setFormData] = useState({
     especialidade: "",
@@ -48,6 +49,8 @@ export default function NovaConsulta() {
         const perfil = String(
           userData.perfil || userData.role || ""
         ).toUpperCase();
+        
+        setUsuarioId(userData.id || "");
         setAutorizado(perfil !== "FAMILIAR");
       } catch {
         setAutorizado(false);
@@ -72,8 +75,20 @@ export default function NovaConsulta() {
 
     if (!idoso || !idoso.id) {
       setErro(
-        "Nenhum idoso ativo selecionado. Selecione um paciente no topo do dashboard."
+        "Nenhum paciente ativo selecionado. Selecione um paciente no topo do painel."
       );
+      setSalvando(false);
+      return;
+    }
+
+    // Tratamento de Data para evitar ERRO 500 no DateTime do PostgreSQL
+    let dataFormatada = formData.data;
+    try {
+      const dataObj = new Date(formData.data);
+      if (Number.isNaN(dataObj.getTime())) throw new Error();
+      dataFormatada = dataObj.toISOString().split("T")[0]; // YYYY-MM-DD
+    } catch {
+      setErro("Data selecionada é inválida.");
       setSalvando(false);
       return;
     }
@@ -81,15 +96,15 @@ export default function NovaConsulta() {
     const token = localStorage.getItem("saspi_token");
 
     const payload = {
-      id: String(Date.now()),
       idoso_id: idoso.id,
+      usuario_id: usuarioId || undefined,
       especialidade: formData.especialidade.trim(),
       medico: formData.profissional.trim(),
-      data: formData.data,
-      horario: formData.horario,
+      data: dataFormatada,
+      horario: formData.horario.trim(),
       localizacao: formData.local.trim(),
       observacao: formData.observacao.trim() || undefined,
-      status: "Agendada" as const,
+      status: "Agendada",
     };
 
     try {
@@ -100,17 +115,16 @@ export default function NovaConsulta() {
           ...(token && { Authorization: `Bearer ${token}` }),
         },
         body: JSON.stringify(payload),
-      }).catch(() => null);
+      });
 
-      if (!res?.ok) {
-        const localRaw = localStorage.getItem("saspi_consultas_list");
-        const listaAtual = localRaw ? JSON.parse(localRaw) : [];
-        localStorage.setItem(
-          "saspi_consultas_list",
-          JSON.stringify([
-            ...(Array.isArray(listaAtual) ? listaAtual : []),
-            payload,
-          ])
+      const errData = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        const msg = Array.isArray(errData?.message)
+          ? errData.message.join(", ")
+          : errData?.message;
+        throw new Error(
+          msg || `Erro ${res.status}: Falha ao registrar agendamento.`
         );
       }
 
@@ -119,7 +133,7 @@ export default function NovaConsulta() {
         router.push("/dashboard/consultas");
       }, 1500);
     } catch (err: any) {
-      setErro(err.message || "Erro ao registrar agendamento.");
+      setErro(err.message || "Erro de conexão ao salvar agendamento.");
     } finally {
       setSalvando(false);
     }
@@ -131,9 +145,7 @@ export default function NovaConsulta() {
         <DashboardNavbar />
         <div className="mx-auto max-w-4xl px-4 py-16 text-center text-gray-500">
           <Loader2 size={24} className="mx-auto animate-spin text-[#1565C0]" />
-          <p className="mt-2 text-sm font-medium">
-            Validando permissões de acesso...
-          </p>
+          <p className="mt-2 text-sm font-medium">Validando permissões...</p>
         </div>
       </main>
     );
@@ -151,8 +163,7 @@ export default function NovaConsulta() {
             Modo Somente Leitura
           </h1>
           <p className="mt-2 text-sm text-gray-600">
-            O perfil Familiar possui permissão exclusiva para visualização da
-            agenda clínica do paciente.
+            O perfil Familiar possui permissão exclusiva para visualização da agenda clínica.
           </p>
           <div className="mt-6">
             <Link
@@ -191,8 +202,7 @@ export default function NovaConsulta() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-gray-600">
-            Registre as informações do próximo atendimento para manter a agenda
-            organizada.
+            Registre as informações do próximo atendimento para manter a agenda organizada.
           </p>
         </div>
 
@@ -212,22 +222,6 @@ export default function NovaConsulta() {
           </div>
         )}
 
-        {idoso && (
-          <div className="mt-6 flex items-center gap-3 rounded-2xl border border-blue-100 bg-[#E8F1FB] p-4 text-[#0A2540]">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#1565C0] shadow-sm">
-              <UserCheck size={20} />
-            </div>
-            <div>
-              <span className="text-xs font-semibold uppercase tracking-wider text-[#1565C0]">
-                Agendamento vinculado ao paciente:
-              </span>
-              <p className="text-sm font-bold">
-                {idoso.nome} ({idoso.idade} anos)
-              </p>
-            </div>
-          </div>
-        )}
-
         <form onSubmit={handleSubmit} className="mt-8 space-y-6">
           <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
             <div className="flex items-center gap-3 border-b border-gray-100 pb-5">
@@ -239,150 +233,84 @@ export default function NovaConsulta() {
                 <h2 className="font-semibold text-[#0A2540]">
                   Informações da consulta
                 </h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  Preencha os dados principais do atendimento.
-                </p>
               </div>
             </div>
 
             <div className="mt-6 grid gap-5 md:grid-cols-2">
               <div>
-                <label
-                  htmlFor="especialidade"
-                  className="mb-2 block text-sm font-medium text-[#0A2540]"
-                >
-                  Especialidade *
-                </label>
+                <label className="mb-2 block text-sm font-medium text-[#0A2540]">Especialidade *</label>
                 <input
-                  id="especialidade"
                   type="text"
                   required
                   value={formData.especialidade}
-                  onChange={(e) =>
-                    setFormData({ ...formData, especialidade: e.target.value })
-                  }
-                  placeholder="Ex.: Cardiologia, Geriatria, Oftalmologia"
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                  onChange={(e) => setFormData({ ...formData, especialidade: e.target.value })}
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-[#1565C0]"
                 />
               </div>
 
               <div>
-                <label
-                  htmlFor="profissional"
-                  className="mb-2 block text-sm font-medium text-[#0A2540]"
-                >
-                  Profissional *
-                </label>
+                <label className="mb-2 block text-sm font-medium text-[#0A2540]">Profissional *</label>
                 <input
-                  id="profissional"
                   type="text"
                   required
                   value={formData.profissional}
-                  onChange={(e) =>
-                    setFormData({ ...formData, profissional: e.target.value })
-                  }
-                  placeholder="Ex.: Dr. Roberto Faria"
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                  onChange={(e) => setFormData({ ...formData, profissional: e.target.value })}
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-[#1565C0]"
                 />
               </div>
 
               <div>
-                <label
-                  htmlFor="data"
-                  className="mb-2 block text-sm font-medium text-[#0A2540]"
-                >
-                  Data *
-                </label>
+                <label className="mb-2 block text-sm font-medium text-[#0A2540]">Data *</label>
                 <input
-                  id="data"
                   type="date"
                   required
                   value={formData.data}
-                  onChange={(e) =>
-                    setFormData({ ...formData, data: e.target.value })
-                  }
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                  onChange={(e) => setFormData({ ...formData, data: e.target.value })}
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-[#1565C0]"
                 />
               </div>
 
               <div>
-                <label
-                  htmlFor="horario"
-                  className="mb-2 block text-sm font-medium text-[#0A2540]"
-                >
-                  Horário *
-                </label>
+                <label className="mb-2 block text-sm font-medium text-[#0A2540]">Horário *</label>
                 <input
-                  id="horario"
                   type="time"
                   required
                   value={formData.horario}
-                  onChange={(e) =>
-                    setFormData({ ...formData, horario: e.target.value })
-                  }
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                  onChange={(e) => setFormData({ ...formData, horario: e.target.value })}
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-[#1565C0]"
                 />
               </div>
 
               <div className="md:col-span-2">
-                <label
-                  htmlFor="local"
-                  className="mb-2 block text-sm font-medium text-[#0A2540]"
-                >
-                  Local da consulta *
-                </label>
+                <label className="mb-2 block text-sm font-medium text-[#0A2540]">Local da consulta *</label>
                 <div className="relative">
-                  <MapPin
-                    size={18}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
-                  />
+                  <MapPin size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
-                    id="local"
                     type="text"
                     required
                     value={formData.local}
-                    onChange={(e) =>
-                      setFormData({ ...formData, local: e.target.value })
-                    }
-                    placeholder="Ex.: Hospital Central - Bloco B"
-                    className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                    onChange={(e) => setFormData({ ...formData, local: e.target.value })}
+                    className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm outline-none focus:border-[#1565C0]"
                   />
                 </div>
               </div>
 
               <div className="md:col-span-2">
-                <label
-                  htmlFor="observacao"
-                  className="mb-2 block text-sm font-medium text-[#0A2540]"
-                >
-                  Observações e Preparos
-                </label>
+                <label className="mb-2 block text-sm font-medium text-[#0A2540]">Observações e Preparos</label>
                 <textarea
-                  id="observacao"
                   rows={4}
                   value={formData.observacao}
-                  onChange={(e) =>
-                    setFormData({ ...formData, observacao: e.target.value })
-                  }
-                  placeholder="Ex.: Levar exames recentes de sangue e ECG. Jejum de 8h"
-                  className="w-full resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                  onChange={(e) => setFormData({ ...formData, observacao: e.target.value })}
+                  className="w-full resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-[#1565C0]"
                 />
               </div>
             </div>
           </section>
 
-          <div className="flex items-start gap-3 rounded-2xl border border-[#DCEAF8] bg-[#F8FBFE] p-5">
-            <CalendarDays size={20} className="mt-0.5 shrink-0 text-[#1565C0]" />
-            <p className="text-sm leading-relaxed text-gray-600">
-              A consulta agendada ficará visível para toda a rede de apoio
-              vinculada ao paciente.
-            </p>
-          </div>
-
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
             <Link
               href="/dashboard/consultas"
-              className="rounded-xl border border-gray-300 bg-white px-6 py-3 text-center font-medium text-gray-700 transition hover:bg-gray-50"
+              className="rounded-xl border border-gray-300 bg-white px-6 py-3 text-center font-medium text-gray-700 hover:bg-gray-50"
             >
               Cancelar
             </Link>
@@ -390,14 +318,10 @@ export default function NovaConsulta() {
             <button
               type="submit"
               disabled={salvando || !idoso}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-6 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0A2540] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-6 py-3 font-medium text-white shadow-sm disabled:opacity-70"
             >
-              {salvando ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : (
-                <Save size={18} />
-              )}
-              {salvando ? "Agendando..." : "Salvar consulta"}
+              {salvando ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+              Salvar consulta
             </button>
           </div>
         </form>
