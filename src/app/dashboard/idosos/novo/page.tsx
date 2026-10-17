@@ -16,11 +16,14 @@ import {
   Phone,
   IdCard,
   MapPin,
+  ShieldAlert,
 } from "lucide-react";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   "https://perfect-bravery-production-5ce7.up.railway.app";
+
+const CLINICA_PADRAO_ID = "e63b19f5-d8e4-4973-bac6-12aba9a0545d";
 
 function calcularIdade(dataNasc: string): number {
   if (!dataNasc) return 70;
@@ -39,6 +42,7 @@ export default function NovoIdoso() {
   const [salvando, setSalvando] = useState(false);
   const [sucesso, setSucesso] = useState(false);
   const [erro, setErro] = useState("");
+  const [autorizado, setAutorizado] = useState<boolean | null>(null);
 
   const [formData, setFormData] = useState({
     nome: "",
@@ -47,7 +51,7 @@ export default function NovoIdoso() {
     sexo: "Feminino",
     telefone: "",
     endereco: "",
-    clinica_id: "e63b19f5-d8e4-4973-bac6-12aba9a0545d",
+    clinica_id: CLINICA_PADRAO_ID,
   });
 
   useEffect(() => {
@@ -56,13 +60,25 @@ export default function NovoIdoso() {
       try {
         const parsed = JSON.parse(userRaw);
         const userData = parsed.user || parsed.usuario || parsed;
+        const perfil = (userData.perfil || userData.role || "").toUpperCase();
+
+        if (perfil !== "ADMINISTRADOR" && perfil !== "ADMIN") {
+          setAutorizado(false);
+          return;
+        }
+
+        setAutorizado(true);
         const cid =
           userData.clinica_id ||
           userData.clinicaId ||
           userData.clinica?.id ||
-          "e63b19f5-d8e4-4973-bac6-12aba9a0545d";
+          CLINICA_PADRAO_ID;
         setFormData((prev) => ({ ...prev, clinica_id: cid }));
-      } catch {}
+      } catch {
+        setAutorizado(false);
+      }
+    } else {
+      setAutorizado(false);
     }
   }, []);
 
@@ -74,17 +90,44 @@ export default function NovoIdoso() {
 
     const token = localStorage.getItem("saspi_token");
 
+    const cpfLimpo = formData.cpf.replace(/\D/g, "");
+    const telefoneLimpo = formData.telefone.replace(/\D/g, "");
+    const enderecoLimpo = formData.endereco.trim();
+
     const payload = {
       nome: formData.nome.trim(),
-      cpf: formData.cpf.replace(/\D/g, "") || null,
+      cpf: cpfLimpo.length > 0 ? cpfLimpo : undefined,
       data_nascimento: formData.data_nascimento,
       sexo: formData.sexo,
-      telefone: formData.telefone.replace(/\D/g, "") || null,
-      endereco: formData.endereco.trim() || null,
-      clinica_id: formData.clinica_id,
+      telefone: telefoneLimpo.length > 0 ? telefoneLimpo : undefined,
+      endereco: enderecoLimpo.length > 0 ? enderecoLimpo : undefined,
+      clinica_id: formData.clinica_id || CLINICA_PADRAO_ID,
     };
 
     try {
+      if (cpfLimpo.length > 0) {
+        const resCheck = await fetch(
+          `${API_URL}/idoso?clinica_id=${payload.clinica_id}`,
+          {
+            headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+          }
+        ).catch(() => null);
+
+        if (resCheck?.ok) {
+          const idososAtuais = await resCheck.json();
+          if (Array.isArray(idososAtuais)) {
+            const cpfJaExiste = idososAtuais.some(
+              (i: any) => String(i.cpf || "").replace(/\D/g, "") === cpfLimpo
+            );
+            if (cpfJaExiste) {
+              throw new Error(
+                "Erro: Já existe um paciente cadastrado com este CPF no sistema!"
+              );
+            }
+          }
+        }
+      }
+
       const response = await fetch(`${API_URL}/idoso`, {
         method: "POST",
         headers: {
@@ -94,22 +137,36 @@ export default function NovoIdoso() {
         body: JSON.stringify(payload),
       });
 
-      const resData = await response.json().catch(() => null);
+      const errData = await response.json().catch(() => null);
 
       if (!response.ok) {
-        const errorMsg = Array.isArray(resData?.message)
-          ? resData.message.join(", ")
-          : resData?.message ||
-            `Erro ${response.status}: Falha ao registrar idoso no banco.`;
-        throw new Error(errorMsg);
+        const rawMsg = Array.isArray(errData?.message)
+          ? errData.message.join(", ")
+          : errData?.message || "";
+
+        if (
+          response.status === 409 ||
+          response.status === 500 ||
+          String(rawMsg).includes("P2002") ||
+          String(rawMsg).toLowerCase().includes("unique")
+        ) {
+          throw new Error(
+            "Erro: Já existe um paciente cadastrado com este CPF no sistema!"
+          );
+        }
+
+        throw new Error(
+          rawMsg ||
+            `Erro ${response.status}: Falha ao registrar paciente no banco.`
+        );
       }
 
-      const idReal = resData?.id || String(Date.now());
+      const idReal = errData?.id || String(Date.now());
       const novoIdoso = {
         id: idReal,
         nome: formData.nome.trim(),
         idade: calcularIdade(formData.data_nascimento),
-        quarto: formData.endereco.trim() || "Leito padrão",
+        quarto: enderecoLimpo || "Leito padrão",
         sexo: formData.sexo,
         clinica_id: formData.clinica_id,
       };
@@ -140,6 +197,49 @@ export default function NovoIdoso() {
     }
   }
 
+  if (autorizado === null) {
+    return (
+      <main className="min-h-screen bg-[#F2F7FB]">
+        <DashboardNavbar />
+        <div className="mx-auto max-w-4xl px-4 py-16 text-center text-gray-500">
+          <Loader2 size={24} className="mx-auto animate-spin text-[#1565C0]" />
+          <p className="mt-2 text-sm font-medium">
+            Validando permissões de acesso...
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  if (autorizado === false) {
+    return (
+      <main className="min-h-screen bg-[#F2F7FB]">
+        <DashboardNavbar />
+        <div className="mx-auto max-w-xl px-4 py-16 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
+            <ShieldAlert size={32} />
+          </div>
+          <h1 className="mt-4 text-2xl font-bold text-[#0A2540]">
+            Acesso Restrito
+          </h1>
+          <p className="mt-2 text-sm text-gray-600">
+            Apenas Administradores têm permissão para admitir e cadastrar novos
+            pacientes na instituição.
+          </p>
+          <div className="mt-6">
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#1565C0] px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#0A2540]"
+            >
+              <ArrowLeft size={16} />
+              Voltar ao Dashboard
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[#F2F7FB]">
       <DashboardNavbar />
@@ -163,8 +263,8 @@ export default function NovoIdoso() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-gray-600">
-            Cadastre um novo idoso no sistema S.A.S.P.I. Os dados serão gravados
-            diretamente na base de dados da clínica.
+            Cadastre um novo paciente no sistema S.A.S.P.I. Os dados serão
+            gravados diretamente na base de dados da clínica.
           </p>
         </div>
 
@@ -179,7 +279,7 @@ export default function NovoIdoso() {
           <div className="mt-6 flex items-center gap-3 rounded-xl bg-emerald-50 p-4 text-emerald-800">
             <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
             <p className="text-sm font-medium">
-              Idoso gravado com sucesso no banco de dados! Redirecionando...
+              Paciente cadastrado com sucesso! Redirecionando...
             </p>
           </div>
         )}

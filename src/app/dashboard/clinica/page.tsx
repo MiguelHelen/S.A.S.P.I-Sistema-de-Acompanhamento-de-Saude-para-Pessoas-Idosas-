@@ -102,12 +102,17 @@ export default function ClinicaPage() {
 
     const token = localStorage.getItem("saspi_token");
 
-    const payload: Record<string, any> = {
+    const cnpjLimpo = formData.cnpj.replace(/\D/g, "");
+    const telefoneLimpo = formData.telefone.replace(/\D/g, "");
+    const emailLimpo = formData.email.trim();
+    const enderecoLimpo = formData.endereco.trim();
+
+    const payload = {
       nome: formData.nome.trim(),
-      cnpj: formData.cnpj?.replace(/\D/g, "") || null,
-      telefone: formData.telefone?.replace(/\D/g, "") || null,
-      email: formData.email?.trim() || null,
-      endereco: formData.endereco?.trim() || null,
+      cnpj: cnpjLimpo.length > 0 ? cnpjLimpo : undefined,
+      telefone: telefoneLimpo.length > 0 ? telefoneLimpo : undefined,
+      email: emailLimpo.length > 0 ? emailLimpo : undefined,
+      endereco: enderecoLimpo.length > 0 ? enderecoLimpo : undefined,
     };
 
     try {
@@ -120,15 +125,13 @@ export default function ClinicaPage() {
         body: JSON.stringify(payload),
       });
 
+      const errData = await res.json().catch(() => null);
+
       if (!res.ok) {
-        const textErr = await res.text();
-        let msg = "Não foi possível atualizar os dados da clínica.";
-        try {
-          const jsonErr = JSON.parse(textErr);
-          msg = jsonErr?.message || jsonErr?.error || msg;
-        } catch {
-          if (textErr) msg = textErr;
-        }
+        const msg = Array.isArray(errData?.message)
+          ? errData.message.join(", ")
+          : errData?.message ||
+            "Não foi possível atualizar os dados da clínica.";
         throw new Error(msg);
       }
 

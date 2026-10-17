@@ -49,8 +49,10 @@ export default function PatientSelector({
   const carregarIdososDaClinica = useCallback(async () => {
     setCarregando(true);
 
-    const token = typeof window !== "undefined" ? localStorage.getItem("saspi_token") : null;
-    const userRaw = typeof window !== "undefined" ? localStorage.getItem("saspi_user") : null;
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("saspi_token") : null;
+    const userRaw =
+      typeof window !== "undefined" ? localStorage.getItem("saspi_user") : null;
 
     let clinicaId = "e63b19f5-d8e4-4973-bac6-12aba9a0545d";
     let perfil = "";
@@ -75,7 +77,9 @@ export default function PatientSelector({
       if (!resIdosos.ok) throw new Error("Falha ao buscar pacientes.");
 
       const dataIdosos = await resIdosos.json();
-      let idososRecebidos: Idoso[] = (Array.isArray(dataIdosos) ? dataIdosos : []).map((item: any) => ({
+      let idososRecebidos: Idoso[] = (
+        Array.isArray(dataIdosos) ? dataIdosos : []
+      ).map((item: any) => ({
         id: item.id,
         nome: item.nome,
         idade: item.idade || calcularIdade(item.data_nascimento),
@@ -84,25 +88,47 @@ export default function PatientSelector({
         clinica_id: item.clinica_id,
       }));
 
-      if (perfil !== "ADMINISTRADOR" && perfil !== "ADMIN" && userId && token) {
+      if (
+        perfil !== "ADMINISTRADOR" &&
+        perfil !== "ADMIN" &&
+        userId &&
+        token
+      ) {
         try {
-          const resVinculos = await fetch(`${API_URL}/usuario-idoso?usuario_id=${userId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
+          let resVinculos = await fetch(
+            `${API_URL}/usuario-idoso/usuario/${userId}`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
+
+          if (!resVinculos.ok) {
+            resVinculos = await fetch(
+              `${API_URL}/usuario-idoso?usuario_id=${userId}`,
+              {
+                headers: { Authorization: `Bearer ${token}` },
+              }
+            );
+          }
 
           if (resVinculos.ok) {
             const vinculosData = await resVinculos.json();
-            const arrayVinculos = Array.isArray(vinculosData) ? vinculosData : (vinculosData.data || []);
-            
-            const meusVinculos = arrayVinculos.filter(
-              (v: any) => v.usuario_id === userId || v.usuarioId === userId || v.usuario?.id === userId
-            );
+            const arrayVinculos = Array.isArray(vinculosData)
+              ? vinculosData
+              : vinculosData.data || [];
+
+            const meusVinculos = arrayVinculos.filter((v: any) => {
+              const donoId = v.usuario_id || v.usuarioId || v.usuario?.id;
+              return !donoId || donoId === userId;
+            });
 
             const idsVinculados = meusVinculos.map(
               (v: any) => v.idoso_id || v.idosoId || v.idoso?.id
             );
-            
-            idososRecebidos = idososRecebidos.filter((i) => idsVinculados.includes(i.id));
+
+            idososRecebidos = idososRecebidos.filter((i) =>
+              idsVinculados.includes(i.id)
+            );
           } else {
             idososRecebidos = [];
           }
@@ -112,17 +138,22 @@ export default function PatientSelector({
       }
 
       setListaIdosos(idososRecebidos);
-      localStorage.setItem("saspi_elderly_list", JSON.stringify(idososRecebidos));
+      localStorage.setItem(
+        "saspi_elderly_list",
+        JSON.stringify(idososRecebidos)
+      );
 
       const savedActiveRaw = localStorage.getItem("saspi_active_elderly");
       let idosoParaAtivar: Idoso | null = null;
 
       if (selectedId) {
-        idosoParaAtivar = idososRecebidos.find((i) => i.id === selectedId) || null;
+        idosoParaAtivar =
+          idososRecebidos.find((i) => i.id === selectedId) || null;
       } else if (savedActiveRaw) {
         try {
           const parsedSaved = JSON.parse(savedActiveRaw);
-          idosoParaAtivar = idososRecebidos.find((i) => i.id === parsedSaved.id) || null;
+          idosoParaAtivar =
+            idososRecebidos.find((i) => i.id === parsedSaved.id) || null;
         } catch {}
       }
 
@@ -132,15 +163,21 @@ export default function PatientSelector({
 
       if (idosoParaAtivar) {
         setAtivo(idosoParaAtivar);
-        localStorage.setItem("saspi_active_elderly", JSON.stringify(idosoParaAtivar));
+        localStorage.setItem(
+          "saspi_active_elderly",
+          JSON.stringify(idosoParaAtivar)
+        );
         onSelectRef.current?.(idosoParaAtivar);
       } else {
         setAtivo(null);
         localStorage.removeItem("saspi_active_elderly");
+        window.dispatchEvent(new Event("saspi_elderly_updated"));
       }
     } catch {
       setListaIdosos([]);
       setAtivo(null);
+      localStorage.removeItem("saspi_active_elderly");
+      window.dispatchEvent(new Event("saspi_elderly_updated"));
     } finally {
       setCarregando(false);
     }
@@ -158,6 +195,8 @@ export default function PatientSelector({
             setAtivo(parsed);
           }
         } catch {}
+      } else {
+        setAtivo(null);
       }
     }
 
@@ -168,6 +207,7 @@ export default function PatientSelector({
   }, [carregarIdososDaClinica]);
 
   function handleSelect(idoso: Idoso) {
+    if (perfilUsuario === "FAMILIAR") return;
     setAtivo(idoso);
     try {
       localStorage.setItem("saspi_active_elderly", JSON.stringify(idoso));
@@ -176,7 +216,9 @@ export default function PatientSelector({
     onSelectRef.current?.(idoso);
   }
 
-  const isAdmin = perfilUsuario === "ADMINISTRADOR" || perfilUsuario === "ADMIN";
+  const isAdmin =
+    perfilUsuario === "ADMINISTRADOR" || perfilUsuario === "ADMIN";
+  const isFamiliar = perfilUsuario === "FAMILIAR";
 
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm md:p-6">
@@ -190,7 +232,9 @@ export default function PatientSelector({
               Paciente em Acompanhamento
             </h2>
             <p className="text-sm text-gray-500">
-              Selecione o idoso para visualizar os prontuários e sinais vitais.
+              {isFamiliar
+                ? "Visualização dedicada ao paciente vinculado à sua conta."
+                : "Selecione o paciente para visualizar os prontuários e sinais vitais."}
             </p>
           </div>
         </div>
@@ -210,14 +254,20 @@ export default function PatientSelector({
         {carregando ? (
           <div className="flex items-center gap-2 py-3 text-sm text-gray-500">
             <Loader2 size={18} className="animate-spin text-[#1565C0]" />
-            Carregando pacientes autorizados...
+            Carregando pacientes vinculados...
           </div>
         ) : listaIdosos.length === 0 ? (
           <div className="flex items-center gap-3 rounded-xl border border-dashed border-gray-200 bg-gray-50/50 p-4">
-            <AlertCircle size={18} className="text-amber-500 shrink-0" />
+            <AlertCircle size={18} className="shrink-0 text-amber-500" />
             <p className="text-sm text-gray-500">
-              Nenhum paciente atribuído ao seu usuário.
+              Nenhum paciente atribuído ao seu usuário até o momento.
             </p>
+          </div>
+        ) : isFamiliar && ativo ? (
+          <div className="inline-flex items-center gap-2.5 rounded-xl bg-[#1565C0] px-4 py-2.5 text-sm font-medium text-white shadow-sm">
+            <UserCheck size={16} className="text-white" />
+            <span>{ativo.nome}</span>
+            <span className="text-xs text-blue-100">({ativo.idade} anos)</span>
           </div>
         ) : (
           <div className="flex flex-wrap items-center gap-2.5">
