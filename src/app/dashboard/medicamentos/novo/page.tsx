@@ -50,12 +50,8 @@ export default function NovoMedicamento() {
 
         setUsuarioId(userData.id || "");
 
-        if (
-          perfil === "MEDICO" ||
-          perfil === "ENFERMEIRO" ||
-          perfil === "ADMINISTRADOR" ||
-          perfil === "ADMIN"
-        ) {
+        // Apenas Medicos e Enfermeiros possuem habilitacao clinica para prescrever
+        if (perfil === "MEDICO" || perfil === "ENFERMEIRO") {
           setAutorizado(true);
         } else {
           setAutorizado(false);
@@ -126,7 +122,15 @@ export default function NovoMedicamento() {
 
     if (!idoso || !idoso.id) {
       setErro(
-        "Nenhum idoso ativo selecionado. Selecione um paciente no topo do dashboard."
+        "Nenhum paciente ativo selecionado. Selecione um paciente antes de prescrever."
+      );
+      setSalvando(false);
+      return;
+    }
+
+    if (!usuarioId) {
+      setErro(
+        "Não foi possível identificar o profissional logado. Faça login novamente."
       );
       setSalvando(false);
       return;
@@ -146,19 +150,19 @@ export default function NovoMedicamento() {
         token
       );
 
-      const payload: Record<string, any> = {
+      if (!medicamentoId) {
+        throw new Error(
+          "Não foi possível registrar o medicamento no catálogo do banco de dados."
+        );
+      }
+
+      // Contrato estrito conforme CreatePrescricaoDto (sem propriedade extra 'status')
+      const payload = {
         idoso_id: idoso.id,
-        ...(medicamentoId && { medicamento_id: medicamentoId }),
-        ...(usuarioId && { usuario_id: usuarioId }),
-        ...(!medicamentoId && {
-          medicamento: {
-            nome: nomeLimpo,
-            descricao: orientacoesLimpas,
-          },
-        }),
+        medicamento_id: medicamentoId,
+        usuario_id: usuarioId,
         dosagem: formData.dosagem.trim(),
         frequencia: frequenciaCompleta,
-        status: "ATIVA",
         data_inicio: new Date().toISOString().split("T")[0],
       };
 
@@ -185,7 +189,7 @@ export default function NovoMedicamento() {
       setSucesso(true);
       setTimeout(() => {
         router.push("/dashboard/medicamentos");
-      }, 1500);
+      }, 1200);
     } catch (err: any) {
       setErro(err.message || "Erro de conexão ao comunicar com a API.");
     } finally {
@@ -219,16 +223,16 @@ export default function NovoMedicamento() {
             Acesso Restrito
           </h1>
           <p className="mt-2 text-sm text-gray-600">
-            Apenas Médicos e Enfermeiros possuem habilitação para cadastrar
-            novas prescrições medicamentosas.
+            Apenas Médicos e Enfermeiros possuem habilitação clínica para
+            cadastrar novas prescrições medicamentosas.
           </p>
           <div className="mt-6">
             <Link
-              href="/dashboard/medicamentos"
+              href="/dashboard"
               className="inline-flex items-center gap-2 rounded-xl bg-[#1565C0] px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#0A2540]"
             >
               <ArrowLeft size={16} />
-              Voltar para Medicamentos
+              Voltar ao Painel
             </Link>
           </div>
         </div>
@@ -275,7 +279,7 @@ export default function NovoMedicamento() {
           <div className="mt-6 flex items-center gap-3 rounded-xl bg-emerald-50 p-4 text-emerald-800">
             <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
             <p className="text-sm font-medium">
-              Medicamento registrado com sucesso no banco de dados!
+              Prescrição gravada com sucesso no banco de dados!
               Redirecionando...
             </p>
           </div>
@@ -291,7 +295,7 @@ export default function NovoMedicamento() {
                 Prescrição vinculada ao paciente:
               </span>
               <p className="text-sm font-bold">
-                {idoso.nome} ({idoso.idade} anos)
+                {idoso.nome} {idoso.idade > 0 ? `(${idoso.idade} anos)` : ""}
               </p>
             </div>
           </div>
@@ -432,9 +436,8 @@ export default function NovoMedicamento() {
           <div className="flex items-start gap-3 rounded-2xl border border-[#D7EEE9] bg-[#F5FBF9] p-5">
             <Clock3 size={20} className="mt-0.5 shrink-0 text-[#26A69A]" />
             <p className="text-sm leading-relaxed text-gray-600">
-              As informações configuradas aqui serão gravadas de forma
-              permanente no banco de dados e sincronizadas com o aplicativo
-              mobile.
+              A prescrição ficará imediatamente visível para a equipe de cuidado
+              e familiares vinculados ao paciente.
             </p>
           </div>
 

@@ -1,11 +1,18 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const ADMIN_ROUTES = [
+const ADMIN_ONLY_ROUTES = [
   "/dashboard/clinica",
   "/dashboard/usuarios",
   "/dashboard/vinculos",
-  "/dashboard/idosos/novo",
+  "/dashboard/idosos",
+];
+
+const CLINICAL_ROUTES = [
+  "/dashboard/saude",
+  "/dashboard/medicamentos",
+  "/dashboard/consultas",
+  "/dashboard/historico",
 ];
 
 export function proxy(request: NextRequest) {
@@ -21,24 +28,40 @@ export function proxy(request: NextRequest) {
       return NextResponse.redirect(loginUrl);
     }
 
-    const isRotaAdmin = ADMIN_ROUTES.some((rota) => pathname.startsWith(rota));
-
-    if (isRotaAdmin) {
-      if (!userCookie) {
-        return NextResponse.redirect(new URL("/dashboard", request.url));
-      }
-
+    let role = "";
+    if (userCookie) {
       try {
         const parsed = JSON.parse(decodeURIComponent(userCookie));
         const user = parsed.user || parsed.usuario || parsed;
-        const role = String(user.perfil || user.role || "").toUpperCase();
-
-        if (role !== "ADMINISTRADOR" && role !== "ADMIN") {
-          return NextResponse.redirect(new URL("/dashboard", request.url));
-        }
+        role = String(user.perfil || user.role || "").toUpperCase();
       } catch {
-        return NextResponse.redirect(new URL("/dashboard", request.url));
+        return NextResponse.redirect(new URL("/login", request.url));
       }
+    }
+
+    const isAdmin = role === "ADMINISTRADOR" || role === "ADMIN";
+    const isRotaAdmin = ADMIN_ONLY_ROUTES.some((rota) =>
+      pathname.startsWith(rota)
+    );
+    const isRotaClinica = CLINICAL_ROUTES.some((rota) =>
+      pathname.startsWith(rota)
+    );
+
+    if (isRotaAdmin && !isAdmin) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+
+    // O Administrador gerencia a instituicao, nao executa operacoes clinicas
+    if (isRotaClinica && isAdmin) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+
+    // Familiar possui acesso somente leitura nos modulos clinicos
+    if (
+      role === "FAMILIAR" &&
+      (pathname.endsWith("/novo") || pathname.endsWith("/nova"))
+    ) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
     }
   }
 

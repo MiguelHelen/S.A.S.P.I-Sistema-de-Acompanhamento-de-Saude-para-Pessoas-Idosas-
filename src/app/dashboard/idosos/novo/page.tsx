@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import DashboardNavbar from "@/components/DashboardNavbar";
+import { calcularIdadeReal } from "@/components/PatientSelector";
 import {
   ArrowLeft,
   User,
@@ -25,24 +26,14 @@ const API_URL =
 
 const CLINICA_PADRAO_ID = "e63b19f5-d8e4-4973-bac6-12aba9a0545d";
 
-function calcularIdade(dataNasc: string): number {
-  if (!dataNasc) return 70;
-  const hoje = new Date();
-  const nasc = new Date(dataNasc);
-  let idade = hoje.getFullYear() - nasc.getFullYear();
-  const mes = hoje.getMonth() - nasc.getMonth();
-  if (mes < 0 || (mes === 0 && hoje.getDate() < nasc.getDate())) {
-    idade--;
-  }
-  return idade > 0 ? idade : 70;
-}
-
 export default function NovoIdoso() {
   const router = useRouter();
   const [salvando, setSalvando] = useState(false);
   const [sucesso, setSucesso] = useState(false);
   const [erro, setErro] = useState("");
   const [autorizado, setAutorizado] = useState<boolean | null>(null);
+
+  const dataMaximaHoje = new Date().toISOString().split("T")[0];
 
   const [formData, setFormData] = useState({
     nome: "",
@@ -93,6 +84,28 @@ export default function NovoIdoso() {
     const cpfLimpo = formData.cpf.replace(/\D/g, "");
     const telefoneLimpo = formData.telefone.replace(/\D/g, "");
     const enderecoLimpo = formData.endereco.trim();
+
+    const anoNasc = Number(formData.data_nascimento.split("-")[0]);
+    const dataObj = new Date(formData.data_nascimento);
+
+    if (
+      !formData.data_nascimento ||
+      Number.isNaN(dataObj.getTime()) ||
+      anoNasc < 1900 ||
+      dataObj > new Date()
+    ) {
+      setErro(
+        "Data de nascimento inválida. Informe uma data real entre 01/01/1900 e a data de hoje."
+      );
+      setSalvando(false);
+      return;
+    }
+
+    if (cpfLimpo.length > 0 && cpfLimpo.length !== 11) {
+      setErro("O CPF informado deve conter exatamente 11 dígitos numéricos.");
+      setSalvando(false);
+      return;
+    }
 
     const payload = {
       nome: formData.nome.trim(),
@@ -165,7 +178,7 @@ export default function NovoIdoso() {
       const novoIdoso = {
         id: idReal,
         nome: formData.nome.trim(),
-        idade: calcularIdade(formData.data_nascimento),
+        idade: calcularIdadeReal(formData.data_nascimento),
         quarto: enderecoLimpo || "Leito padrão",
         sexo: formData.sexo,
         clinica_id: formData.clinica_id,
@@ -183,13 +196,11 @@ export default function NovoIdoso() {
 
       const novaLista = [...listaAtual, novoIdoso];
       localStorage.setItem("saspi_elderly_list", JSON.stringify(novaLista));
-      localStorage.setItem("saspi_active_elderly", JSON.stringify(novoIdoso));
-      window.dispatchEvent(new Event("saspi_elderly_updated"));
 
       setSucesso(true);
       setTimeout(() => {
-        router.push("/dashboard");
-      }, 1500);
+        router.push("/dashboard/idosos");
+      }, 1200);
     } catch (err: any) {
       setErro(err.message || "Erro desconhecido ao conectar com a API.");
     } finally {
@@ -246,11 +257,11 @@ export default function NovoIdoso() {
 
       <div className="mx-auto max-w-4xl px-4 py-8 md:px-8">
         <Link
-          href="/dashboard"
+          href="/dashboard/idosos"
           className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-[#1565C0]"
         >
           <ArrowLeft size={17} />
-          Voltar para o Dashboard
+          Voltar para lista de idosos
         </Link>
 
         <div className="mt-8">
@@ -343,6 +354,7 @@ export default function NovoIdoso() {
                   <input
                     id="cpf"
                     type="text"
+                    maxLength={14}
                     value={formData.cpf}
                     onChange={(e) =>
                       setFormData({ ...formData, cpf: e.target.value })
@@ -369,6 +381,8 @@ export default function NovoIdoso() {
                     id="data_nascimento"
                     type="date"
                     required
+                    min="1900-01-01"
+                    max={dataMaximaHoje}
                     value={formData.data_nascimento}
                     onChange={(e) =>
                       setFormData({
@@ -456,7 +470,7 @@ export default function NovoIdoso() {
 
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
             <Link
-              href="/dashboard"
+              href="/dashboard/idosos"
               className="rounded-xl border border-gray-300 bg-white px-6 py-3 text-center font-medium text-gray-700 transition hover:bg-gray-50"
             >
               Cancelar
