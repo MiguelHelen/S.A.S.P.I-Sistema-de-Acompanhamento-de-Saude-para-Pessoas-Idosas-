@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsUUID, IsDateString } from 'class-validator';
+import { IsString, IsOptional, IsUUID, IsDateString, IsIn } from 'class-validator';
 
 export class CreatePrescricaoDto {
   @IsUUID()
@@ -25,4 +25,8 @@ export class CreatePrescricaoDto {
   @IsOptional()
   @IsDateString()
   data_fim?: string;
+
+  @IsOptional()
+  @IsIn(['ATIVA', 'ENCERRADA'])
+  status?: 'ATIVA' | 'ENCERRADA';
 }
