@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -16,6 +16,7 @@ import {
   ChevronDown,
   Building2,
   Loader2,
+  Link2,
 } from "lucide-react";
 
 interface UsuarioLogado {
@@ -26,26 +27,34 @@ interface UsuarioLogado {
   clinica_nome?: string;
 }
 
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://perfect-bravery-production-5ce7.up.railway.app";
+
+const NAV_LINKS = [
+  { href: "/dashboard", label: "Visão Geral", icon: Activity },
+  { href: "/dashboard/saude", label: "Sinais Vitais", icon: HeartPulse },
+  { href: "/dashboard/medicamentos", label: "Medicamentos", icon: Pill },
+  { href: "/dashboard/consultas", label: "Consultas", icon: CalendarDays },
+  { href: "/dashboard/historico", label: "Histórico", icon: History },
+];
+
 export default function DashboardNavbar() {
   const pathname = usePathname();
   const router = useRouter();
   const [dropdownAberto, setDropdownAberto] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  
+
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [nomeClinica, setNomeClinica] = useState<string>("");
   const [buscandoClinica, setBuscandoClinica] = useState(false);
 
-  const apiUrl =
-    process.env.NEXT_PUBLIC_API_URL ||
-    "https://perfect-bravery-production-5ce7.up.railway.app";
-
-  async function buscarNomeClinica(cId: string, token: string | null) {
+  const buscarNomeClinica = useCallback(async (cId: string, token: string | null) => {
     if (!cId) return;
     setBuscandoClinica(true);
 
     try {
-      const res = await fetch(`${apiUrl}/clinica/${cId}`, {
+      const res = await fetch(`${API_URL}/clinica/${cId}`, {
         headers: {
           ...(token && { Authorization: `Bearer ${token}` }),
         },
@@ -56,7 +65,6 @@ export default function DashboardNavbar() {
         if (data?.nome) {
           setNomeClinica(data.nome);
 
-          // Atualiza o cache local para evitar requisições repetidas desnecessárias
           const userRaw = localStorage.getItem("saspi_user");
           if (userRaw) {
             try {
@@ -67,58 +75,53 @@ export default function DashboardNavbar() {
               localStorage.setItem("saspi_user", JSON.stringify(parsed));
             } catch {}
           }
-          return;
         }
       }
-    } catch (err) {
-      console.warn("Aviso ao buscar clínica no backend:", err);
+    } catch {
+      // Silencioso para evitar poluição no console em caso de rede instável
     } finally {
       setBuscandoClinica(false);
     }
-  }
+  }, []);
 
-  function carregarUsuario() {
+  const carregarUsuario = useCallback(() => {
     if (typeof window === "undefined") return;
     const userRaw = localStorage.getItem("saspi_user");
     const token = localStorage.getItem("saspi_token");
 
-    if (userRaw) {
-      try {
-        const parsed = JSON.parse(userRaw);
-        const userData = parsed.user || parsed.usuario || parsed;
+    if (!userRaw) return;
 
-        const cId =
-          userData.clinica_id ||
-          userData.clinicaId ||
-          userData.clinica?.id ||
-          "";
+    try {
+      const parsed = JSON.parse(userRaw);
+      const userData = parsed.user || parsed.usuario || parsed;
 
-        const cNomeInicial =
-          userData.clinica?.nome ||
-          userData.clinica_nome ||
-          "";
+      const cId =
+        userData.clinica_id ||
+        userData.clinicaId ||
+        userData.clinica?.id ||
+        "";
 
-        setUsuario({
-          nome:
-            userData.nome ||
-            userData.name ||
-            (userData.email ? userData.email.split("@")[0] : "Usuário"),
-          email: userData.email || "",
-          perfil: userData.perfil || userData.role || "MEDICO",
-          clinica_id: cId,
-          clinica_nome: cNomeInicial,
-        });
+      const cNomeInicial =
+        userData.clinica?.nome || userData.clinica_nome || "";
 
-        if (cNomeInicial) {
-          setNomeClinica(cNomeInicial);
-        } else if (cId) {
-          buscarNomeClinica(cId, token);
-        }
-      } catch (err) {
-        console.error("Erro ao ler dados da sessão na navbar:", err);
+      setUsuario({
+        nome:
+          userData.nome ||
+          userData.name ||
+          (userData.email ? userData.email.split("@")[0] : "Usuário"),
+        email: userData.email || "",
+        perfil: (userData.perfil || userData.role || "MEDICO").toUpperCase(),
+        clinica_id: cId,
+        clinica_nome: cNomeInicial,
+      });
+
+      if (cNomeInicial) {
+        setNomeClinica(cNomeInicial);
+      } else if (cId) {
+        buscarNomeClinica(cId, token);
       }
-    }
-  }
+    } catch {}
+  }, [buscarNomeClinica]);
 
   useEffect(() => {
     carregarUsuario();
@@ -141,32 +144,24 @@ export default function DashboardNavbar() {
       window.removeEventListener("storage", carregarUsuario);
       document.removeEventListener("mousedown", handleClickFora);
     };
-  }, []);
+  }, [carregarUsuario]);
 
   function handleLogout() {
     localStorage.removeItem("saspi_token");
     localStorage.removeItem("saspi_user");
     localStorage.removeItem("saspi_active_elderly");
+    localStorage.removeItem("saspi_elderly_list");
+    document.cookie = "saspi_token=; path=/; max-age=0; SameSite=Lax";
+    document.cookie = "saspi_user=; path=/; max-age=0; SameSite=Lax";
     router.push("/login");
   }
 
-const isAdmin =
-  usuario?.perfil === "ADMINISTRADOR" ||
-  usuario?.perfil === "ADMIN";
-
-  const links = [
-    { href: "/dashboard", label: "Visão Geral", icon: Activity },
-    { href: "/dashboard/saude", label: "Sinais Vitais", icon: HeartPulse },
-    { href: "/dashboard/medicamentos", label: "Medicamentos", icon: Pill },
-    { href: "/dashboard/consultas", label: "Consultas", icon: CalendarDays },
-    { href: "/dashboard/historico", label: "Histórico", icon: History },
-  ];
+  const isAdmin =
+    usuario?.perfil === "ADMINISTRADOR" || usuario?.perfil === "ADMIN";
 
   return (
     <header className="sticky top-0 z-40 border-b border-gray-100 bg-white/95 backdrop-blur-md">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 md:px-8">
-        
-        {/* LOGO & CLÍNICA BUSCADA DO BANCO */}
         <div className="flex items-center gap-3 md:gap-4">
           <Link href="/dashboard" className="flex items-center">
             <Image
@@ -175,7 +170,7 @@ const isAdmin =
               width={160}
               height={40}
               priority
-              className="h-9 w-auto object-contain"
+              style={{ width: "auto", height: "auto" }}
             />
           </Link>
 
@@ -196,9 +191,8 @@ const isAdmin =
           )}
         </div>
 
-        {/* Links Centrais */}
         <nav className="hidden items-center gap-1 md:flex">
-          {links.map((link) => {
+          {NAV_LINKS.map((link) => {
             const Icon = link.icon;
             const ativo =
               link.href === "/dashboard"
@@ -222,11 +216,10 @@ const isAdmin =
           })}
         </nav>
 
-        {/* Menu do Usuário */}
         <div className="relative" ref={dropdownRef}>
           <button
             type="button"
-            onClick={() => setDropdownAberto(!dropdownAberto)}
+            onClick={() => setDropdownAberto((prev) => !prev)}
             className="flex items-center gap-3 rounded-xl p-1.5 transition hover:bg-gray-50"
             aria-expanded={dropdownAberto}
           >
@@ -265,9 +258,11 @@ const isAdmin =
           </button>
 
           {dropdownAberto && usuario && (
-            <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-gray-100 bg-white p-2 shadow-lg ring-1 ring-black/5 animate-in fade-in zoom-in-95">
+            <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-gray-100 bg-white p-2 shadow-lg ring-1 ring-black/5">
               <div className="border-b border-gray-100 px-3 py-2 md:hidden">
-                <p className="text-sm font-semibold text-[#0A2540]">{usuario.nome}</p>
+                <p className="text-sm font-semibold text-[#0A2540]">
+                  {usuario.nome}
+                </p>
                 <p className="text-xs text-gray-500">{usuario.email}</p>
                 {nomeClinica && (
                   <p className="mt-1 text-xs font-medium text-[#1565C0]">
@@ -305,6 +300,24 @@ const isAdmin =
                       <UserPlus size={16} className="text-[#26A69A]" />
                       Cadastrar Novo Usuário
                     </Link>
+
+                    <Link
+                      href="/dashboard/vinculos/novo"
+                      onClick={() => setDropdownAberto(false)}
+                      className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-gray-700 transition hover:bg-[#F2F7FB] hover:text-[#1565C0]"
+                    >
+                      <Link2 size={16} className="text-[#1565C0]" />
+                      Atribuir Vínculos
+                    </Link>
+
+                    <Link
+                      href="/dashboard/vinculos"
+                      onClick={() => setDropdownAberto(false)}
+                      className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-gray-700 transition hover:bg-[#F2F7FB] hover:text-[#1565C0]"
+                    >
+                      <Link2 size={16} className="text-[#1565C0]" />
+                      Listar Vínculos
+                    </Link>
                   </>
                 )}
               </div>
@@ -322,7 +335,6 @@ const isAdmin =
             </div>
           )}
         </div>
-
       </div>
     </header>
   );

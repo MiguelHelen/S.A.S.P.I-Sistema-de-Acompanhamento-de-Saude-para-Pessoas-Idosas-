@@ -1,35 +1,48 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import DashboardNavbar from "@/components/DashboardNavbar";
+import type { Idoso } from "@/components/PatientSelector";
 import {
   ArrowLeft,
   HeartPulse,
   Save,
   Loader2,
   CheckCircle2,
-  UserCheck,
-  Activity,
-  Clock,
   ClipboardList,
+  UserCheck,
+  AlertCircle,
 } from "lucide-react";
+
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://perfect-bravery-production-5ce7.up.railway.app";
 
 export default function NovoRegistro() {
   const router = useRouter();
   const [salvando, setSalvando] = useState(false);
   const [sucesso, setSucesso] = useState(false);
+  const [erro, setErro] = useState("");
+  const [idoso, setIdoso] = useState<Idoso | null>(null);
 
-  // Estados alinhados com o esquema 'registro_saude' no Prisma
   const [formData, setFormData] = useState({
-    indicador_nome: "Frequência Cardíaca", // No backend isso será mapeado para um indicador_id
+    indicador_nome: "Frequência Cardíaca",
     valor: "",
     unidade: "bpm",
     observacao: "",
   });
 
-  // Atualiza a unidade automaticamente dependendo do indicador escolhido
+  useEffect(() => {
+    const activeElderly = localStorage.getItem("saspi_active_elderly");
+    if (activeElderly) {
+      try {
+        setIdoso(JSON.parse(activeElderly));
+      } catch {}
+    }
+  }, []);
+
   function handleIndicadorChange(nome_indicador: string) {
     let novaUnidade = "bpm";
     if (nome_indicador === "Oxigenação") novaUnidade = "%";
@@ -42,18 +55,56 @@ export default function NovoRegistro() {
     });
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSalvando(true);
+    setErro("");
+    setSucesso(false);
 
-    // Simula tempo de rede
-    setTimeout(() => {
+    if (!idoso || !idoso.id) {
+      setErro("Nenhum idoso ativo selecionado. Selecione um paciente no topo do dashboard.");
       setSalvando(false);
+      return;
+    }
+
+    const token = localStorage.getItem("saspi_token");
+
+    // Payload estruturado conforme o contrato do backend NestJS para a entidade registro-saude
+    const payload = {
+      idoso_id: idoso.id,
+      indicador_nome: formData.indicador_nome,
+      valor: formData.valor.trim(),
+      unidade: formData.unidade,
+      observacao: formData.observacao.trim() || undefined,
+      origem: "Manual",
+    };
+
+    try {
+      const res = await fetch(`${API_URL}/registro-saude`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(
+          errData?.message || `Erro ${res.status}: Não foi possível registrar o sinal vital.`
+        );
+      }
+
       setSucesso(true);
       setTimeout(() => {
         router.push("/dashboard/historico");
-      }, 1200);
-    }, 600);
+      }, 1500);
+    } catch (err: any) {
+      setErro(err.message || "Erro de conexão ao salvar o registro de saúde.");
+    } finally {
+      setSalvando(false);
+    }
   }
 
   return (
@@ -83,12 +134,35 @@ export default function NovoRegistro() {
           </p>
         </div>
 
+        {erro && (
+          <div className="mt-6 flex items-center gap-3 rounded-xl bg-red-50 p-4 text-red-700">
+            <AlertCircle size={20} className="shrink-0 text-red-600" />
+            <p className="text-sm font-medium">{erro}</p>
+          </div>
+        )}
+
         {sucesso && (
           <div className="mt-6 flex items-center gap-3 rounded-xl bg-emerald-50 p-4 text-emerald-800">
             <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
             <p className="text-sm font-medium">
-              Sinal vital registrado com sucesso! Redirecionando...
+              Sinal vital gravado com sucesso no banco de dados! Redirecionando...
             </p>
+          </div>
+        )}
+
+        {idoso && (
+          <div className="mt-6 flex items-center gap-3 rounded-2xl border border-blue-100 bg-[#E8F1FB] p-4 text-[#0A2540]">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#1565C0] shadow-sm">
+              <UserCheck size={20} />
+            </div>
+            <div>
+              <span className="text-xs font-semibold uppercase tracking-wider text-[#1565C0]">
+                Aferição vinculada ao paciente:
+              </span>
+              <p className="text-sm font-bold">
+                {idoso.nome} ({idoso.idade} anos)
+              </p>
+            </div>
           </div>
         )}
 
@@ -111,7 +185,10 @@ export default function NovoRegistro() {
 
             <div className="mt-6 grid gap-5 md:grid-cols-2">
               <div className="md:col-span-2">
-                <label htmlFor="indicador" className="mb-2 block text-sm font-medium text-[#0A2540]">
+                <label
+                  htmlFor="indicador"
+                  className="mb-2 block text-sm font-medium text-[#0A2540]"
+                >
                   Indicador de saúde *
                 </label>
                 <select
@@ -120,14 +197,19 @@ export default function NovoRegistro() {
                   onChange={(e) => handleIndicadorChange(e.target.value)}
                   className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 >
-                  <option value="Frequência Cardíaca">Frequência cardíaca</option>
+                  <option value="Frequência Cardíaca">
+                    Frequência cardíaca
+                  </option>
                   <option value="Oxigenação">Oxigenação (SpO₂)</option>
                   <option value="Pressão Arterial">Pressão arterial</option>
                 </select>
               </div>
 
               <div>
-                <label htmlFor="valor" className="mb-2 block text-sm font-medium text-[#0A2540]">
+                <label
+                  htmlFor="valor"
+                  className="mb-2 block text-sm font-medium text-[#0A2540]"
+                >
                   Valor aferido *
                 </label>
                 <input
@@ -135,14 +217,23 @@ export default function NovoRegistro() {
                   type="text"
                   required
                   value={formData.valor}
-                  onChange={(e) => setFormData({ ...formData, valor: e.target.value })}
-                  placeholder={formData.indicador_nome === "Pressão Arterial" ? "Ex.: 120/80" : "Ex.: 72"}
+                  onChange={(e) =>
+                    setFormData({ ...formData, valor: e.target.value })
+                  }
+                  placeholder={
+                    formData.indicador_nome === "Pressão Arterial"
+                      ? "Ex.: 120/80"
+                      : "Ex.: 72"
+                  }
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 placeholder:text-gray-400 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
               </div>
 
               <div>
-                <label htmlFor="unidade" className="mb-2 block text-sm font-medium text-[#0A2540]">
+                <label
+                  htmlFor="unidade"
+                  className="mb-2 block text-sm font-medium text-[#0A2540]"
+                >
                   Unidade de medida
                 </label>
                 <input
@@ -150,19 +241,24 @@ export default function NovoRegistro() {
                   type="text"
                   readOnly
                   value={formData.unidade}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-600 outline-none cursor-not-allowed"
+                  className="w-full cursor-not-allowed rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-600 outline-none"
                 />
               </div>
 
               <div className="md:col-span-2">
-                <label htmlFor="observacao" className="mb-2 block text-sm font-medium text-[#0A2540]">
+                <label
+                  htmlFor="observacao"
+                  className="mb-2 block text-sm font-medium text-[#0A2540]"
+                >
                   Observações clínicas
                 </label>
                 <textarea
                   id="observacao"
                   rows={4}
                   value={formData.observacao}
-                  onChange={(e) => setFormData({ ...formData, observacao: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, observacao: e.target.value })
+                  }
                   placeholder="Ex.: Aferido em repouso após 15 minutos..."
                   className="w-full resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 placeholder:text-gray-400 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
@@ -172,10 +268,12 @@ export default function NovoRegistro() {
 
           <div className="rounded-2xl border border-[#DCEAF8] bg-[#F8FBFE] p-5">
             <div className="flex gap-3">
-              <ClipboardList size={20} className="mt-0.5 shrink-0 text-[#1565C0]" />
+              <ClipboardList
+                size={20}
+                className="mt-0.5 shrink-0 text-[#1565C0]"
+              />
               <p className="text-sm leading-relaxed text-gray-600">
-                Este registro será marcado na base como aferição manual. Ele unifica-se
-                aos dados automáticos coletados via smartbands para alimentar o histórico integrado do S.A.S.P.I.
+                Este registro será gravado permanentemente na base de dados, unificando-se aos dados automáticos coletados via smartbands para alimentar o histórico integrado do S.A.S.P.I.
               </p>
             </div>
           </div>
@@ -190,11 +288,15 @@ export default function NovoRegistro() {
 
             <button
               type="submit"
-              disabled={salvando}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-6 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0A2540] hover:shadow-md disabled:opacity-70"
+              disabled={salvando || !idoso}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-6 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0A2540] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {salvando ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-              {salvando ? "Registrando..." : "Salvar registro"}
+              {salvando ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <Save size={18} />
+              )}
+              {salvando ? "Gravando no banco..." : "Salvar registro"}
             </button>
           </div>
         </form>

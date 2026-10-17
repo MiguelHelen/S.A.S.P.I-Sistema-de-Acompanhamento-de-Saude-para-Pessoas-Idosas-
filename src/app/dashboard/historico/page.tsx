@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import DashboardNavbar from "@/components/DashboardNavbar";
 import PatientSelector, { Idoso } from "@/components/PatientSelector";
-import Link from "next/link";
 import {
   CalendarDays,
   HeartPulse,
@@ -11,6 +11,7 @@ import {
   Plus,
   Filter,
   History,
+  Loader2,
   Activity,
 } from "lucide-react";
 
@@ -23,92 +24,84 @@ interface EventoHistorico {
   autor: string;
 }
 
-const mockEventos: Record<string, EventoHistorico[]> = {
-  "1": [
-    {
-      id: "h1",
-      tipo: "sinal_vital",
-      titulo: "Frequência Cardíaca",
-      descricao: "74 bpm (Estável)",
-      dataHora: "Hoje às 16:30",
-      autor: "Dr. Wallex André",
-    },
-    {
-      id: "h2",
-      tipo: "medicamento",
-      titulo: "Losartana 50mg",
-      descricao: "Dose administrada e confirmada",
-      dataHora: "Hoje às 08:00",
-      autor: "Cuidador Noturno",
-    },
-    {
-      id: "h3",
-      tipo: "consulta",
-      titulo: "Consulta de Cardiologia",
-      descricao: "Hospital Central - Dr. Roberto Faria",
-      dataHora: "Ontem às 14:00",
-      autor: "Dr. Wallex André",
-    },
-  ],
-  "2": [
-    {
-      id: "h4",
-      tipo: "sinal_vital",
-      titulo: "Pressão Arterial",
-      descricao: "130/85 mmHg",
-      dataHora: "Hoje às 09:15",
-      autor: "Enf. Roberta",
-    },
-    {
-      id: "h5",
-      tipo: "medicamento",
-      titulo: "Metformina 850mg",
-      descricao: "Tomado com o pequeno-almoço",
-      dataHora: "Hoje às 08:30",
-      autor: "Cuidador Diurno",
-    },
-  ],
-  "3": [
-    {
-      id: "h6",
-      tipo: "consulta",
-      titulo: "Reavaliação Geriátrica",
-      descricao: "Clínica Bem Viver",
-      dataHora: "12/10 às 10:00",
-      autor: "Dra. Camila Torres",
-    },
-  ],
-};
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://perfect-bravery-production-5ce7.up.railway.app";
 
 export default function HistoricoPage() {
-  const [idoso, setIdoso] = useState<Idoso>({
-    id: "1",
-    nome: "Dona Francisca Silva",
-    idade: 78,
-  });
+  const [idoso, setIdoso] = useState<Idoso | null>(null);
+  const [eventos, setEventos] = useState<EventoHistorico[]>([]);
+  const [carregando, setCarregando] = useState(false);
 
   const [categoriaSelecionada, setCategoriaSelecionada] = useState<
     "todos" | "sinal_vital" | "medicamento" | "consulta"
   >("todos");
 
+  const carregarHistorico = useCallback(async (idosoId: string) => {
+    setCarregando(true);
+    const token = localStorage.getItem("saspi_token");
+
+    try {
+      const res = await fetch(`${API_URL}/registro-saude?idoso_id=${idosoId}`, {
+        headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const listaMapeada: EventoHistorico[] = (Array.isArray(data) ? data : []).map(
+          (item: any) => {
+            const dataFormatada = item.created_at
+              ? new Date(item.created_at).toLocaleString("pt-BR", {
+                  dateStyle: "short",
+                  timeStyle: "short",
+                })
+              : "Registro recente";
+
+            return {
+              id: item.id,
+              tipo: "sinal_vital" as const,
+              titulo: item.indicador_nome || "Sinal Vital",
+              descricao: `${item.valor || ""} ${item.unidade || ""} ${
+                item.observacao ? `• ${item.observacao}` : ""
+              }`,
+              dataHora: dataFormatada,
+              autor: item.origem || "Equipe de Cuidado",
+            };
+          }
+        );
+
+        setEventos(listaMapeada);
+      } else {
+        setEventos([]);
+      }
+    } catch {
+      setEventos([]);
+    } finally {
+      setCarregando(false);
+    }
+  }, []);
+
   useEffect(() => {
     const activeElderly = localStorage.getItem("saspi_active_elderly");
     if (activeElderly) {
       try {
-        setIdoso(JSON.parse(activeElderly));
-      } catch (e) {
-        console.error("Erro ao ler idoso ativo:", e);
-      }
+        const parsed = JSON.parse(activeElderly);
+        setIdoso(parsed);
+        if (parsed?.id) {
+          carregarHistorico(parsed.id);
+        }
+      } catch {}
     }
-  }, []);
+  }, [carregarHistorico]);
 
   function handleSelectElderly(novo: Idoso) {
     setIdoso(novo);
-    localStorage.setItem("saspi_active_elderly", JSON.stringify(novo));
+    if (novo?.id) {
+      carregarHistorico(novo.id);
+    }
   }
 
-  const eventosDoIdoso = mockEventos[idoso.id] || [];
-  const eventosFiltrados = eventosDoIdoso.filter(
+  const eventosFiltrados = eventos.filter(
     (evento) =>
       categoriaSelecionada === "todos" || evento.tipo === categoriaSelecionada
   );
@@ -129,8 +122,15 @@ export default function HistoricoPage() {
             </h1>
 
             <p className="mt-2 max-w-2xl text-gray-600">
-              Linha do tempo cronológica com aferições, medicamentos e atendimentos de{" "}
-              <strong className="text-[#0A2540]">{idoso.nome}</strong>.
+              {idoso ? (
+                <>
+                  Linha do tempo cronológica com aferições, medicamentos e
+                  atendimentos de{" "}
+                  <strong className="text-[#0A2540]">{idoso.nome}</strong>.
+                </>
+              ) : (
+                "Selecione um paciente para consultar o histórico clínico."
+              )}
             </p>
           </div>
 
@@ -143,11 +143,10 @@ export default function HistoricoPage() {
           </Link>
         </div>
 
-        {/* Seletor de Idoso integrado no container */}
         <div className="mt-6">
           <PatientSelector
             onSelect={handleSelectElderly}
-            selectedId={idoso.id}
+            selectedId={idoso?.id}
           />
         </div>
 
@@ -160,7 +159,6 @@ export default function HistoricoPage() {
               </h2>
             </div>
 
-            {/* Filtros em botões rápidos */}
             <div className="flex flex-wrap items-center gap-2">
               <Filter size={16} className="text-gray-400" />
               {[
@@ -174,7 +172,11 @@ export default function HistoricoPage() {
                   type="button"
                   onClick={() =>
                     setCategoriaSelecionada(
-                      filtro.valor as "todos" | "sinal_vital" | "medicamento" | "consulta"
+                      filtro.valor as
+                        | "todos"
+                        | "sinal_vital"
+                        | "medicamento"
+                        | "consulta"
                     )
                   }
                   className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${
@@ -189,7 +191,12 @@ export default function HistoricoPage() {
             </div>
           </div>
 
-          {eventosFiltrados.length > 0 ? (
+          {carregando ? (
+            <div className="flex items-center justify-center py-12 text-sm text-gray-500">
+              <Loader2 size={24} className="animate-spin text-[#1565C0]" />
+              <span className="ml-2">Buscando histórico no banco de dados...</span>
+            </div>
+          ) : eventosFiltrados.length > 0 ? (
             <ul className="mt-8 space-y-4">
               {eventosFiltrados.map((evento) => (
                 <li
@@ -214,15 +221,21 @@ export default function HistoricoPage() {
                     )}
 
                     <div>
-                      <p className="font-semibold text-[#0A2540]">{evento.titulo}</p>
-                      <p className="mt-0.5 text-xs text-gray-400">{evento.dataHora}</p>
-                      <p className="mt-2 text-sm text-gray-600">{evento.descricao}</p>
+                      <p className="font-semibold text-[#0A2540]">
+                        {evento.titulo}
+                      </p>
+                      <p className="mt-0.5 text-xs text-gray-400">
+                        {evento.dataHora}
+                      </p>
+                      <p className="mt-2 text-sm text-gray-600">
+                        {evento.descricao}
+                      </p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2 sm:text-right">
                     <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-[#1565C0]">
-                      Registado por: <strong>{evento.autor}</strong>
+                      Origem: <strong>{evento.autor}</strong>
                     </span>
                   </div>
                 </li>
@@ -230,7 +243,9 @@ export default function HistoricoPage() {
             </ul>
           ) : (
             <div className="mt-8 rounded-xl border border-dashed border-gray-200 p-8 text-center text-sm text-gray-500">
-              Nenhum registo encontrado para a categoria selecionada.
+              {idoso
+                ? `Nenhum registro encontrado no banco para ${idoso.nome}.`
+                : "Selecione um paciente para exibir os registros."}
             </div>
           )}
         </section>

@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import DashboardNavbar from "@/components/DashboardNavbar";
 import PatientSelector, { Idoso } from "@/components/PatientSelector";
-import Link from "next/link";
-import { Pill, Plus, Calendar, Clock, AlertCircle, Loader2 } from "lucide-react";
+import { Pill, Plus, Loader2 } from "lucide-react";
 
 interface Prescricao {
   id: string;
@@ -18,21 +18,21 @@ interface Prescricao {
   data_inicio: string;
 }
 
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://perfect-bravery-production-5ce7.up.railway.app";
+
 export default function MedicamentosPage() {
   const [idosoAtivo, setIdosoAtivo] = useState<Idoso | null>(null);
   const [prescricoes, setPrescricoes] = useState<Prescricao[]>([]);
   const [carregando, setCarregando] = useState(false);
 
-  const apiUrl =
-    process.env.NEXT_PUBLIC_API_URL ||
-    "https://perfect-bravery-production-5ce7.up.railway.app";
-
-  async function carregarPrescricoes(idosoId: string) {
+  const carregarPrescricoes = useCallback(async (idosoId: string) => {
     setCarregando(true);
-    const token = typeof window !== "undefined" ? localStorage.getItem("saspi_token") : null;
+    const token = localStorage.getItem("saspi_token");
 
     try {
-      const res = await fetch(`${apiUrl}/prescricao?idoso_id=${idosoId}`, {
+      const res = await fetch(`${API_URL}/prescricao?idoso_id=${idosoId}`, {
         headers: { ...(token && { Authorization: `Bearer ${token}` }) },
       });
 
@@ -47,7 +47,7 @@ export default function MedicamentosPage() {
     } finally {
       setCarregando(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem("saspi_active_elderly");
@@ -58,7 +58,7 @@ export default function MedicamentosPage() {
         carregarPrescricoes(parsed.id);
       } catch {}
     }
-  }, []);
+  }, [carregarPrescricoes]);
 
   function handleSelectPatient(idoso: Idoso) {
     setIdosoAtivo(idoso);
@@ -95,9 +95,11 @@ export default function MedicamentosPage() {
         </div>
 
         <div className="mt-8 space-y-6">
-          <PatientSelector onSelect={handleSelectPatient} />
+          <PatientSelector
+            onSelect={handleSelectPatient}
+            selectedId={idosoAtivo?.id}
+          />
 
-          {/* Lista de Prescrições */}
           <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between border-b border-gray-100 pb-5">
               <div className="flex items-center gap-3">
@@ -128,11 +130,12 @@ export default function MedicamentosPage() {
                     Nenhuma prescrição encontrada
                   </h3>
                   <p className="mt-1 max-w-sm text-sm text-gray-500">
-                    Não existem medicamentos prescritos registrados para este paciente até o momento.
+                    Não existem medicamentos prescritos registrados para este
+                    paciente até o momento.
                   </p>
                   <Link
                     href="/dashboard/medicamentos/novo"
-                    className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#E8F1FB] px-4 py-2 text-sm font-medium text-[#1565C0] hover:bg-[#1565C0] hover:text-white"
+                    className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#E8F1FB] px-4 py-2 text-sm font-medium text-[#1565C0] transition hover:bg-[#1565C0] hover:text-white"
                   >
                     <Plus size={16} />
                     Adicionar primeiro medicamento
@@ -141,7 +144,10 @@ export default function MedicamentosPage() {
               ) : (
                 <div className="divide-y divide-gray-100">
                   {prescricoes.map((p) => (
-                    <div key={p.id} className="flex items-center justify-between py-4">
+                    <div
+                      key={p.id}
+                      className="flex items-center justify-between py-4"
+                    >
                       <div>
                         <p className="font-semibold text-[#0A2540]">
                           {p.medicamento?.nome || "Medicamento"}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { UserCheck, Users, UserPlus, Loader2, AlertCircle } from "lucide-react";
 
@@ -18,60 +18,64 @@ interface PatientSelectorProps {
   selectedId?: string;
 }
 
-export default function PatientSelector({ onSelect, selectedId }: PatientSelectorProps) {
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://perfect-bravery-production-5ce7.up.railway.app";
+
+function calcularIdade(dataNasc?: string): number {
+  if (!dataNasc) return 70;
+  const hoje = new Date();
+  const nasc = new Date(dataNasc);
+  let idade = hoje.getFullYear() - nasc.getFullYear();
+  const mes = hoje.getMonth() - nasc.getMonth();
+  if (mes < 0 || (mes === 0 && hoje.getDate() < nasc.getDate())) {
+    idade--;
+  }
+  return idade > 0 ? idade : 70;
+}
+
+export default function PatientSelector({
+  onSelect,
+  selectedId,
+}: PatientSelectorProps) {
   const [listaIdosos, setListaIdosos] = useState<Idoso[]>([]);
   const [ativo, setAtivo] = useState<Idoso | null>(null);
   const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState("");
+  const [perfilUsuario, setPerfilUsuario] = useState<string>("");
 
-  const apiUrl =
-    process.env.NEXT_PUBLIC_API_URL ||
-    "https://perfect-bravery-production-5ce7.up.railway.app";
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
 
-  function calcularIdade(dataNasc?: string): number {
-    if (!dataNasc) return 70;
-    const hoje = new Date();
-    const nasc = new Date(dataNasc);
-    let idade = hoje.getFullYear() - nasc.getFullYear();
-    const mes = hoje.getMonth() - nasc.getMonth();
-    if (mes < 0 || (mes === 0 && hoje.getDate() < nasc.getDate())) {
-      idade--;
-    }
-    return idade > 0 ? idade : 70;
-  }
-
-  async function carregarIdososDaClinica() {
+  const carregarIdososDaClinica = useCallback(async () => {
     setCarregando(true);
-    setErro("");
 
     const token = typeof window !== "undefined" ? localStorage.getItem("saspi_token") : null;
     const userRaw = typeof window !== "undefined" ? localStorage.getItem("saspi_user") : null;
 
-    let clinicaId = "e63b19f5-d8e4-4973-bac6-12aba9a0545d"; // Fallback padrão
+    let clinicaId = "e63b19f5-d8e4-4973-bac6-12aba9a0545d";
+    let perfil = "";
+    let userId = "";
 
     if (userRaw) {
       try {
         const parsed = JSON.parse(userRaw);
         const userData = parsed.user || parsed.usuario || parsed;
         clinicaId = userData.clinica_id || userData.clinicaId || clinicaId;
-      } catch (e) {
-        console.error("Erro ao ler usuário:", e);
-      }
+        perfil = String(userData.perfil || userData.role || "").toUpperCase();
+        userId = userData.id || "";
+        setPerfilUsuario(perfil);
+      } catch {}
     }
 
     try {
-      const res = await fetch(`${apiUrl}/idoso?clinica_id=${clinicaId}`, {
-        headers: {
-          ...(token && { Authorization: `Bearer ${token}` }),
-        },
+      const resIdosos = await fetch(`${API_URL}/idoso?clinica_id=${clinicaId}`, {
+        headers: { ...(token && { Authorization: `Bearer ${token}` }) },
       });
 
-      if (!res.ok) {
-        throw new Error(`Falha ao buscar idosos (Status ${res.status})`);
-      }
+      if (!resIdosos.ok) throw new Error("Falha ao buscar pacientes.");
 
-      const data = await res.json();
-      const idososRecebidos: Idoso[] = (Array.isArray(data) ? data : []).map((item: any) => ({
+      const dataIdosos = await resIdosos.json();
+      let idososRecebidos: Idoso[] = (Array.isArray(dataIdosos) ? dataIdosos : []).map((item: any) => ({
         id: item.id,
         nome: item.nome,
         idade: item.idade || calcularIdade(item.data_nascimento),
@@ -80,9 +84,36 @@ export default function PatientSelector({ onSelect, selectedId }: PatientSelecto
         clinica_id: item.clinica_id,
       }));
 
-      setListaIdosos(idososRecebidos);
+      if (perfil !== "ADMINISTRADOR" && perfil !== "ADMIN" && userId && token) {
+        try {
+          const resVinculos = await fetch(`${API_URL}/usuario-idoso?usuario_id=${userId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
 
-      // Sincroniza qual idoso está selecionado
+          if (resVinculos.ok) {
+            const vinculosData = await resVinculos.json();
+            const arrayVinculos = Array.isArray(vinculosData) ? vinculosData : (vinculosData.data || []);
+            
+            const meusVinculos = arrayVinculos.filter(
+              (v: any) => v.usuario_id === userId || v.usuarioId === userId || v.usuario?.id === userId
+            );
+
+            const idsVinculados = meusVinculos.map(
+              (v: any) => v.idoso_id || v.idosoId || v.idoso?.id
+            );
+            
+            idososRecebidos = idososRecebidos.filter((i) => idsVinculados.includes(i.id));
+          } else {
+            idososRecebidos = [];
+          }
+        } catch {
+          idososRecebidos = [];
+        }
+      }
+
+      setListaIdosos(idososRecebidos);
+      localStorage.setItem("saspi_elderly_list", JSON.stringify(idososRecebidos));
+
       const savedActiveRaw = localStorage.getItem("saspi_active_elderly");
       let idosoParaAtivar: Idoso | null = null;
 
@@ -102,56 +133,50 @@ export default function PatientSelector({ onSelect, selectedId }: PatientSelecto
       if (idosoParaAtivar) {
         setAtivo(idosoParaAtivar);
         localStorage.setItem("saspi_active_elderly", JSON.stringify(idosoParaAtivar));
-        if (onSelect) onSelect(idosoParaAtivar);
+        onSelectRef.current?.(idosoParaAtivar);
       } else {
         setAtivo(null);
         localStorage.removeItem("saspi_active_elderly");
       }
-    } catch (err: any) {
-      console.warn("Aviso ao carregar idosos da API, verificando cache local:", err);
-
-      const stored = localStorage.getItem("saspi_elderly_list");
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setListaIdosos(parsed);
-            const idosoSel = (selectedId && parsed.find((i: any) => i.id === selectedId)) || parsed[0];
-            setAtivo(idosoSel);
-            if (onSelect) onSelect(idosoSel);
-            setCarregando(false);
-            return;
-          }
-        } catch {}
-      }
-      setErro("Nenhum idoso disponível ou erro de conexão com a clínica.");
+    } catch {
+      setListaIdosos([]);
+      setAtivo(null);
     } finally {
       setCarregando(false);
     }
-  }
+  }, [selectedId]);
 
   useEffect(() => {
     carregarIdososDaClinica();
 
-    window.addEventListener("saspi_elderly_updated", carregarIdososDaClinica);
+    function handleElderlyUpdate() {
+      const savedActiveRaw = localStorage.getItem("saspi_active_elderly");
+      if (savedActiveRaw) {
+        try {
+          const parsed = JSON.parse(savedActiveRaw);
+          if (parsed && parsed.id) {
+            setAtivo(parsed);
+          }
+        } catch {}
+      }
+    }
 
+    window.addEventListener("saspi_elderly_updated", handleElderlyUpdate);
     return () => {
-      window.removeEventListener("saspi_elderly_updated", carregarIdososDaClinica);
+      window.removeEventListener("saspi_elderly_updated", handleElderlyUpdate);
     };
-  }, [selectedId]);
+  }, [carregarIdososDaClinica]);
 
   function handleSelect(idoso: Idoso) {
     setAtivo(idoso);
     try {
       localStorage.setItem("saspi_active_elderly", JSON.stringify(idoso));
       window.dispatchEvent(new Event("saspi_elderly_updated"));
-    } catch (e) {
-      console.error("Erro ao salvar idoso ativo:", e);
-    }
-    if (onSelect) {
-      onSelect(idoso);
-    }
+    } catch {}
+    onSelectRef.current?.(idoso);
   }
+
+  const isAdmin = perfilUsuario === "ADMINISTRADOR" || perfilUsuario === "ADMIN";
 
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm md:p-6">
@@ -165,38 +190,34 @@ export default function PatientSelector({ onSelect, selectedId }: PatientSelecto
               Paciente em Acompanhamento
             </h2>
             <p className="text-sm text-gray-500">
-              Selecione o idoso para carregar os prontuários e sinais vitais.
+              Selecione o idoso para visualizar os prontuários e sinais vitais.
             </p>
           </div>
         </div>
 
-        <Link
-          href="/dashboard/idosos/novo"
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#1565C0]/20 bg-[#E8F1FB] px-4 py-2 text-sm font-medium text-[#1565C0] transition hover:bg-[#1565C0] hover:text-white"
-        >
-          <UserPlus size={16} />
-          Novo Idoso
-        </Link>
+        {isAdmin && (
+          <Link
+            href="/dashboard/idosos/novo"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#1565C0]/20 bg-[#E8F1FB] px-4 py-2 text-sm font-medium text-[#1565C0] transition hover:bg-[#1565C0] hover:text-white"
+          >
+            <UserPlus size={16} />
+            Novo Paciente
+          </Link>
+        )}
       </div>
 
       <div className="mt-5 border-t border-gray-100 pt-5">
         {carregando ? (
           <div className="flex items-center gap-2 py-3 text-sm text-gray-500">
             <Loader2 size={18} className="animate-spin text-[#1565C0]" />
-            Carregando pacientes da clínica...
+            Carregando pacientes autorizados...
           </div>
         ) : listaIdosos.length === 0 ? (
-          <div className="flex items-center justify-between rounded-xl border border-dashed border-gray-200 bg-gray-50/50 p-4">
-            <div className="flex items-center gap-2 text-sm text-gray-500">
-              <AlertCircle size={18} className="text-amber-500" />
-              Nenhum idoso cadastrado nesta clínica até o momento.
-            </div>
-            <Link
-              href="/dashboard/idosos/novo"
-              className="text-xs font-semibold text-[#1565C0] hover:underline"
-            >
-              Cadastrar o primeiro idoso &rarr;
-            </Link>
+          <div className="flex items-center gap-3 rounded-xl border border-dashed border-gray-200 bg-gray-50/50 p-4">
+            <AlertCircle size={18} className="text-amber-500 shrink-0" />
+            <p className="text-sm text-gray-500">
+              Nenhum paciente atribuído ao seu usuário.
+            </p>
           </div>
         ) : (
           <div className="flex flex-wrap items-center gap-2.5">
