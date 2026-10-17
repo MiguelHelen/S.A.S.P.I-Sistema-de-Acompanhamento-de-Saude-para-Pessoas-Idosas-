@@ -19,6 +19,7 @@
 
 # production
 /build
+/backend/dist
 
 # misc
 .DS_Store
@@ -42,5 +43,10 @@ next-env.d.ts
 
 eslint.config.mjs
 .eslintignore
-.xml
-.sql
+
+# Repomix e Arquivos de Contexto da IA
+*.xml
+*.sql
+comandos repomix.md
+backend-context*.txt
+frontend-context*.txt
