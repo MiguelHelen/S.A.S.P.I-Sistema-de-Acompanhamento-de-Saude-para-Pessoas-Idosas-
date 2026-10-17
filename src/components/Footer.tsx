@@ -12,7 +12,7 @@ const links = [
 
 export default function Footer() {
   return (
-    <footer className="mt-16 bg-[#0c2741] text-slate-100">
+    <footer className="bg-[#0c2741] text-slate-100">
       <div className="mx-auto grid max-w-7xl gap-8 px-4 py-9 sm:px-6 md:grid-cols-[1.1fr_1.4fr_1fr] md:items-center lg:px-8">
         <Link href="/" className="flex items-center gap-3" aria-label="S.A.S.P.I. — página inicial">
           <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-emerald-300">
