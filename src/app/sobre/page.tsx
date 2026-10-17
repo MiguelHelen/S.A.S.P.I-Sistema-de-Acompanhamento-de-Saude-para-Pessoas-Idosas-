@@ -1,5 +1,6 @@
-
 import Link from "next/link";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 import {
   Heart,
   Users,
@@ -9,7 +10,6 @@ import {
   Lightbulb,
   Clock3,
 } from "lucide-react";
-import Navbar from "@/components/Navbar";
 
 const cardsContexto = [
   {
@@ -270,8 +270,8 @@ export default function SobrePage() {
           </div>
         </section>
 
-        {/* Banner verde-água */}
-        <section className="bg-[#F5FAFC] px-5 pb-8 md:px-8 md:pb-3">
+        {/* Banner verde-água (Com o padding corrigido para encostar no Footer) */}
+        <section className="bg-[#F5FAFC] px-5 pb-16 md:px-8 md:pb-16">
           <div className="relative mx-auto flex max-w-7xl flex-col gap-5 overflow-hidden rounded-2xl border border-[#D7ECEB] bg-linear-to-r from-[#E2F5F0] via-[#E6F5F5] to-[#DDEFFA] px-6 py-6 md:flex-row md:items-center md:gap-6 md:px-9">
             <div className="absolute -right-5 top-0 h-36 w-36 rounded-full bg-white/25" />
 
@@ -305,47 +305,7 @@ export default function SobrePage() {
         </section>
       </main>
 
-      {/* Footer — mantido como estava */}
-       <section id="contato" className="bg-[#0A2540] py-16 text-white md:py-20">
-        <div className="mx-auto max-w-7xl px-4 md:px-8">
-          <div className="grid gap-10 lg:grid-cols-2 lg:items-center">
-            <div>
-              <span className="text-sm font-semibold uppercase tracking-wider text-[#67D5CA]">
-                Contato
-              </span>
-
-              <h2 className="mt-3 text-3xl font-bold tracking-tight md:text-4xl">
-                Um projeto voltado ao acompanhamento e organização da saúde
-              </h2>
-
-              <p className="mt-4 max-w-2xl leading-relaxed text-blue-100">
-                O S.A.S.P.I. está sendo desenvolvido como Trabalho de Conclusão
-                de Curso em Desenvolvimento de Sistemas.
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
-              <h3 className="font-semibold">S.A.S.P.I.</h3>
-
-              <p className="mt-2 text-sm leading-relaxed text-blue-100">
-                Sistema de Acompanhamento de Saúde para Pessoas Idosas.
-              </p>
-
-              <div className="mt-6 space-y-2 text-sm text-blue-100">
-                <p>Projeto acadêmico</p>
-                <p>Desenvolvimento de Sistemas</p>
-                <p>2026</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-12 flex flex-col gap-4 border-t border-white/10 pt-6 text-sm text-blue-100 sm:flex-row sm:items-center sm:justify-between">
-            <p>© 2026 S.A.S.P.I.</p>
-
-            <p>Sistema de Acompanhamento de Saúde para Pessoas Idosas</p>
-          </div>
-        </div>
-      </section>
+      <Footer />
     </>
   );
 }

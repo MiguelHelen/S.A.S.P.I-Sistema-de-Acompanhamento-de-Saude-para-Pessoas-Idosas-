@@ -23,27 +23,21 @@ export default function Navbar() {
         </Link>
 
         <div className="hidden items-center gap-6 lg:flex">
-          <Link href="/" className="text-sm font-medium text-[#1565C0]">
+          <Link href="/" className="text-sm font-medium text-[#1565C0] hover:text-[#0A2540] transition">
             Início
           </Link>
-          <a
-            href="#sobre"
-            className="text-sm font-medium text-gray-600 transition hover:text-[#1565C0]"
-          >
-            Sobre
-          </a>
-          <a
-            href="#funcionalidades"
-            className="text-sm font-medium text-gray-600 transition hover:text-[#1565C0]"
-          >
+          <Link href="/sobre" className="text-sm font-medium text-gray-600 transition hover:text-[#1565C0]">
+            Sobre o Projeto
+          </Link>
+          <Link href="/#funcionalidades" className="text-sm font-medium text-gray-600 transition hover:text-[#1565C0]">
             Funcionalidades
-          </a>
-          <a
-            href="#contato"
-            className="text-sm font-medium text-gray-600 transition hover:text-[#1565C0]"
-          >
+          </Link>
+          <Link href="/ajuda" className="text-sm font-medium text-gray-600 transition hover:text-[#1565C0]">
+            Ajuda / FAQ
+          </Link>
+          <Link href="/contato" className="text-sm font-medium text-gray-600 transition hover:text-[#1565C0]">
             Contato
-          </a>
+          </Link>
           <Link
             href="/login"
             className="rounded-lg bg-[#1565C0] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#0A2540]"
@@ -66,34 +60,21 @@ export default function Navbar() {
       {menuOpen && (
         <div className="border-t border-gray-200 bg-white px-4 py-4 lg:hidden">
           <div className="mx-auto flex max-w-7xl flex-col gap-4">
-            <Link
-              href="/"
-              onClick={() => setMenuOpen(false)}
-              className="text-sm font-medium text-[#1565C0]"
-            >
+            <Link href="/" onClick={() => setMenuOpen(false)} className="text-sm font-medium text-[#1565C0]">
               Início
             </Link>
-            <a
-              href="#sobre"
-              onClick={() => setMenuOpen(false)}
-              className="text-sm font-medium text-gray-600 transition hover:text-[#1565C0]"
-            >
-              Sobre
-            </a>
-            <a
-              href="#funcionalidades"
-              onClick={() => setMenuOpen(false)}
-              className="text-sm font-medium text-gray-600 transition hover:text-[#1565C0]"
-            >
+            <Link href="/sobre" onClick={() => setMenuOpen(false)} className="text-sm font-medium text-gray-600 transition hover:text-[#1565C0]">
+              Sobre o Projeto
+            </Link>
+            <Link href="/#funcionalidades" onClick={() => setMenuOpen(false)} className="text-sm font-medium text-gray-600 transition hover:text-[#1565C0]">
               Funcionalidades
-            </a>
-            <a
-              href="#contato"
-              onClick={() => setMenuOpen(false)}
-              className="text-sm font-medium text-gray-600 transition hover:text-[#1565C0]"
-            >
+            </Link>
+            <Link href="/ajuda" onClick={() => setMenuOpen(false)} className="text-sm font-medium text-gray-600 transition hover:text-[#1565C0]">
+              Ajuda / FAQ
+            </Link>
+            <Link href="/contato" onClick={() => setMenuOpen(false)} className="text-sm font-medium text-gray-600 transition hover:text-[#1565C0]">
               Contato
-            </a>
+            </Link>
             <Link
               href="/login"
               onClick={() => setMenuOpen(false)}
