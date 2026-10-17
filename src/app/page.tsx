@@ -1,5 +1,6 @@
 import Navbar from "@/components/Navbar";
-import Image from "next/image";
+import Footer from "@/components/Footer";
+import Link from "next/link";
 import {
   HeartPulse,
   ClipboardList,
@@ -47,19 +48,19 @@ export default function Home() {
             </p>
 
             <div className="mt-8 flex flex-col gap-4 sm:flex-row">
-              <a
-                href="#sobre"
+              <Link
+                href="/sobre"
                 className="rounded-lg bg-[#1565C0] px-6 py-3 text-center font-medium text-white transition hover:bg-[#0A2540]"
               >
                 Conheça o S.A.S.P.I.
-              </a>
+              </Link>
 
-              <a
+              <Link
                 href="#funcionalidades"
                 className="rounded-lg border border-[#1565C0] px-6 py-3 text-center font-medium text-[#1565C0] transition hover:bg-[#E6F4EF]"
               >
                 Ver funcionalidades
-              </a>
+              </Link>
             </div>
           </div>
 
@@ -141,6 +142,7 @@ export default function Home() {
           </div>
         </div>
       </section>
+
       <section id="sobre" className="bg-white py-20 md:py-24">
         <div className="mx-auto max-w-7xl px-4 md:px-8">
           <div className="grid items-center gap-12 lg:grid-cols-2">
@@ -499,46 +501,9 @@ export default function Home() {
           </div>
         </div>
       </section>
-      <section id="contato" className="bg-[#0A2540] py-16 text-white md:py-20">
-        <div className="mx-auto max-w-7xl px-4 md:px-8">
-          <div className="grid gap-10 lg:grid-cols-2 lg:items-center">
-            <div>
-              <span className="text-sm font-semibold uppercase tracking-wider text-[#67D5CA]">
-                Contato
-              </span>
 
-              <h2 className="mt-3 text-3xl font-bold tracking-tight md:text-4xl">
-                Um projeto voltado ao acompanhamento e organização da saúde
-              </h2>
-
-              <p className="mt-4 max-w-2xl leading-relaxed text-blue-100">
-                O S.A.S.P.I. está sendo desenvolvido como Trabalho de Conclusão
-                de Curso em Desenvolvimento de Sistemas.
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
-              <h3 className="font-semibold">S.A.S.P.I.</h3>
-
-              <p className="mt-2 text-sm leading-relaxed text-blue-100">
-                Sistema de Acompanhamento de Saúde para Pessoas Idosas.
-              </p>
-
-              <div className="mt-6 space-y-2 text-sm text-blue-100">
-                <p>Projeto acadêmico</p>
-                <p>Desenvolvimento de Sistemas</p>
-                <p>2026</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-12 flex flex-col gap-4 border-t border-white/10 pt-6 text-sm text-blue-100 sm:flex-row sm:items-center sm:justify-between">
-            <p>© 2026 S.A.S.P.I.</p>
-
-            <p>Sistema de Acompanhamento de Saúde para Pessoas Idosas</p>
-          </div>
-        </div>
-      </section>
+      {/* COMPONENTE FOOTER NOVO ADICIONADO AQUI */}
+      <Footer />
     </main>
   );
 }
