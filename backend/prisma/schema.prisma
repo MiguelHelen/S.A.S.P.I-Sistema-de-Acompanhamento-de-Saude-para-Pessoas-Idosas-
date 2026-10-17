@@ -308,8 +308,7 @@ model saml_providers {
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/row-level-security for more info.
 model saml_relay_states {
   id              String        @id @db.Uuid
   sso_provider_id String        @db.Uuid
@@ -537,6 +536,7 @@ model idoso {
   endereco             String?
   clinica_id           String                 @db.Uuid
   created_at           DateTime               @default(now()) @db.Timestamptz(6)
+  consulta             consulta[]
   dispositivo_vestivel dispositivo_vestivel[]
   clinica              clinica                @relation(fields: [clinica_id], references: [id], onUpdate: NoAction)
   prescricao           prescricao[]
@@ -621,6 +621,7 @@ model usuario {
   perfil         perfil_usuario
   clinica_id     String           @db.Uuid
   created_at     DateTime         @default(now()) @db.Timestamptz(6)
+  consulta       consulta[]
   prescricao     prescricao[]
   registro_saude registro_saude[]
   users          users?           @relation(fields: [auth_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -644,6 +645,25 @@ model usuario_idoso {
   @@unique([usuario_id, idoso_id, tipo_vinculo])
   @@index([idoso_id], map: "idx_usuario_idoso_idoso")
   @@index([usuario_id], map: "idx_usuario_idoso_usuario")
+  @@schema("public")
+}
+
+model consulta {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idoso_id      String   @db.Uuid
+  usuario_id    String?  @db.Uuid
+  especialidade String   @db.VarChar(150)
+  medico        String   @db.VarChar(150)
+  data          DateTime @db.Date
+  horario       String   @db.VarChar(20)
+  localizacao   String   @db.VarChar(255)
+  observacao    String?
+  status        String   @default("Agendada") @db.VarChar(30)
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+  idoso         idoso    @relation(fields: [idoso_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  usuario       usuario? @relation(fields: [usuario_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([idoso_id], map: "idx_consulta_idoso")
   @@schema("public")
 }
 

@@ -12,11 +12,27 @@ import { DispositivoVestivelModule } from './dispositivo-vestivel/dispositivo-ve
 import { RegistroSaudeModule } from './registro-saude/registro-saude.module';
 import { MedicamentoModule } from './medicamento/medicamento.module';
 import { PrescricaoModule } from './prescricao/prescricao.module';
+import { ConsultaModule } from './consulta/consulta.module';
 import { AuthModule } from './auth/auth.module';
 import { TempoRealModule } from './tempo-real/tempo-real.module';
 
 @Module({
-  imports: [PrismaModule, ClinicaModule, SupabaseModule, UsuarioModule, IdosoModule, UsuarioIdosoModule, IndicadorSaudeModule, DispositivoVestivelModule, RegistroSaudeModule, MedicamentoModule, PrescricaoModule, AuthModule, TempoRealModule],
+  imports: [
+    PrismaModule,
+    ClinicaModule,
+    SupabaseModule,
+    UsuarioModule,
+    IdosoModule,
+    UsuarioIdosoModule,
+    IndicadorSaudeModule,
+    DispositivoVestivelModule,
+    RegistroSaudeModule,
+    MedicamentoModule,
+    PrescricaoModule,
+    ConsultaModule,
+    AuthModule,
+    TempoRealModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })
