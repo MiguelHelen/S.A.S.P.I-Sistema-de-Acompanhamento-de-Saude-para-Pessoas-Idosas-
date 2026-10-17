@@ -110,7 +110,6 @@ export default function NovoVinculo() {
         if (resUsers.ok) {
           const data = await resUsers.json();
           if (Array.isArray(data)) {
-            // Regra 1: Filtrar perfil Administrador para impedir auto-vínculo ilógico
             const usuariosElegiveis = data.filter((u: any) => {
               const p = String(u.perfil || "").toUpperCase();
               return p !== "ADMINISTRADOR" && p !== "ADMIN";
@@ -118,7 +117,10 @@ export default function NovoVinculo() {
 
             setUsuarios(usuariosElegiveis);
             if (usuariosElegiveis.length > 0) {
-              setFormData((prev) => ({ ...prev, usuario_id: usuariosElegiveis[0].id }));
+              setFormData((prev) => ({
+                ...prev,
+                usuario_id: usuariosElegiveis[0].id,
+              }));
             }
           }
         }
@@ -138,20 +140,22 @@ export default function NovoVinculo() {
 
     const token = localStorage.getItem("saspi_token");
 
-    const usuarioSelecionado = usuarios.find((u) => u.id === formData.usuario_id);
-    const perfilUsuario = (usuarioSelecionado?.perfil || "CUIDADOR").toUpperCase();
+    const usuarioSelecionado = usuarios.find(
+      (u) => u.id === formData.usuario_id
+    );
+    const perfilUsuario = (
+      usuarioSelecionado?.perfil || "CUIDADOR"
+    ).toUpperCase();
 
-    // DTO do NestJS exige exatamente: 'MEDICO_RESPONSAVEL', 'ENFERMEIRO', 'CUIDADOR' ou 'FAMILIAR'
     let tipoVinculoAutomatico = "CUIDADOR";
     if (perfilUsuario === "MEDICO" || perfilUsuario === "MÉDICO") {
       tipoVinculoAutomatico = "MEDICO_RESPONSAVEL";
     } else if (perfilUsuario === "ENFERMEIRO") {
-      tipoVinculoAutomatico = "ENFERMEIRO"; // CORRIGIDO PARA ATENDER O DTO
+      tipoVinculoAutomatico = "ENFERMEIRO";
     } else if (perfilUsuario === "FAMILIAR") {
       tipoVinculoAutomatico = "FAMILIAR";
     }
 
-    // Regra 2: Payload Limpo - Envio apenas do que o endpoint de vínculo precisa (Sem clinica_id)
     const payload = {
       usuario_id: formData.usuario_id,
       idoso_id: formData.idoso_id,
@@ -159,6 +163,30 @@ export default function NovoVinculo() {
     };
 
     try {
+      // 1. Verifica preventivamente na rota existente se o vínculo já foi registrado
+      const resCheck = await fetch(
+        `${API_URL}/usuario-idoso/usuario/${formData.usuario_id}`,
+        {
+          headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+        }
+      ).catch(() => null);
+
+      if (resCheck?.ok) {
+        const vinculosAtuais = await resCheck.json();
+        if (Array.isArray(vinculosAtuais)) {
+          const jaVinculado = vinculosAtuais.some(
+            (v: any) =>
+              (v.idoso_id || v.idosoId || v.idoso?.id) === formData.idoso_id
+          );
+          if (jaVinculado) {
+            throw new Error(
+              "Erro: Este usuário já está vinculado a este paciente!"
+            );
+          }
+        }
+      }
+
+      // 2. Dispara a criação do vínculo
       const res = await fetch(`${API_URL}/usuario-idoso`, {
         method: "POST",
         headers: {
@@ -171,25 +199,28 @@ export default function NovoVinculo() {
       const errData = await res.json().catch(() => null);
 
       if (!res.ok) {
-        // Regra 3: Tratamento Detalhado e Dinâmico de Erro (Conflito/Duplicidade vs Genérico)
-        if (res.status === 409 || (errData?.message && String(errData.message).toLowerCase().includes("unique"))) {
-          throw new Error("Erro: Este usuário já está vinculado a este paciente!");
+        const msgStr = String(errData?.message || "").toLowerCase();
+        if (
+          res.status === 409 ||
+          res.status === 500 ||
+          msgStr.includes("unique") ||
+          msgStr.includes("p2002") ||
+          msgStr.includes("internal server error")
+        ) {
+          throw new Error(
+            "Erro: Este usuário já está vinculado a este paciente!"
+          );
         }
-        
-        // Exibindo a mensagem real de erro do NestJS
+
         let msgExtracao = errData?.message;
         if (Array.isArray(msgExtracao)) msgExtracao = msgExtracao.join(", ");
-        throw new Error(msgExtracao || "Ocorreu um erro ao atribuir o vínculo. Verifique os dados.");
+        throw new Error(
+          msgExtracao || "Ocorreu um erro ao atribuir o vínculo."
+        );
       }
 
       setSucesso(true);
-      // Mantém na tela e limpa para um possível novo vínculo contínuo
-      setFormData({
-        usuario_id: usuarios[0]?.id || "",
-        idoso_id: idosos[0]?.id || "",
-      });
       setTimeout(() => setSucesso(false), 4000);
-
     } catch (err: any) {
       setErro(err.message || "Erro de conexão ao salvar o vínculo.");
     } finally {
@@ -263,7 +294,8 @@ export default function NovoVinculo() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-gray-600">
-            Vincule um idoso ao médico, enfermeiro, cuidador ou familiar autorizado.
+            Vincule um idoso ao médico, enfermeiro, cuidador ou familiar
+            autorizado.
           </p>
         </div>
 
@@ -278,7 +310,8 @@ export default function NovoVinculo() {
           <div className="mt-6 flex items-center gap-3 rounded-xl bg-emerald-50 p-4 text-emerald-800">
             <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
             <p className="text-sm font-medium">
-              Vínculo registrado com sucesso na base de dados! Pronto para o próximo cadastro.
+              Vínculo registrado com sucesso na base de dados! Pronto para o
+              próximo cadastro.
             </p>
           </div>
         )}
@@ -295,7 +328,8 @@ export default function NovoVinculo() {
                   Dados da Atribuição
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Selecione o profissional ou familiar e o paciente correspondente.
+                  Selecione o profissional ou familiar e o paciente
+                  correspondente.
                 </p>
               </div>
             </div>
@@ -323,7 +357,9 @@ export default function NovoVinculo() {
                     className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   >
                     {usuarios.length === 0 ? (
-                      <option value="">Nenhum profissional elegível encontrado</option>
+                      <option value="">
+                        Nenhum profissional elegível encontrado
+                      </option>
                     ) : (
                       usuarios.map((u) => (
                         <option key={u.id} value={u.id}>
