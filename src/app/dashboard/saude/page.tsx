@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import DashboardNavbar from "@/components/DashboardNavbar";
 import PatientSelector, { Idoso } from "@/components/PatientSelector";
 import MetricCard from "@/components/MetricCard";
-import { HeartPulse, Activity, Thermometer, Droplet, Clock, Loader2 } from "lucide-react";
+import { HeartPulse, Activity, Thermometer, Droplet, Clock } from "lucide-react";
 
 export default function SaudePage() {
   const [idosoAtivo, setIdosoAtivo] = useState<Idoso | null>(null);
@@ -38,9 +38,11 @@ export default function SaudePage() {
         </div>
 
         <div className="mt-8 space-y-6">
-          <PatientSelector onSelect={(idoso) => setIdosoAtivo(idoso)} />
+          <PatientSelector
+            onSelect={(idoso) => setIdosoAtivo(idoso)}
+            selectedId={idosoAtivo?.id}
+          />
 
-          {/* Cards de Leitura em Tempo Real */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <MetricCard
               title="Frequência Cardíaca"
@@ -68,13 +70,13 @@ export default function SaudePage() {
             />
           </div>
 
-          {/* Histórico Recente de Leituras */}
           <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-[#0A2540]">
               Últimas Aferições Registradas
             </h2>
             <p className="mt-1 text-sm text-gray-500">
-              Registros gerados por dispositivos vestíveis ou lançamentos manuais da equipe[cite: 2, 5].
+              Registros gerados por dispositivos vestíveis ou lançamentos manuais
+              da equipe.
             </p>
 
             <div className="mt-8 flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50/50 p-12 text-center">
@@ -83,7 +85,8 @@ export default function SaudePage() {
                 Sem aferições para este paciente
               </h3>
               <p className="mt-1 max-w-md text-sm text-gray-500">
-                Assim que a smartband transmitir os dados ou for realizado um registro clínico, os índices aparecerão aqui[cite: 2].
+                Assim que a smartband transmitir os dados ou for realizado um
+                registro clínico, os índices aparecerão aqui.
               </p>
             </div>
           </div>

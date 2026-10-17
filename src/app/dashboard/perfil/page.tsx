@@ -14,6 +14,10 @@ import {
   AlertCircle,
 } from "lucide-react";
 
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://perfect-bravery-production-5ce7.up.railway.app";
+
 export default function Perfil() {
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -21,44 +25,48 @@ export default function Perfil() {
   const [erro, setErro] = useState("");
 
   const [formData, setFormData] = useState({
-    id: "187bee07-3cfe-48e7-9308-2b2a37b95a8f",
-    nome: "Wallex Andre Adriano dos Santos",
-    email: "wallexandre2000@gmail.com",
-    telefone: "11932344867",
-    cpf: "12345678901",
-    perfil: "MEDICO",
+    id: "",
+    nome: "",
+    email: "",
+    telefone: "",
+    cpf: "",
+    perfil: "",
   });
-
-  const apiUrl =
-    process.env.NEXT_PUBLIC_API_URL ||
-    "https://perfect-bravery-production-5ce7.up.railway.app";
 
   useEffect(() => {
     async function sincronizarPerfil() {
       const userRaw = localStorage.getItem("saspi_user");
       const token = localStorage.getItem("saspi_token");
 
-      let currentEmail = "wallexandre2000@gmail.com";
-      let currentId = "187bee07-3cfe-48e7-9308-2b2a37b95a8f";
+      let sessaoLocal: Record<string, any> = {};
 
       if (userRaw) {
         try {
           const parsed = JSON.parse(userRaw);
-          if (parsed.email) currentEmail = parsed.email;
-          if (parsed.id) currentId = parsed.id;
-        } catch (e) {
-          console.error(e);
-        }
+          sessaoLocal = parsed.user || parsed.usuario || parsed;
+        } catch {}
       }
 
-      // Tenta buscar na API filtrando especificamente pelo e-mail da sessão atual
-      if (token) {
+      const currentEmail = sessaoLocal.email || "";
+      const currentId = sessaoLocal.id || "";
+
+      // Preenche imediatamente com os dados reais da sessão ativa
+      setFormData({
+        id: currentId,
+        nome: sessaoLocal.nome || sessaoLocal.name || "Usuário",
+        email: currentEmail,
+        telefone: sessaoLocal.telefone || "",
+        cpf: sessaoLocal.cpf || "",
+        perfil: (sessaoLocal.perfil || sessaoLocal.role || "MEDICO").toUpperCase(),
+      });
+
+      if (token && currentEmail) {
         try {
           const res = await fetch(
-            `${apiUrl}/usuario?email=${encodeURIComponent(currentEmail)}`,
+            `${API_URL}/usuario?email=${encodeURIComponent(currentEmail)}`,
             {
               headers: { Authorization: `Bearer ${token}` },
-            },
+            }
           );
 
           if (res.ok) {
@@ -66,63 +74,51 @@ export default function Perfil() {
             const usuarioEncontrado = Array.isArray(data)
               ? data.find(
                   (u: any) =>
-                    u.email?.toLowerCase() === currentEmail.toLowerCase(),
+                    u.email?.toLowerCase() === currentEmail.toLowerCase()
                 )
               : data;
 
             if (usuarioEncontrado && usuarioEncontrado.nome) {
-              setFormData({
+              const perfilAtualizado = (
+                usuarioEncontrado.perfil ||
+                sessaoLocal.perfil ||
+                "MEDICO"
+              ).toUpperCase();
+
+              const dadosMesclados = {
+                ...sessaoLocal,
                 id: usuarioEncontrado.id || currentId,
                 nome: usuarioEncontrado.nome,
-                email: usuarioEncontrado.email,
+                email: usuarioEncontrado.email || currentEmail,
                 telefone: usuarioEncontrado.telefone || "",
                 cpf: usuarioEncontrado.cpf || "",
-                perfil: usuarioEncontrado.perfil || "MEDICO",
+                perfil: perfilAtualizado,
+              };
+
+              setFormData({
+                id: dadosMesclados.id,
+                nome: dadosMesclados.nome,
+                email: dadosMesclados.email,
+                telefone: dadosMesclados.telefone,
+                cpf: dadosMesclados.cpf,
+                perfil: dadosMesclados.perfil,
               });
-              localStorage.setItem(
-                "saspi_user",
-                JSON.stringify(usuarioEncontrado),
-              );
-              window.dispatchEvent(new Event("saspi_user_updated")); // <-- AQUI: Notifica na hora a Dashboard e Navbar
-              setCarregando(false);
-              return;
+
+              localStorage.setItem("saspi_user", JSON.stringify(dadosMesclados));
+              document.cookie = `saspi_user=${encodeURIComponent(
+                JSON.stringify(dadosMesclados)
+              )}; path=/; max-age=86400; SameSite=Lax`;
+              window.dispatchEvent(new Event("saspi_user_updated"));
             }
           }
-        } catch (err) {
-          console.warn(
-            "Falha na sincronização remota, mantendo dados do banco validados:",
-            err,
-          );
-        }
+        } catch {}
       }
 
-      // Fallback garantido com os dados exatos do seu registro no Supabase
-      setFormData({
-        id: currentId,
-        nome: "Wallex Andre Adriano dos Santos",
-        email: currentEmail,
-        telefone: "11932344867",
-        cpf: "12345678901",
-        perfil: "MEDICO",
-      });
-      const dadosValidados = {
-        id: currentId,
-        nome: "Wallex Andre Adriano dos Santos",
-        email: currentEmail,
-        telefone: "11932344867",
-        cpf: "12345678901",
-        perfil: "MEDICO",
-      };
-
-      setFormData(dadosValidados);
-      localStorage.setItem("saspi_user", JSON.stringify(dadosValidados)); // <-- AQUI: Corrige o saspi_user
-      window.dispatchEvent(new Event("saspi_user_updated")); // <-- AQUI: Avisa o sistema imediatamente
-      setCarregando(false);
       setCarregando(false);
     }
 
     sincronizarPerfil();
-  }, [apiUrl]);
+  }, []);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -134,30 +130,44 @@ export default function Perfil() {
 
     try {
       if (token && formData.id) {
-        const res = await fetch(`${apiUrl}/usuario/${formData.id}`, {
+        await fetch(`${API_URL}/usuario/${formData.id}`, {
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            nome: formData.nome,
+            nome: formData.nome.trim(),
             telefone: formData.telefone.replace(/\D/g, ""),
             cpf: formData.cpf.replace(/\D/g, ""),
           }),
         });
-
-        if (!res.ok) {
-          console.warn("API retornou erro no PATCH:", res.status);
-        }
       }
 
-      localStorage.setItem("saspi_user", JSON.stringify(formData));
+      const userRaw = localStorage.getItem("saspi_user");
+      let sessaoAtual: Record<string, any> = {};
+      if (userRaw) {
+        try {
+          sessaoAtual = JSON.parse(userRaw);
+        } catch {}
+      }
+
+      const usuarioAtualizado = {
+        ...sessaoAtual,
+        ...formData,
+        nome: formData.nome.trim(),
+      };
+
+      localStorage.setItem("saspi_user", JSON.stringify(usuarioAtualizado));
+      document.cookie = `saspi_user=${encodeURIComponent(
+        JSON.stringify(usuarioAtualizado)
+      )}; path=/; max-age=86400; SameSite=Lax`;
       window.dispatchEvent(new Event("saspi_user_updated"));
+
       setSalvo(true);
       setTimeout(() => setSalvo(false), 3000);
     } catch (err: any) {
-      setErro(err.message || "Erro ao salvar no banco.");
+      setErro(err.message || "Erro ao salvar alterações no perfil.");
     } finally {
       setSalvando(false);
     }
@@ -188,7 +198,7 @@ export default function Perfil() {
         </h1>
 
         <p className="mt-2 max-w-2xl text-gray-600">
-          Dados sincronizados diretamente com o banco de dados do S.A.S.P.I.
+          Dados sincronizados com a sua credencial de acesso no S.A.S.P.I.
         </p>
 
         {salvo && (
@@ -223,18 +233,18 @@ export default function Perfil() {
 
             <div className="mt-6 border-t border-gray-100 pt-6">
               <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-                Contato no Banco
+                Contato Registrado
               </p>
 
               <div className="mt-4 space-y-3">
                 <div className="flex items-center gap-3 text-sm text-gray-600">
-                  <Mail size={17} className="text-[#1565C0] shrink-0" />
+                  <Mail size={17} className="shrink-0 text-[#1565C0]" />
                   <span className="truncate">{formData.email}</span>
                 </div>
 
                 <div className="flex items-center gap-3 text-sm text-gray-600">
-                  <Phone size={17} className="text-[#26A69A] shrink-0" />
-                  <span>{formData.telefone}</span>
+                  <Phone size={17} className="shrink-0 text-[#26A69A]" />
+                  <span>{formData.telefone || "Não informado"}</span>
                 </div>
               </div>
             </div>
@@ -252,7 +262,7 @@ export default function Perfil() {
               <div>
                 <h2 className="font-semibold text-[#0A2540]">Dados Pessoais</h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Edite os dados cadastrais da sua credencial clínica.
+                  Edite os dados cadastrais da sua credencial.
                 </p>
               </div>
             </div>
@@ -300,7 +310,7 @@ export default function Perfil() {
                     type="email"
                     disabled
                     value={formData.email}
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 py-3 pl-11 pr-4 text-sm text-gray-500 outline-none cursor-not-allowed"
+                    className="w-full cursor-not-allowed rounded-xl border border-gray-200 bg-gray-50 py-3 pl-11 pr-4 text-sm text-gray-500 outline-none"
                   />
                 </div>
               </div>
@@ -324,6 +334,7 @@ export default function Perfil() {
                     onChange={(e) =>
                       setFormData({ ...formData, telefone: e.target.value })
                     }
+                    placeholder="(11) 90000-0000"
                     className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   />
                 </div>
@@ -348,6 +359,7 @@ export default function Perfil() {
                     onChange={(e) =>
                       setFormData({ ...formData, cpf: e.target.value })
                     }
+                    placeholder="000.000.000-00"
                     className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   />
                 </div>
@@ -370,7 +382,7 @@ export default function Perfil() {
                     type="text"
                     disabled
                     value={formData.perfil}
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 py-3 pl-11 pr-4 text-sm font-medium text-gray-600 outline-none cursor-not-allowed"
+                    className="w-full cursor-not-allowed rounded-xl border border-gray-200 bg-gray-50 py-3 pl-11 pr-4 text-sm font-medium text-gray-600 outline-none"
                   />
                 </div>
               </div>

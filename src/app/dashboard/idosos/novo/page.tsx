@@ -18,6 +18,22 @@ import {
   MapPin,
 } from "lucide-react";
 
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://perfect-bravery-production-5ce7.up.railway.app";
+
+function calcularIdade(dataNasc: string): number {
+  if (!dataNasc) return 70;
+  const hoje = new Date();
+  const nasc = new Date(dataNasc);
+  let idade = hoje.getFullYear() - nasc.getFullYear();
+  const mes = hoje.getMonth() - nasc.getMonth();
+  if (mes < 0 || (mes === 0 && hoje.getDate() < nasc.getDate())) {
+    idade--;
+  }
+  return idade > 0 ? idade : 70;
+}
+
 export default function NovoIdoso() {
   const router = useRouter();
   const [salvando, setSalvando] = useState(false);
@@ -31,43 +47,24 @@ export default function NovoIdoso() {
     sexo: "Feminino",
     telefone: "",
     endereco: "",
-    clinica_id: "",
+    clinica_id: "e63b19f5-d8e4-4973-bac6-12aba9a0545d",
   });
 
   useEffect(() => {
-    // Resgata o UUID da clínica vinculada ao usuário logado
     const userRaw = localStorage.getItem("saspi_user");
     if (userRaw) {
       try {
         const parsed = JSON.parse(userRaw);
+        const userData = parsed.user || parsed.usuario || parsed;
         const cid =
-          parsed.clinica_id ||
-          parsed.clinicaId ||
-          parsed.clinica?.id ||
-          "e63b19f5-d8e4-4973-bac6-12aba9a0545d"; // Fallback seguro da clínica existente no banco
+          userData.clinica_id ||
+          userData.clinicaId ||
+          userData.clinica?.id ||
+          "e63b19f5-d8e4-4973-bac6-12aba9a0545d";
         setFormData((prev) => ({ ...prev, clinica_id: cid }));
-      } catch (e) {
-        console.error("Erro ao resgatar clínica da sessão:", e);
-      }
-    } else {
-      setFormData((prev) => ({
-        ...prev,
-        clinica_id: "e63b19f5-d8e4-4973-bac6-12aba9a0545d",
-      }));
+      } catch {}
     }
   }, []);
-
-  function calcularIdade(dataNasc: string): number {
-    if (!dataNasc) return 70;
-    const hoje = new Date();
-    const nasc = new Date(dataNasc);
-    let idade = hoje.getFullYear() - nasc.getFullYear();
-    const mes = hoje.getMonth() - nasc.getMonth();
-    if (mes < 0 || (mes === 0 && hoje.getDate() < nasc.getDate())) {
-      idade--;
-    }
-    return idade > 0 ? idade : 70;
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -75,32 +72,20 @@ export default function NovoIdoso() {
     setErro("");
     setSucesso(false);
 
-    const apiUrl =
-      process.env.NEXT_PUBLIC_API_URL ||
-      "https://perfect-bravery-production-5ce7.up.railway.app";
-    const token =
-      typeof window !== "undefined"
-        ? localStorage.getItem("saspi_token")
-        : null;
+    const token = localStorage.getItem("saspi_token");
 
-    // Payload rigorosamente alinhado com a tabela public.idoso do PostgreSQL
     const payload = {
       nome: formData.nome.trim(),
       cpf: formData.cpf.replace(/\D/g, "") || null,
-      data_nascimento: formData.data_nascimento, // formato YYYY-MM-DD
+      data_nascimento: formData.data_nascimento,
       sexo: formData.sexo,
       telefone: formData.telefone.replace(/\D/g, "") || null,
       endereco: formData.endereco.trim() || null,
       clinica_id: formData.clinica_id,
     };
 
-    console.group("🚀 S.A.S.P.I. -> Cadastrando Idoso no Banco");
-    console.log("Destino:", `${apiUrl}/idoso`);
-    console.log("Payload:", payload);
-    console.groupEnd();
-
     try {
-      const response = await fetch(`${apiUrl}/idoso`, {
+      const response = await fetch(`${API_URL}/idoso`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -111,42 +96,36 @@ export default function NovoIdoso() {
 
       const resData = await response.json().catch(() => null);
 
-      console.log("📬 Resposta do Servidor:", response.status, resData);
-
       if (!response.ok) {
         const errorMsg = Array.isArray(resData?.message)
           ? resData.message.join(", ")
-          : resData?.message || `Erro ${response.status}: Falha ao registrar idoso no banco.`;
+          : resData?.message ||
+            `Erro ${response.status}: Falha ao registrar idoso no banco.`;
         throw new Error(errorMsg);
       }
 
-      // Se salvou com sucesso no banco real:
       const idReal = resData?.id || String(Date.now());
       const novoIdoso = {
         id: idReal,
-        nome: formData.nome,
+        nome: formData.nome.trim(),
         idade: calcularIdade(formData.data_nascimento),
-        quarto: formData.endereco || "Leito padrão",
+        quarto: formData.endereco.trim() || "Leito padrão",
+        sexo: formData.sexo,
+        clinica_id: formData.clinica_id,
       };
 
-      // Atualiza o cache local para o PatientSelector refletir na hora
       const listaAtualRaw = localStorage.getItem("saspi_elderly_list");
-      let listaAtual = [
-        { id: "1", nome: "Dona Francisca Silva", idade: 78, quarto: "102-A" },
-        { id: "2", nome: "Seu Sebastião Souza", idade: 82, quarto: "105-B" },
-        { id: "3", nome: "Dona Helena Ramos", idade: 75, quarto: "201" },
-      ];
+      let listaAtual: any[] = [];
 
       if (listaAtualRaw) {
         try {
-          listaAtual = JSON.parse(listaAtualRaw);
+          const parsed = JSON.parse(listaAtualRaw);
+          if (Array.isArray(parsed)) listaAtual = parsed;
         } catch {}
       }
 
       const novaLista = [...listaAtual, novoIdoso];
       localStorage.setItem("saspi_elderly_list", JSON.stringify(novaLista));
-
-      // Define como paciente ativo imediatamente
       localStorage.setItem("saspi_active_elderly", JSON.stringify(novoIdoso));
       window.dispatchEvent(new Event("saspi_elderly_updated"));
 
@@ -155,7 +134,6 @@ export default function NovoIdoso() {
         router.push("/dashboard");
       }, 1500);
     } catch (err: any) {
-      console.error("❌ Erro ao salvar no banco:", err);
       setErro(err.message || "Erro desconhecido ao conectar com a API.");
     } finally {
       setSalvando(false);
@@ -185,7 +163,8 @@ export default function NovoIdoso() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-gray-600">
-            Cadastre um novo idoso no sistema S.A.S.P.I. Os dados serão gravados diretamente na base de dados da clínica.
+            Cadastre um novo idoso no sistema S.A.S.P.I. Os dados serão gravados
+            diretamente na base de dados da clínica.
           </p>
         </div>
 

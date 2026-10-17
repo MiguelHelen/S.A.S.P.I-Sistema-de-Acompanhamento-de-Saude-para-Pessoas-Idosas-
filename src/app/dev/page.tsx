@@ -1,21 +1,27 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import {
   ArrowLeft,
+  Building2,
   CalendarDays,
   ClipboardList,
   FlaskConical,
+  HeartHandshake,
   HeartPulse,
   Home,
+  Link2,
   LogIn,
   Pill,
-  Plus,
   UserPlus,
   UserRound,
 } from "lucide-react";
-import { notFound } from "next/navigation";
-import { useEffect, useState } from "react";
+
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://perfect-bravery-production-5ce7.up.railway.app";
 
 const publicRoutes = [
   {
@@ -46,14 +52,14 @@ const dashboardRoutes = [
     icon: Home,
   },
   {
-    title: "Minha Saúde",
-    description: "Evolução dos indicadores de saúde.",
+    title: "Sinais Vitais",
+    description: "Evolução dos indicadores fisiológicos.",
     href: "/dashboard/saude",
     icon: HeartPulse,
   },
   {
     title: "Medicamentos",
-    description: "Lista de medicamentos cadastrados.",
+    description: "Plano de medicamentos e prescrições.",
     href: "/dashboard/medicamentos",
     icon: Pill,
   },
@@ -64,16 +70,34 @@ const dashboardRoutes = [
     icon: CalendarDays,
   },
   {
-    title: "Exames",
-    description: "Central de laudos e resultados.",
-    href: "/dashboard/exames",
-    icon: FlaskConical,
-  },
-  {
     title: "Histórico",
     description: "Linha do tempo de registros clínicos.",
     href: "/dashboard/historico",
     icon: ClipboardList,
+  },
+  {
+    title: "Novo Idoso",
+    description: "Admissão e cadastro de pacientes.",
+    href: "/dashboard/idosos/novo",
+    icon: HeartHandshake,
+  },
+  {
+    title: "Dados da Clínica",
+    description: "Gestão institucional (Restrito Admin).",
+    href: "/dashboard/clinica",
+    icon: Building2,
+  },
+  {
+    title: "Novo Usuário",
+    description: "Cadastro de equipe (Restrito Admin).",
+    href: "/dashboard/usuarios/novo",
+    icon: UserPlus,
+  },
+  {
+    title: "Atribuir Vínculo",
+    description: "Associação profissional-idoso (Restrito Admin).",
+    href: "/dashboard/vinculos/novo",
+    icon: Link2,
   },
   {
     title: "Perfil",
@@ -124,32 +148,19 @@ export default function DevPage() {
   const [apiStatus, setApiStatus] = useState("Verificando...");
 
   useEffect(() => {
-    // Trava de segurança para produção
     if (process.env.NODE_ENV === "production") {
       notFound();
     }
 
-    // Ping na API para checar conexão e imprimir no F12
     async function checkBackendConnection() {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://perfect-bravery-production-5ce7.up.railway.app";
-      
       try {
-        console.log("%c⏳ S.A.S.P.I. -> Tentando conectar com a API na Railway...", "color: #3b82f6; font-weight: bold;");
-        
-        // Fazemos um fetch simples na rota principal
-        const response = await fetch(apiUrl);
-        
+        const response = await fetch(API_URL);
         if (response.ok || response.status === 404 || response.status === 401) {
-          // Se respondeu qualquer coisa (mesmo rota não encontrada/não autorizada), o servidor está online
-          console.log("%c✅ S.A.S.P.I. -> API CONECTADA COM SUCESSO!", "color: #10b981; font-size: 14px; font-weight: bold; background: #ecfdf5; padding: 4px; border-radius: 4px;");
           setApiStatus("Conectado 🟢");
         } else {
-          console.log("%c⚠️ S.A.S.P.I. -> A API respondeu com um erro inesperado.", "color: #f59e0b; font-weight: bold;");
           setApiStatus("Erro na resposta 🟡");
         }
-      } catch (error) {
-        console.error("%c❌ S.A.S.P.I. -> FALHA NA CONEXÃO. API OFFLINE OU ERRO DE CORS.", "color: #ef4444; font-size: 14px; font-weight: bold; background: #fef2f2; padding: 4px; border-radius: 4px;");
-        console.error(error);
+      } catch {
         setApiStatus("Offline 🔴");
       }
     }
@@ -219,11 +230,11 @@ export default function DevPage() {
             </span>
 
             <h2 className="mt-2 text-2xl font-bold text-[#0A2540]">
-              Páginas do Dashboard
+              Páginas do Dashboard e Gestão
             </h2>
 
             <p className="mt-2 text-sm text-gray-500">
-              Principais telas de acompanhamento do sistema.
+              Principais telas de acompanhamento clínico e administração.
             </p>
           </div>
 
@@ -244,22 +255,22 @@ export default function DevPage() {
               <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
                 Build
               </p>
-              <p className="mt-2 font-semibold text-[#20877E]">Funcionando</p>
+              <p className="mt-2 font-semibold text-[#20877E]">Otimizado</p>
             </div>
 
             <div className="rounded-xl bg-[#F8FBFE] p-4">
               <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-                Vulnerabilidades
+                Segurança (RBAC)
               </p>
-              <p className="mt-2 font-semibold text-[#20877E]">0 encontradas</p>
+              <p className="mt-2 font-semibold text-[#20877E]">Proxy Ativo</p>
             </div>
 
             <div className="rounded-xl bg-[#F8FBFE] p-4">
               <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-                Dados
+                Persistência
               </p>
               <p className="mt-2 font-semibold text-[#1565C0]">
-                Demonstrativos
+                Híbrida (API + Sessão)
               </p>
             </div>
 
@@ -267,7 +278,15 @@ export default function DevPage() {
               <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
                 API Backend
               </p>
-              <p className={`mt-2 font-semibold ${apiStatus.includes("Conectado") ? "text-emerald-600" : apiStatus.includes("Offline") ? "text-red-500" : "text-amber-500"}`}>
+              <p
+                className={`mt-2 font-semibold ${
+                  apiStatus.includes("Conectado")
+                    ? "text-emerald-600"
+                    : apiStatus.includes("Offline")
+                      ? "text-red-500"
+                      : "text-amber-500"
+                }`}
+              >
                 {apiStatus}
               </p>
             </div>

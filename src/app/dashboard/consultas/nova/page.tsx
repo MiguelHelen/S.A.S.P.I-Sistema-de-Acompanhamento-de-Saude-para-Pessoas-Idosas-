@@ -4,27 +4,29 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import DashboardNavbar from "@/components/DashboardNavbar";
+import type { Idoso } from "@/components/PatientSelector";
 import {
   ArrowLeft,
   CalendarDays,
-  Clock,
   MapPin,
   UserCheck,
   Save,
   Loader2,
   CheckCircle2,
   Stethoscope,
+  AlertCircle,
 } from "lucide-react";
+
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://perfect-bravery-production-5ce7.up.railway.app";
 
 export default function NovaConsulta() {
   const router = useRouter();
   const [salvando, setSalvando] = useState(false);
   const [sucesso, setSucesso] = useState(false);
-  const [idoso, setIdoso] = useState({
-    id: "1",
-    nome: "Dona Francisca Silva",
-    idade: 78,
-  });
+  const [erro, setErro] = useState("");
+  const [idoso, setIdoso] = useState<Idoso | null>(null);
 
   const [formData, setFormData] = useState({
     especialidade: "",
@@ -40,24 +42,62 @@ export default function NovaConsulta() {
     if (activeElderly) {
       try {
         setIdoso(JSON.parse(activeElderly));
-      } catch (e) {
-        console.error("Erro ao ler idoso ativo:", e);
-      }
+      } catch {}
     }
   }, []);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSalvando(true);
+    setErro("");
+    setSucesso(false);
 
-    // Simulação do salvamento vinculando a consulta ao idoso ativo
-    setTimeout(() => {
+    if (!idoso || !idoso.id) {
+      setErro("Nenhum idoso ativo selecionado. Selecione um paciente no topo do dashboard.");
       setSalvando(false);
+      return;
+    }
+
+    const token = localStorage.getItem("saspi_token");
+
+    // Payload estruturado conforme o contrato do backend NestJS para consultas
+    const payload = {
+      idoso_id: idoso.id,
+      especialidade: formData.especialidade.trim(),
+      medico: formData.profissional.trim(),
+      data: formData.data, // Formato YYYY-MM-DD
+      horario: formData.horario, // Formato HH:mm
+      localizacao: formData.local.trim(),
+      observacao: formData.observacao.trim() || undefined,
+      status: "Agendada",
+    };
+
+    try {
+      const res = await fetch(`${API_URL}/consulta`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(
+          errData?.message || `Erro ${res.status}: Não foi possível registrar a consulta.`
+        );
+      }
+
       setSucesso(true);
       setTimeout(() => {
         router.push("/dashboard/consultas");
-      }, 1200);
-    }, 600);
+      }, 1500);
+    } catch (err: any) {
+      setErro(err.message || "Erro de conexão ao salvar a consulta.");
+    } finally {
+      setSalvando(false);
+    }
   }
 
   return (
@@ -87,11 +127,18 @@ export default function NovaConsulta() {
           </p>
         </div>
 
+        {erro && (
+          <div className="mt-6 flex items-center gap-3 rounded-xl bg-red-50 p-4 text-red-700">
+            <AlertCircle size={20} className="shrink-0 text-red-600" />
+            <p className="text-sm font-medium">{erro}</p>
+          </div>
+        )}
+
         {sucesso && (
           <div className="mt-6 flex items-center gap-3 rounded-xl bg-emerald-50 p-4 text-emerald-800">
             <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
             <p className="text-sm font-medium">
-              Consulta agendada com sucesso! Redirecionando...
+              Consulta agendada com sucesso no banco de dados! Redirecionando...
             </p>
           </div>
         )}
@@ -258,7 +305,7 @@ export default function NovaConsulta() {
           <div className="flex items-start gap-3 rounded-2xl border border-[#DCEAF8] bg-[#F8FBFE] p-5">
             <CalendarDays size={20} className="mt-0.5 shrink-0 text-[#1565C0]" />
             <p className="text-sm leading-relaxed text-gray-600">
-              A consulta cadastrada aparecerá na agenda e nos lembretes do acompanhamento web e mobile.
+              A consulta agendada será gravada permanentemente na base de dados e refletida nos lembretes de acompanhamento.
             </p>
           </div>
 
@@ -272,8 +319,8 @@ export default function NovaConsulta() {
 
             <button
               type="submit"
-              disabled={salvando}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-6 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0A2540] hover:shadow-md disabled:opacity-70"
+              disabled={salvando || !idoso}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-6 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0A2540] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-70"
             >
               {salvando ? (
                 <Loader2 size={18} className="animate-spin" />

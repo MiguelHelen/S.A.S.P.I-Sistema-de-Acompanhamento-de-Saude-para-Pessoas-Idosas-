@@ -19,6 +19,12 @@ import {
   ShieldAlert,
 } from "lucide-react";
 
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://perfect-bravery-production-5ce7.up.railway.app";
+
+const CLINICA_PADRAO_ID = "e63b19f5-d8e4-4973-bac6-12aba9a0545d";
+
 export default function NovoUsuario() {
   const router = useRouter();
   const [salvando, setSalvando] = useState(false);
@@ -33,15 +39,10 @@ export default function NovoUsuario() {
     telefone: "",
     cpf: "",
     perfil: "CUIDADOR",
-    clinica_id: "",
+    clinica_id: CLINICA_PADRAO_ID,
   });
 
-  const apiUrl =
-    process.env.NEXT_PUBLIC_API_URL ||
-    "https://perfect-bravery-production-5ce7.up.railway.app";
-
   useEffect(() => {
-    // Validação de Permissão: Apenas ADMINISTRADOR pode cadastrar novos usuários
     const userRaw = localStorage.getItem("saspi_user");
     if (userRaw) {
       try {
@@ -59,7 +60,7 @@ export default function NovoUsuario() {
           userData.clinica_id ||
           userData.clinicaId ||
           userData.clinica?.id ||
-          "e63b19f5-d8e4-4973-bac6-12aba9a0545d";
+          CLINICA_PADRAO_ID;
 
         setFormData((prev) => ({ ...prev, clinica_id: cId }));
       } catch {
@@ -70,7 +71,81 @@ export default function NovoUsuario() {
     }
   }, []);
 
-  // Se o usuário não for Administrador (ex: Médico), bloqueia a tela
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSalvando(true);
+    setErro("");
+    setSucesso(false);
+
+    const token = localStorage.getItem("saspi_token");
+
+    // Limpeza rigorosa: converte campos vazios para undefined para evitar erros 500 no banco de dados
+    const telefoneLimpo = formData.telefone.replace(/\D/g, "");
+    const cpfLimpo = formData.cpf.replace(/\D/g, "");
+
+    const payload = {
+      nome: formData.nome.trim(),
+      email: formData.email.trim().toLowerCase(),
+      senha: formData.senha,
+      telefone: telefoneLimpo.length > 0 ? telefoneLimpo : undefined,
+      cpf: cpfLimpo.length > 0 ? cpfLimpo : undefined,
+      perfil: String(formData.perfil || "CUIDADOR").trim().toUpperCase(),
+      clinica_id: formData.clinica_id || CLINICA_PADRAO_ID,
+    };
+
+    try {
+      const res = await fetch(`${API_URL}/usuario`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const errData = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        let mensagemErro = errData?.message || "Erro desconhecido ao registrar usuário.";
+        
+        // Identificação de erro clara: P2002 no Prisma ou HTTP 409 indica que o registro já existe (Duplicidade)
+        if (res.status === 409 || String(mensagemErro).includes("P2002") || String(mensagemErro).toLowerCase().includes("unique")) {
+          throw new Error("Erro: Este e-mail já está cadastrado no sistema!");
+        }
+
+        // Mostrando o erro real da validação do NestJS
+        if (Array.isArray(errData?.message)) {
+          mensagemErro = errData.message.join(", ");
+        }
+
+        throw new Error(mensagemErro);
+      }
+
+      setSucesso(true);
+      setTimeout(() => {
+        router.push("/dashboard");
+      }, 1500);
+    } catch (err: any) {
+      setErro(err.message || "Erro de conexão ao salvar usuário.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  if (autorizado === null) {
+    return (
+      <main className="min-h-screen bg-[#F2F7FB]">
+        <DashboardNavbar />
+        <div className="mx-auto max-w-4xl px-4 py-16 text-center text-gray-500">
+          <Loader2 size={24} className="mx-auto animate-spin text-[#1565C0]" />
+          <p className="mt-2 text-sm font-medium">
+            Validando permissões de acesso...
+          </p>
+        </div>
+      </main>
+    );
+  }
+
   if (autorizado === false) {
     return (
       <main className="min-h-screen bg-[#F2F7FB]">
@@ -83,7 +158,8 @@ export default function NovoUsuario() {
             Acesso Restrito
           </h1>
           <p className="mt-2 text-sm text-gray-600">
-            Apenas Administradores têm permissão para cadastrar novos membros ou profissionais na clínica. Médicos e outros profissionais possuem acesso restrito à área assistencial.
+            Apenas Administradores têm permissão para cadastrar novos membros ou
+            profissionais na clínica.
           </p>
           <div className="mt-6">
             <Link
@@ -97,51 +173,6 @@ export default function NovoUsuario() {
         </div>
       </main>
     );
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSalvando(true);
-    setErro("");
-    setSucesso(false);
-
-    const token = localStorage.getItem("saspi_token");
-
-    const payload = {
-      nome: formData.nome.trim(),
-      email: formData.email.trim().toLowerCase(),
-      senha: formData.senha,
-      telefone: formData.telefone.replace(/\D/g, "") || null,
-      cpf: formData.cpf.replace(/\D/g, "") || null,
-      perfil: formData.perfil,
-      clinica_id: formData.clinica_id,
-    };
-
-    try {
-      const res = await fetch(`${apiUrl}/usuario`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token && { Authorization: `Bearer ${token}` }),
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        throw new Error(data?.message || `Erro ${res.status}: Não foi possível registrar o usuário.`);
-      }
-
-      setSucesso(true);
-      setTimeout(() => {
-        router.push("/dashboard");
-      }, 1500);
-    } catch (err: any) {
-      setErro(err.message || "Erro de conexão ao salvar usuário.");
-    } finally {
-      setSalvando(false);
-    }
   }
 
   return (
@@ -167,7 +198,8 @@ export default function NovoUsuario() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-gray-600">
-            Cadastre membros da rede de apoio ou profissionais clínicos vinculados a esta instituição.
+            Cadastre membros da rede de apoio ou profissionais clínicos
+            vinculados a esta instituição.
           </p>
         </div>
 
@@ -187,8 +219,11 @@ export default function NovoUsuario() {
           </div>
         )}
 
-        {/* autoComplete="off" previne o preenchimento automático das senhas do navegador */}
-        <form onSubmit={handleSubmit} autoComplete="off" className="mt-8 space-y-6">
+        <form
+          onSubmit={handleSubmit}
+          autoComplete="off"
+          className="mt-8 space-y-6"
+        >
           <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
             <div className="flex items-center gap-3 border-b border-gray-100 pb-5">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#E8F1FB] text-[#1565C0]">
@@ -200,7 +235,8 @@ export default function NovoUsuario() {
                   Dados do Usuário
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Preencha os dados e defina a senha e o nível de permissão do usuário.
+                  Preencha os dados e defina a senha e o nível de permissão do
+                  usuário.
                 </p>
               </div>
             </div>
@@ -357,11 +393,21 @@ export default function NovoUsuario() {
                     }
                     className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   >
-                    <option value="MEDICO">Médico (Acompanhamento clínico e prescrições)</option>
-                    <option value="ENFERMEIRO">Enfermeiro (Triagem, rotinas e cuidados)</option>
-                    <option value="CUIDADOR">Cuidador (Apoio na rotina diária)</option>
-                    <option value="FAMILIAR">Familiar (Acompanhamento remoto)</option>
-                    <option value="ADMINISTRADOR">Administrador (Gestão de usuários e clínica)</option>
+                    <option value="MEDICO">
+                      Médico (Acompanhamento clínico e prescrições)
+                    </option>
+                    <option value="ENFERMEIRO">
+                      Enfermeiro (Triagem, rotinas e cuidados)
+                    </option>
+                    <option value="CUIDADOR">
+                      Cuidador (Apoio na rotina diária)
+                    </option>
+                    <option value="FAMILIAR">
+                      Familiar (Acompanhamento remoto)
+                    </option>
+                    <option value="ADMINISTRADOR">
+                      Administrador (Gestão de usuários e clínica)
+                    </option>
                   </select>
                 </div>
               </div>
