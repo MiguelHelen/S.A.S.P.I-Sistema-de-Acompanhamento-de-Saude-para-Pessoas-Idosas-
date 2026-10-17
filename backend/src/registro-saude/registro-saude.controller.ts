@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
 import { RegistroSaudeService } from './registro-saude.service';
 import { AuthGuard } from '../auth/auth.guard';
 import { CreateRegistroSaudeDto } from './dto/create-registro-saude.dto';
@@ -8,13 +17,19 @@ import { CreateRegistroSaudeDto } from './dto/create-registro-saude.dto';
 export class RegistroSaudeController {
   constructor(private readonly registroSaudeService: RegistroSaudeService) {}
 
-    @Post()
-  create(@Body() body: CreateRegistroSaudeDto) {
-    return this.registroSaudeService.create(body);
+  @Post()
+  create(@Body() body: CreateRegistroSaudeDto, @Request() req: any) {
+    return this.registroSaudeService.create(body, req.user.id);
+  }
+
+  @Get()
+  findAll(@Query('idoso_id') idosoId: string, @Request() req: any) {
+    if (!idosoId) return [];
+    return this.registroSaudeService.findByIdosoSeguro(idosoId, req.user.id);
   }
 
   @Get('idoso/:idosoId')
-  findByIdoso(@Param('idosoId') idosoId: string) {
-    return this.registroSaudeService.findByIdoso(idosoId);
+  findByIdoso(@Param('idosoId') idosoId: string, @Request() req: any) {
+    return this.registroSaudeService.findByIdosoSeguro(idosoId, req.user.id);
   }
 }
