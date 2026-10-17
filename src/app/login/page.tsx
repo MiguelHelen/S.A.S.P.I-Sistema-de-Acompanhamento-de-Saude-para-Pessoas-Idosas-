@@ -3,8 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, HeartPulse, KeyRound, Mail, Loader2 } from "lucide-react";
 import Image from "next/image";
+import { ArrowLeft, HeartPulse, KeyRound, Mail, Loader2 } from "lucide-react";
+
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://perfect-bravery-production-5ce7.up.railway.app";
 
 export default function Login() {
   const router = useRouter();
@@ -19,28 +23,25 @@ export default function Login() {
     setErro("");
     setLoading(true);
 
-    const apiUrl =
-      process.env.NEXT_PUBLIC_API_URL ||
-      "https://perfect-bravery-production-5ce7.up.railway.app";
+    const emailLower = email.trim().toLowerCase();
 
     try {
-      const res = await fetch(`${apiUrl}/auth/login`, {
+      const res = await fetch(`${API_URL}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), senha }),
+        body: JSON.stringify({ email: emailLower, senha }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
         throw new Error(
-          data.message || "E-mail ou senha inválidos. Tente novamente.",
+          data.message || "E-mail ou senha inválidos. Tente novamente."
         );
       }
 
-      // Grava o token
       const token = data.access_token || data.token;
       if (token) {
         localStorage.setItem("saspi_token", token);
@@ -48,18 +49,20 @@ export default function Login() {
 
       let usuarioCompleto: any = data.usuario || data.user || null;
 
-      // Busca na tabela public.usuario usando o token para pegar o perfil real cadastrado
       if (token) {
         try {
-          const resUser = await fetch(`${apiUrl}/usuario?email=${encodeURIComponent(email.trim().toLowerCase())}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
+          const resUser = await fetch(
+            `${API_URL}/usuario?email=${encodeURIComponent(emailLower)}`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
 
           if (resUser.ok) {
             const dataUser = await resUser.json();
             const encontrado = Array.isArray(dataUser)
               ? dataUser.find(
-                  (u: any) => u.email?.toLowerCase() === email.trim().toLowerCase(),
+                  (u: any) => u.email?.toLowerCase() === emailLower
                 ) || dataUser[0]
               : dataUser;
 
@@ -67,18 +70,14 @@ export default function Login() {
               usuarioCompleto = encontrado;
             }
           }
-        } catch (e) {
-          console.warn("Aviso ao buscar dados estendidos do banco:", e);
-        }
+        } catch {}
       }
 
-      // Determinação segura dos dados cadastrais
-      const emailLower = email.trim().toLowerCase();
       let nomeResolvido = usuarioCompleto?.nome || usuarioCompleto?.name;
       let perfilResolvido = usuarioCompleto?.perfil || usuarioCompleto?.role;
-      let clinicaIdResolvido = usuarioCompleto?.clinica_id || "e63b19f5-d8e4-4973-bac6-12aba9a0545d";
+      let clinicaIdResolvido =
+        usuarioCompleto?.clinica_id || "e63b19f5-d8e4-4973-bac6-12aba9a0545d";
 
-      // Fallback garantido para o usuário Administrador cadastrado no banco
       if (emailLower === "wallexandre2009@gmail.com") {
         if (!nomeResolvido || nomeResolvido.includes("@")) {
           nomeResolvido = "Wallex Administrador";
@@ -86,11 +85,14 @@ export default function Login() {
         perfilResolvido = "ADMINISTRADOR";
         clinicaIdResolvido = "e63b19f5-d8e4-4973-bac6-12aba9a0545d";
       } else if (!nomeResolvido) {
-        nomeResolvido = email.split("@")[0];
+        nomeResolvido = emailLower.split("@")[0];
       }
 
       const usuarioSalvar = {
-        id: usuarioCompleto?.id || data.id || "375f5df4-57f0-4b02-a725-d01bf774b72e",
+        id:
+          usuarioCompleto?.id ||
+          data.id ||
+          "375f5df4-57f0-4b02-a725-d01bf774b72e",
         auth_id: data.id || data.sub || "f7bbe33d-93d4-4546-a59b-32decb20c37f",
         nome: nomeResolvido,
         email: emailLower,
@@ -102,9 +104,16 @@ export default function Login() {
       localStorage.setItem("saspi_user", JSON.stringify(usuarioSalvar));
       window.dispatchEvent(new Event("saspi_user_updated"));
 
+      if (token) {
+        document.cookie = `saspi_token=${token}; path=/; max-age=86400; SameSite=Lax`;
+        document.cookie = `saspi_user=${encodeURIComponent(
+          JSON.stringify(usuarioSalvar)
+        )}; path=/; max-age=86400; SameSite=Lax`;
+      }
+
       router.push("/dashboard");
     } catch (error: any) {
-      setErro(error.message);
+      setErro(error.message || "Não foi possível realizar o login.");
     } finally {
       setLoading(false);
     }
@@ -114,7 +123,6 @@ export default function Login() {
     <main className="min-h-screen bg-[#F2F7FB] px-4 py-8 md:px-8">
       <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl items-center justify-center">
         <div className="grid w-full overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-xl shadow-blue-950/5 lg:grid-cols-2">
-          {/* Área institucional */}
           <section className="relative hidden overflow-hidden bg-[#0A2540] p-12 text-white lg:flex lg:flex-col lg:justify-between">
             <div>
               <Link href="/" className="inline-flex items-center">
@@ -123,9 +131,9 @@ export default function Login() {
                   alt="S.A.S.P.I."
                   width={180}
                   height={48}
+                  priority
                   className="brightness-0 invert"
                   style={{ width: "auto", height: "auto" }}
-                  priority
                 />
               </Link>
               <div className="mt-16">
@@ -149,7 +157,6 @@ export default function Login() {
             </div>
           </section>
 
-          {/* Área do formulário */}
           <section className="p-6 sm:p-10 lg:p-12">
             <div className="mx-auto max-w-md">
               <Link
