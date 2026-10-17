@@ -43,27 +43,17 @@ export default function HistoricoPage() {
     const headers = { ...(token && { Authorization: `Bearer ${token}` }) };
 
     try {
-      let resSaude = await fetch(
-        `${API_URL}/registro-saude/idoso/${idosoId}`,
-        { headers }
-      ).catch(() => null);
-
-      if (!resSaude?.ok) {
-        resSaude = await fetch(
-          `${API_URL}/registro-saude?idoso_id=${idosoId}`,
-          { headers }
-        ).catch(() => null);
-      }
-
-      let resPresc = await fetch(`${API_URL}/prescricao/idoso/${idosoId}`, {
-        headers,
-      }).catch(() => null);
-
-      if (!resPresc?.ok) {
-        resPresc = await fetch(`${API_URL}/prescricao?idoso_id=${idosoId}`, {
-          headers,
-        }).catch(() => null);
-      }
+      const [resSaude, resPresc, resCons] = await Promise.all([
+        fetch(`${API_URL}/registro-saude/idoso/${idosoId}`, { headers }).catch(
+          () => null
+        ),
+        fetch(`${API_URL}/prescricao/idoso/${idosoId}`, { headers }).catch(
+          () => null
+        ),
+        fetch(`${API_URL}/consulta?idoso_id=${idosoId}`, { headers }).catch(
+          () => null
+        ),
+      ]);
 
       const eventosUnificados: EventoHistorico[] = [];
 
@@ -131,7 +121,9 @@ export default function HistoricoPage() {
           .filter((p: any) => !p.idoso_id || p.idoso_id === idosoId)
           .forEach((p: any) => {
             const dataFormatada = p.data_inicio
-              ? new Date(p.data_inicio).toLocaleDateString("pt-BR")
+              ? new Date(p.data_inicio).toLocaleDateString("pt-BR", {
+                  timeZone: "UTC",
+                })
               : "Prescrição ativa";
 
             eventosUnificados.push({
@@ -141,6 +133,30 @@ export default function HistoricoPage() {
               descricao: `${p.dosagem || ""} • ${p.frequencia || "Uso contínuo"}`,
               dataHora: dataFormatada,
               autor: p.usuario?.nome || "Equipe Médica",
+            });
+          });
+      }
+
+      if (resCons?.ok) {
+        const dataCons = await resCons.json();
+        const arrCons = Array.isArray(dataCons)
+          ? dataCons
+          : dataCons.data || [];
+
+        arrCons
+          .filter((c: any) => !c.idoso_id || c.idoso_id === idosoId)
+          .forEach((c: any) => {
+            const dataFormatada = c.data
+              ? `${new Date(c.data).toLocaleDateString("pt-BR", { timeZone: "UTC" })} às ${c.horario || ""}`
+              : "Consulta agendada";
+
+            eventosUnificados.push({
+              id: `cons-${c.id}`,
+              tipo: "consulta",
+              titulo: `Consulta: ${c.especialidade}`,
+              descricao: `${c.localizacao || ""} • Status: ${c.status || "Agendada"}`,
+              dataHora: dataFormatada,
+              autor: c.medico || "Médico Responsável",
             });
           });
       }

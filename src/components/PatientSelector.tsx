@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import Link from "next/link";
-import { UserCheck, Users, UserPlus, Loader2, AlertCircle } from "lucide-react";
+import { UserCheck, Users, Loader2, AlertCircle } from "lucide-react";
 
 export interface Idoso {
   id: string;
@@ -11,6 +10,7 @@ export interface Idoso {
   quarto?: string;
   sexo?: string;
   clinica_id?: string;
+  data_nascimento?: string;
 }
 
 interface PatientSelectorProps {
@@ -22,16 +22,17 @@ const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   "https://perfect-bravery-production-5ce7.up.railway.app";
 
-function calcularIdade(dataNasc?: string): number {
-  if (!dataNasc) return 70;
+export function calcularIdadeReal(dataNasc?: string): number {
+  if (!dataNasc) return 0;
   const hoje = new Date();
   const nasc = new Date(dataNasc);
-  let idade = hoje.getFullYear() - nasc.getFullYear();
-  const mes = hoje.getMonth() - nasc.getMonth();
-  if (mes < 0 || (mes === 0 && hoje.getDate() < nasc.getDate())) {
+  if (Number.isNaN(nasc.getTime())) return 0;
+  let idade = hoje.getUTCFullYear() - nasc.getUTCFullYear();
+  const mes = hoje.getUTCMonth() - nasc.getUTCMonth();
+  if (mes < 0 || (mes === 0 && hoje.getUTCDate() < nasc.getUTCDate())) {
     idade--;
   }
-  return idade > 0 ? idade : 70;
+  return idade >= 0 && idade <= 130 ? idade : 0;
 }
 
 export default function PatientSelector({
@@ -46,7 +47,7 @@ export default function PatientSelector({
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
 
-  const carregarIdososDaClinica = useCallback(async () => {
+  const carregarIdososAutorizados = useCallback(async () => {
     setCarregando(true);
 
     const token =
@@ -54,7 +55,6 @@ export default function PatientSelector({
     const userRaw =
       typeof window !== "undefined" ? localStorage.getItem("saspi_user") : null;
 
-    let clinicaId = "e63b19f5-d8e4-4973-bac6-12aba9a0545d";
     let perfil = "";
     let userId = "";
 
@@ -62,85 +62,60 @@ export default function PatientSelector({
       try {
         const parsed = JSON.parse(userRaw);
         const userData = parsed.user || parsed.usuario || parsed;
-        clinicaId = userData.clinica_id || userData.clinicaId || clinicaId;
         perfil = String(userData.perfil || userData.role || "").toUpperCase();
         userId = userData.id || "";
         setPerfilUsuario(perfil);
       } catch {}
     }
 
+    if (!userId || !token) {
+      setListaIdosos([]);
+      setAtivo(null);
+      setCarregando(false);
+      return;
+    }
+
     try {
-      const resIdosos = await fetch(`${API_URL}/idoso?clinica_id=${clinicaId}`, {
-        headers: { ...(token && { Authorization: `Bearer ${token}` }) },
-      });
-
-      if (!resIdosos.ok) throw new Error("Falha ao buscar pacientes.");
-
-      const dataIdosos = await resIdosos.json();
-      let idososRecebidos: Idoso[] = (
-        Array.isArray(dataIdosos) ? dataIdosos : []
-      ).map((item: any) => ({
-        id: item.id,
-        nome: item.nome,
-        idade: item.idade || calcularIdade(item.data_nascimento),
-        quarto: item.endereco || item.quarto || "Leito padrão",
-        sexo: item.sexo,
-        clinica_id: item.clinica_id,
-      }));
-
-      if (
-        perfil !== "ADMINISTRADOR" &&
-        perfil !== "ADMIN" &&
-        userId &&
-        token
-      ) {
-        try {
-          let resVinculos = await fetch(
-            `${API_URL}/usuario-idoso/usuario/${userId}`,
-            {
-              headers: { Authorization: `Bearer ${token}` },
-            }
-          );
-
-          if (!resVinculos.ok) {
-            resVinculos = await fetch(
-              `${API_URL}/usuario-idoso?usuario_id=${userId}`,
-              {
-                headers: { Authorization: `Bearer ${token}` },
-              }
-            );
-          }
-
-          if (resVinculos.ok) {
-            const vinculosData = await resVinculos.json();
-            const arrayVinculos = Array.isArray(vinculosData)
-              ? vinculosData
-              : vinculosData.data || [];
-
-            const meusVinculos = arrayVinculos.filter((v: any) => {
-              const donoId = v.usuario_id || v.usuarioId || v.usuario?.id;
-              return !donoId || donoId === userId;
-            });
-
-            const idsVinculados = meusVinculos.map(
-              (v: any) => v.idoso_id || v.idosoId || v.idoso?.id
-            );
-
-            idososRecebidos = idososRecebidos.filter((i) =>
-              idsVinculados.includes(i.id)
-            );
-          } else {
-            idososRecebidos = [];
-          }
-        } catch {
-          idososRecebidos = [];
+      // Busca direta na rota de vinculos do usuario que ja traz include: { idoso: true }
+      const resVinculos = await fetch(
+        `${API_URL}/usuario-idoso/usuario/${userId}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
         }
+      );
+
+      let idososVinculados: Idoso[] = [];
+
+      if (resVinculos.ok) {
+        const vinculosData = await resVinculos.json();
+        const arrayVinculos = Array.isArray(vinculosData)
+          ? vinculosData
+          : vinculosData.data || [];
+
+        const mapaUnico = new Map<string, Idoso>();
+
+        arrayVinculos.forEach((v: any) => {
+          const item = v.idoso;
+          if (item && item.id && !mapaUnico.has(item.id)) {
+            mapaUnico.set(item.id, {
+              id: item.id,
+              nome: item.nome,
+              idade: calcularIdadeReal(item.data_nascimento),
+              quarto: item.endereco || "Leito não informado",
+              sexo: item.sexo,
+              clinica_id: item.clinica_id,
+              data_nascimento: item.data_nascimento,
+            });
+          }
+        });
+
+        idososVinculados = Array.from(mapaUnico.values());
       }
 
-      setListaIdosos(idososRecebidos);
+      setListaIdosos(idososVinculados);
       localStorage.setItem(
         "saspi_elderly_list",
-        JSON.stringify(idososRecebidos)
+        JSON.stringify(idososVinculados)
       );
 
       const savedActiveRaw = localStorage.getItem("saspi_active_elderly");
@@ -148,17 +123,17 @@ export default function PatientSelector({
 
       if (selectedId) {
         idosoParaAtivar =
-          idososRecebidos.find((i) => i.id === selectedId) || null;
+          idososVinculados.find((i) => i.id === selectedId) || null;
       } else if (savedActiveRaw) {
         try {
           const parsedSaved = JSON.parse(savedActiveRaw);
           idosoParaAtivar =
-            idososRecebidos.find((i) => i.id === parsedSaved.id) || null;
+            idososVinculados.find((i) => i.id === parsedSaved.id) || null;
         } catch {}
       }
 
-      if (!idosoParaAtivar && idososRecebidos.length > 0) {
-        idosoParaAtivar = idososRecebidos[0];
+      if (!idosoParaAtivar && idososVinculados.length > 0) {
+        idosoParaAtivar = idososVinculados[0];
       }
 
       if (idosoParaAtivar) {
@@ -176,15 +151,13 @@ export default function PatientSelector({
     } catch {
       setListaIdosos([]);
       setAtivo(null);
-      localStorage.removeItem("saspi_active_elderly");
-      window.dispatchEvent(new Event("saspi_elderly_updated"));
     } finally {
       setCarregando(false);
     }
   }, [selectedId]);
 
   useEffect(() => {
-    carregarIdososDaClinica();
+    carregarIdososAutorizados();
 
     function handleElderlyUpdate() {
       const savedActiveRaw = localStorage.getItem("saspi_active_elderly");
@@ -204,10 +177,10 @@ export default function PatientSelector({
     return () => {
       window.removeEventListener("saspi_elderly_updated", handleElderlyUpdate);
     };
-  }, [carregarIdososDaClinica]);
+  }, [carregarIdososAutorizados]);
 
   function handleSelect(idoso: Idoso) {
-    if (perfilUsuario === "FAMILIAR") return;
+    if (perfilUsuario === "FAMILIAR" && listaIdosos.length <= 1) return;
     setAtivo(idoso);
     try {
       localStorage.setItem("saspi_active_elderly", JSON.stringify(idoso));
@@ -216,9 +189,8 @@ export default function PatientSelector({
     onSelectRef.current?.(idoso);
   }
 
-  const isAdmin =
-    perfilUsuario === "ADMINISTRADOR" || perfilUsuario === "ADMIN";
-  const isFamiliar = perfilUsuario === "FAMILIAR";
+  const isFamiliarUnico =
+    perfilUsuario === "FAMILIAR" && listaIdosos.length === 1;
 
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm md:p-6">
@@ -232,22 +204,12 @@ export default function PatientSelector({
               Paciente em Acompanhamento
             </h2>
             <p className="text-sm text-gray-500">
-              {isFamiliar
+              {isFamiliarUnico
                 ? "Visualização dedicada ao paciente vinculado à sua conta."
-                : "Selecione o paciente para visualizar os prontuários e sinais vitais."}
+                : "Selecione o paciente vinculado para visualizar os prontuários e sinais vitais."}
             </p>
           </div>
         </div>
-
-        {isAdmin && (
-          <Link
-            href="/dashboard/idosos/novo"
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#1565C0]/20 bg-[#E8F1FB] px-4 py-2 text-sm font-medium text-[#1565C0] transition hover:bg-[#1565C0] hover:text-white"
-          >
-            <UserPlus size={16} />
-            Novo Paciente
-          </Link>
-        )}
       </div>
 
       <div className="mt-5 border-t border-gray-100 pt-5">
@@ -260,14 +222,19 @@ export default function PatientSelector({
           <div className="flex items-center gap-3 rounded-xl border border-dashed border-gray-200 bg-gray-50/50 p-4">
             <AlertCircle size={18} className="shrink-0 text-amber-500" />
             <p className="text-sm text-gray-500">
-              Nenhum paciente atribuído ao seu usuário até o momento.
+              Nenhum paciente atribuído ao seu usuário até o momento. Solicite o
+              vínculo à administração da clínica.
             </p>
           </div>
-        ) : isFamiliar && ativo ? (
+        ) : isFamiliarUnico && ativo ? (
           <div className="inline-flex items-center gap-2.5 rounded-xl bg-[#1565C0] px-4 py-2.5 text-sm font-medium text-white shadow-sm">
             <UserCheck size={16} className="text-white" />
             <span>{ativo.nome}</span>
-            <span className="text-xs text-blue-100">({ativo.idade} anos)</span>
+            {ativo.idade > 0 && (
+              <span className="text-xs text-blue-100">
+                ({ativo.idade} anos)
+              </span>
+            )}
           </div>
         ) : (
           <div className="flex flex-wrap items-center gap-2.5">
@@ -289,13 +256,15 @@ export default function PatientSelector({
                     className={isSelected ? "text-white" : "text-gray-400"}
                   />
                   <span>{idoso.nome}</span>
-                  <span
-                    className={`text-xs ${
-                      isSelected ? "text-blue-100" : "text-gray-400"
-                    }`}
-                  >
-                    ({idoso.idade} anos)
-                  </span>
+                  {idoso.idade > 0 && (
+                    <span
+                      className={`text-xs ${
+                        isSelected ? "text-blue-100" : "text-gray-400"
+                      }`}
+                    >
+                      ({idoso.idade} anos)
+                    </span>
+                  )}
                 </button>
               );
             })}
