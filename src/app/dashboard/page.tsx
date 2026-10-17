@@ -19,9 +19,12 @@ import {
   ClipboardList,
   UserCheck,
   Loader2,
-  AlertTriangle,
   Link2,
 } from "lucide-react";
+
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://perfect-bravery-production-5ce7.up.railway.app";
 
 export default function Dashboard() {
   const [carregandoSessao, setCarregandoSessao] = useState(true);
@@ -34,6 +37,12 @@ export default function Dashboard() {
   });
 
   const [idosoAtivo, setIdosoAtivo] = useState<Idoso | null>(null);
+  const [resumoClinico, setResumoClinico] = useState({
+    fc: "--",
+    spo2: "--",
+    proximoMedTitulo: "Nenhuma prescrição ativa",
+    proximoMedSub: "Sem agendamento",
+  });
 
   const carregarUsuario = useCallback(() => {
     const userRaw = localStorage.getItem("saspi_user");
@@ -86,6 +95,92 @@ export default function Dashboard() {
     };
   }, [carregarUsuario]);
 
+  useEffect(() => {
+    async function carregarResumoPaciente(idosoId: string) {
+      const token = localStorage.getItem("saspi_token");
+      const headers = { ...(token && { Authorization: `Bearer ${token}` }) };
+
+      try {
+        const [resReg, resPresc] = await Promise.all([
+          fetch(`${API_URL}/registro-saude?idoso_id=${idosoId}`, {
+            headers,
+          }).catch(() => null),
+          fetch(`${API_URL}/prescricao?idoso_id=${idosoId}`, {
+            headers,
+          }).catch(() => null),
+        ]);
+
+        let fcVal = "--";
+        let spo2Val = "--";
+        let medTitulo = "Nenhuma prescrição ativa";
+        let medSub = "Sem agendamento";
+
+        if (resReg?.ok) {
+          const regs = await resReg.json();
+          if (Array.isArray(regs)) {
+            const doIdoso = regs.filter(
+              (r: any) => !r.idoso_id || r.idoso_id === idosoId
+            );
+            const fcReg = doIdoso.find((r: any) =>
+              String(r.indicador_saude?.nome || r.indicador_nome || "")
+                .toLowerCase()
+                .includes("card")
+            );
+            const spo2Reg = doIdoso.find((r: any) =>
+              String(r.indicador_saude?.nome || r.indicador_nome || "")
+                .toLowerCase()
+                .includes("oxig")
+            );
+
+            if (fcReg) {
+              fcVal = String(
+                fcReg.valor_numerico ??
+                  fcReg.valor_categorico ??
+                  fcReg.valor ??
+                  "--"
+              );
+            }
+            if (spo2Reg) {
+              spo2Val = String(
+                spo2Reg.valor_numerico ??
+                  spo2Reg.valor_categorico ??
+                  spo2Reg.valor ??
+                  "--"
+              );
+            }
+          }
+        }
+
+        if (resPresc?.ok) {
+          const prescs = await resPresc.json();
+          if (Array.isArray(prescs) && prescs.length > 0) {
+            const ativas = prescs.filter(
+              (p: any) =>
+                (!p.idoso_id || p.idoso_id === idosoId) &&
+                String(p.status || "ATIVA").toUpperCase() === "ATIVA"
+            );
+            if (ativas.length > 0) {
+              const p = ativas[0];
+              medTitulo = p.medicamento?.nome || "Medicação Prescrita";
+              medSub = `${p.dosagem || ""} • ${p.frequencia || "Uso contínuo"}`;
+            }
+          }
+        }
+
+        setResumoClinico({
+          fc: fcVal,
+          spo2: spo2Val,
+          proximoMedTitulo: medTitulo,
+          proximoMedSub: medSub,
+        });
+      } catch {}
+    }
+
+    if (idosoAtivo?.id) {
+      carregarResumoPaciente(idosoAtivo.id);
+    }
+  }, [idosoAtivo?.id]);
+
   const perfilUpper = user.perfil;
   const isAdmin = perfilUpper === "ADMINISTRADOR" || perfilUpper === "ADMIN";
   const isMedicoOuEnfermeiro =
@@ -103,7 +198,7 @@ export default function Dashboard() {
     if (perfilUpper === "MEDICO") return `Olá, Dr(a). ${primeiroNome}!`;
     if (perfilUpper === "ENFERMEIRO") return `Olá, Enf. ${primeiroNome}!`;
     if (perfilUpper === "CUIDADOR") return `Olá, Cuidador(a) ${primeiroNome}!`;
-    if (perfilUpper === "FAMILIAR") return `Olá, ${primeiroNome} (Familiar)!`;
+    if (perfilUpper === "FAMILIAR") return `Olá, ${primeiroNome}!`;
     return `Olá, ${primeiroNome}!`;
   }
 
@@ -129,7 +224,7 @@ export default function Dashboard() {
               {isAdmin
                 ? "Painel Administrativo"
                 : isLeituraSomente
-                  ? "Acompanhamento Compartilhado (LGPD)"
+                  ? "Acompanhamento Assistencial Compartilhado"
                   : "Acompanhamento Clínico Assistencial"}
             </span>
 
@@ -142,7 +237,7 @@ export default function Dashboard() {
                 ? "Gestão institucional de profissionais, cuidadores e idosos do S.A.S.P.I."
                 : idosoAtivo
                   ? `Acompanhamento em tempo real dos sinais vitais e da rotina de ${idosoAtivo.nome}.`
-                  : "Selecione ou cadastre um idoso para iniciar o monitoramento."}
+                  : "Selecione um paciente vinculado para iniciar o monitoramento."}
             </p>
           </div>
 
@@ -218,7 +313,7 @@ export default function Dashboard() {
                 S.A.S.P.I.
               </p>
 
-              <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <Link
                   href="/dashboard/usuarios/novo"
                   className="group rounded-xl border border-gray-200 bg-[#FAFCFE] p-5 transition hover:border-[#BFD8F2] hover:bg-white hover:shadow-md"
@@ -241,6 +336,27 @@ export default function Dashboard() {
                 </Link>
 
                 <Link
+                  href="/dashboard/idosos/novo"
+                  className="group rounded-xl border border-gray-200 bg-[#FAFCFE] p-5 transition hover:border-[#BFD8F2] hover:bg-white hover:shadow-md"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#E6F4EF] text-[#26A69A]">
+                      <ClipboardList size={20} />
+                    </div>
+                    <ArrowRight
+                      size={18}
+                      className="text-gray-400 transition group-hover:translate-x-1 group-hover:text-[#1565C0]"
+                    />
+                  </div>
+                  <h3 className="mt-4 font-semibold text-[#0A2540]">
+                    Registrar Paciente
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Admitir novo idoso na instituição.
+                  </p>
+                </Link>
+
+                <Link
                   href="/dashboard/vinculos/novo"
                   className="group rounded-xl border border-gray-200 bg-[#FAFCFE] p-5 transition hover:border-[#BFD8F2] hover:bg-white hover:shadow-md"
                 >
@@ -254,31 +370,10 @@ export default function Dashboard() {
                     />
                   </div>
                   <h3 className="mt-4 font-semibold text-[#0A2540]">
-                    Atribuir Idoso a Cuidador/Médico
+                    Atribuir Vínculo
                   </h3>
                   <p className="mt-1 text-sm text-gray-500">
                     Vincular pacientes aos profissionais autorizados.
-                  </p>
-                </Link>
-
-                <Link
-                  href="/dashboard/clinica"
-                  className="group rounded-xl border border-gray-200 bg-[#FAFCFE] p-5 transition hover:border-[#BFD8F2] hover:bg-white hover:shadow-md"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#E8F1FB] text-[#1565C0]">
-                      <Building2 size={20} />
-                    </div>
-                    <ArrowRight
-                      size={18}
-                      className="text-gray-400 transition group-hover:translate-x-1 group-hover:text-[#1565C0]"
-                    />
-                  </div>
-                  <h3 className="mt-4 font-semibold text-[#0A2540]">
-                    Dados da Clínica
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-500">
-                    Gerenciar razão social, contato e endereço da instituição.
                   </p>
                 </Link>
 
@@ -299,7 +394,28 @@ export default function Dashboard() {
                     Listar Vínculos
                   </h3>
                   <p className="mt-1 text-sm text-gray-500">
-                    Visualizar associações entre equipe e pacientes.
+                    Visualizar e revogar associações ativas.
+                  </p>
+                </Link>
+
+                <Link
+                  href="/dashboard/clinica"
+                  className="group rounded-xl border border-gray-200 bg-[#FAFCFE] p-5 transition hover:border-[#BFD8F2] hover:bg-white hover:shadow-md"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#E8F1FB] text-[#1565C0]">
+                      <Building2 size={20} />
+                    </div>
+                    <ArrowRight
+                      size={18}
+                      className="text-gray-400 transition group-hover:translate-x-1 group-hover:text-[#1565C0]"
+                    />
+                  </div>
+                  <h3 className="mt-4 font-semibold text-[#0A2540]">
+                    Dados da Clínica
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Gerenciar razão social, contato e endereço.
                   </p>
                 </Link>
               </div>
@@ -317,29 +433,29 @@ export default function Dashboard() {
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                   <MetricCard
                     title="Frequência Cardíaca"
-                    value="--"
+                    value={resumoClinico.fc}
                     unit="bpm"
                     icon={<HeartPulse size={22} />}
                   />
 
                   <MetricCard
                     title="Oxigenação (SpO2)"
-                    value="--"
+                    value={resumoClinico.spo2}
                     unit="%"
                     icon={<Activity size={22} />}
                   />
 
                   <InfoCard
                     label="Próximo Medicamento"
-                    title="Nenhuma prescrição ativa"
-                    subtitle="Sem agendamento"
+                    title={resumoClinico.proximoMedTitulo}
+                    subtitle={resumoClinico.proximoMedSub}
                     icon={<Pill size={22} />}
                   />
 
                   <InfoCard
                     label="Próxima Consulta"
                     title="Sem agendamento"
-                    subtitle="Nenhuma consulta marcada"
+                    subtitle="Consulte a agenda clínica"
                     icon={<CalendarDays size={22} />}
                   />
                 </div>
@@ -367,11 +483,14 @@ export default function Dashboard() {
                     <div className="mt-6 flex h-64 flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50/50 p-6 text-center">
                       <Activity size={32} className="text-gray-300" />
                       <p className="mt-2 text-sm font-medium text-[#0A2540]">
-                        Nenhum registro de telemetria recente
+                        {resumoClinico.fc !== "--" ||
+                        resumoClinico.spo2 !== "--"
+                          ? `Última aferição sincronizada: FC ${resumoClinico.fc} bpm | SpO₂ ${resumoClinico.spo2}%`
+                          : "Nenhum registro de telemetria recente"}
                       </p>
                       <p className="mt-1 text-xs text-gray-500">
-                        Os dados aparecerão assim que a smartband ou uma
-                        aferição manual for sincronizada.
+                        Os dados são atualizados conforme sincronização do
+                        dispositivo vestível ou aferição manual.
                       </p>
                     </div>
                   </section>
@@ -381,19 +500,22 @@ export default function Dashboard() {
                       Prescrições e Alertas
                     </h2>
                     <p className="mt-1 text-sm text-gray-500">
-                      {idosoAtivo ? `Rotina de ${idosoAtivo.nome}` : "Nenhum paciente selecionado"}
+                      Rotina de {idosoAtivo.nome}
                     </p>
 
                     <div className="mt-6 space-y-4">
                       <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/50 p-6 text-center">
                         <Pill size={24} className="mx-auto text-gray-300" />
                         <p className="mt-2 text-sm font-medium text-gray-600">
-                          Nenhum alerta ou medicação para hoje
+                          {resumoClinico.proximoMedTitulo}
                         </p>
                         <p className="mt-1 text-xs text-gray-400">
-                          {isMedicoOuEnfermeiro
-                            ? "Cadastre prescrições no módulo de Medicamentos."
-                            : "Aguardando novas prescrições da equipe clínica."}
+                          {resumoClinico.proximoMedTitulo !==
+                          "Nenhuma prescrição ativa"
+                            ? resumoClinico.proximoMedSub
+                            : isMedicoOuEnfermeiro
+                              ? "Cadastre prescrições no módulo de Medicamentos."
+                              : "Aguardando novas prescrições da equipe clínica."}
                         </p>
                       </div>
 

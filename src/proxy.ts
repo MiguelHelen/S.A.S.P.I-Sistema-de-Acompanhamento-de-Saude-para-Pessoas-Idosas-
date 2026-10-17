@@ -3,8 +3,9 @@ import type { NextRequest } from "next/server";
 
 const ADMIN_ROUTES = [
   "/dashboard/clinica",
-  "/dashboard/usuarios/novo",
-  "/dashboard/vinculos/novo",
+  "/dashboard/usuarios",
+  "/dashboard/vinculos",
+  "/dashboard/idosos/novo",
 ];
 
 export function proxy(request: NextRequest) {
@@ -13,7 +14,6 @@ export function proxy(request: NextRequest) {
   const token = request.cookies.get("saspi_token")?.value;
   const userCookie = request.cookies.get("saspi_user")?.value;
 
-  // 1. Se tentar acessar qualquer rota de /dashboard sem token válido, redireciona para /login
   if (pathname.startsWith("/dashboard")) {
     if (!token) {
       const loginUrl = new URL("/login", request.url);
@@ -21,7 +21,6 @@ export function proxy(request: NextRequest) {
       return NextResponse.redirect(loginUrl);
     }
 
-    // 2. Validação de RBAC no servidor para rotas exclusivas de ADMINISTRADOR
     const isRotaAdmin = ADMIN_ROUTES.some((rota) => pathname.startsWith(rota));
 
     if (isRotaAdmin) {
@@ -30,7 +29,8 @@ export function proxy(request: NextRequest) {
       }
 
       try {
-        const user = JSON.parse(decodeURIComponent(userCookie));
+        const parsed = JSON.parse(decodeURIComponent(userCookie));
+        const user = parsed.user || parsed.usuario || parsed;
         const role = String(user.perfil || user.role || "").toUpperCase();
 
         if (role !== "ADMINISTRADOR" && role !== "ADMIN") {

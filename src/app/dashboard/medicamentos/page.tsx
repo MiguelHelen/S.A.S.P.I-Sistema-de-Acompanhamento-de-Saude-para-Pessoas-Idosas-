@@ -8,14 +8,19 @@ import { Pill, Plus, Loader2 } from "lucide-react";
 
 interface Prescricao {
   id: string;
-  medicamento: {
-    nome: string;
+  idoso_id?: string;
+  medicamento_id?: string;
+  medicamento?: {
+    nome?: string;
     descricao?: string;
   };
-  dosagem: string;
-  frequencia: string;
-  status: string;
-  data_inicio: string;
+  usuario?: {
+    nome?: string;
+  };
+  dosagem?: string;
+  frequencia?: string;
+  status?: string;
+  data_inicio?: string;
 }
 
 const API_URL =
@@ -26,19 +31,32 @@ export default function MedicamentosPage() {
   const [idosoAtivo, setIdosoAtivo] = useState<Idoso | null>(null);
   const [prescricoes, setPrescricoes] = useState<Prescricao[]>([]);
   const [carregando, setCarregando] = useState(false);
+  const [perfilUsuario, setPerfilUsuario] = useState("");
 
   const carregarPrescricoes = useCallback(async (idosoId: string) => {
     setCarregando(true);
     const token = localStorage.getItem("saspi_token");
+    const headers = { ...(token && { Authorization: `Bearer ${token}` }) };
 
     try {
-      const res = await fetch(`${API_URL}/prescricao?idoso_id=${idosoId}`, {
-        headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+      let res = await fetch(`${API_URL}/prescricao/idoso/${idosoId}`, {
+        headers,
       });
+
+      if (!res.ok) {
+        res = await fetch(`${API_URL}/prescricao?idoso_id=${idosoId}`, {
+          headers,
+        });
+      }
 
       if (res.ok) {
         const data = await res.json();
-        setPrescricoes(Array.isArray(data) ? data : []);
+        const lista = Array.isArray(data) ? data : data.data || [];
+        setPrescricoes(
+          lista.filter(
+            (p: any) => !p.idoso_id || p.idoso_id === idosoId
+          )
+        );
       } else {
         setPrescricoes([]);
       }
@@ -50,20 +68,41 @@ export default function MedicamentosPage() {
   }, []);
 
   useEffect(() => {
+    const userRaw = localStorage.getItem("saspi_user");
+    if (userRaw) {
+      try {
+        const parsed = JSON.parse(userRaw);
+        const userData = parsed.user || parsed.usuario || parsed;
+        setPerfilUsuario(
+          String(userData.perfil || userData.role || "").toUpperCase()
+        );
+      } catch {}
+    }
+
     const saved = localStorage.getItem("saspi_active_elderly");
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         setIdosoAtivo(parsed);
-        carregarPrescricoes(parsed.id);
+        if (parsed?.id) {
+          carregarPrescricoes(parsed.id);
+        }
       } catch {}
     }
   }, [carregarPrescricoes]);
 
   function handleSelectPatient(idoso: Idoso) {
     setIdosoAtivo(idoso);
-    carregarPrescricoes(idoso.id);
+    if (idoso?.id) {
+      carregarPrescricoes(idoso.id);
+    }
   }
+
+  const podePrescrever =
+    perfilUsuario === "MEDICO" ||
+    perfilUsuario === "ENFERMEIRO" ||
+    perfilUsuario === "ADMINISTRADOR" ||
+    perfilUsuario === "ADMIN";
 
   return (
     <main className="min-h-screen bg-[#F2F7FB]">
@@ -81,17 +120,19 @@ export default function MedicamentosPage() {
             <p className="mt-2 text-gray-600">
               {idosoAtivo
                 ? `Prescrições ativas e horários de dosagem de ${idosoAtivo.nome}.`
-                : "Selecione um paciente para gerenciar a medicação."}
+                : "Selecione um paciente para visualizar a medicação."}
             </p>
           </div>
 
-          <Link
-            href="/dashboard/medicamentos/novo"
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0A2540] hover:shadow-md"
-          >
-            <Plus size={18} />
-            Nova Prescrição
-          </Link>
+          {podePrescrever && (
+            <Link
+              href="/dashboard/medicamentos/novo"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0A2540] hover:shadow-md"
+            >
+              <Plus size={18} />
+              Nova Prescrição
+            </Link>
+          )}
         </div>
 
         <div className="mt-8 space-y-6">
@@ -133,34 +174,49 @@ export default function MedicamentosPage() {
                     Não existem medicamentos prescritos registrados para este
                     paciente até o momento.
                   </p>
-                  <Link
-                    href="/dashboard/medicamentos/novo"
-                    className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#E8F1FB] px-4 py-2 text-sm font-medium text-[#1565C0] transition hover:bg-[#1565C0] hover:text-white"
-                  >
-                    <Plus size={16} />
-                    Adicionar primeiro medicamento
-                  </Link>
+                  {podePrescrever && (
+                    <Link
+                      href="/dashboard/medicamentos/novo"
+                      className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#E8F1FB] px-4 py-2 text-sm font-medium text-[#1565C0] transition hover:bg-[#1565C0] hover:text-white"
+                    >
+                      <Plus size={16} />
+                      Adicionar primeiro medicamento
+                    </Link>
+                  )}
                 </div>
               ) : (
                 <div className="divide-y divide-gray-100">
-                  {prescricoes.map((p) => (
-                    <div
-                      key={p.id}
-                      className="flex items-center justify-between py-4"
-                    >
-                      <div>
-                        <p className="font-semibold text-[#0A2540]">
-                          {p.medicamento?.nome || "Medicamento"}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {p.dosagem} • {p.frequencia}
-                        </p>
+                  {prescricoes.map((p) => {
+                    const statusFormatado =
+                      String(p.status || "ATIVA").toUpperCase() === "ATIVA"
+                        ? "Ativa"
+                        : p.status;
+
+                    return (
+                      <div
+                        key={p.id}
+                        className="flex flex-col justify-between gap-3 py-4 sm:flex-row sm:items-center"
+                      >
+                        <div>
+                          <p className="font-semibold text-[#0A2540]">
+                            {p.medicamento?.nome || "Medicamento Prescrito"}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {p.dosagem || "Dosagem padrão"} •{" "}
+                            {p.frequencia || "Uso contínuo"}
+                          </p>
+                          {p.medicamento?.descricao && (
+                            <p className="mt-1 text-xs text-gray-400">
+                              Orientação: {p.medicamento.descricao}
+                            </p>
+                          )}
+                        </div>
+                        <span className="inline-flex w-fit rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                          {statusFormatado}
+                        </span>
                       </div>
-                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-                        {p.status}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

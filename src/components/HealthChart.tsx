@@ -10,31 +10,25 @@ import {
   YAxis,
 } from "recharts";
 
-const data = [
-  { horario: "08h", valor: 70 },
-  { horario: "10h", valor: 72 },
-  { horario: "12h", valor: 71 },
-  { horario: "14h", valor: 74 },
-  { horario: "16h", valor: 73 },
-  { horario: "18h", valor: 72 },
-];
+export interface PontoGraficoSaude {
+  horario: string;
+  valor: number;
+}
 
-export default function HealthChart() {
+interface HealthChartProps {
+  dados?: PontoGraficoSaude[];
+}
+
+export default function HealthChart({ dados = [] }: HealthChartProps) {
   return (
     <div className="h-72 w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data}>
+        <LineChart data={dados}>
           <CartesianGrid strokeDasharray="3 3" />
 
-          <XAxis
-            dataKey="horario"
-            tick={{ fontSize: 12 }}
-          />
+          <XAxis dataKey="horario" tick={{ fontSize: 12 }} />
 
-          <YAxis
-            domain={[60, 90]}
-            tick={{ fontSize: 12 }}
-          />
+          <YAxis domain={["auto", "auto"]} tick={{ fontSize: 12 }} />
 
           <Tooltip />
 

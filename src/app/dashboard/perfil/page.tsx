@@ -50,14 +50,17 @@ export default function Perfil() {
       const currentEmail = sessaoLocal.email || "";
       const currentId = sessaoLocal.id || "";
 
-      // Preenche imediatamente com os dados reais da sessão ativa
       setFormData({
         id: currentId,
         nome: sessaoLocal.nome || sessaoLocal.name || "Usuário",
         email: currentEmail,
         telefone: sessaoLocal.telefone || "",
         cpf: sessaoLocal.cpf || "",
-        perfil: (sessaoLocal.perfil || sessaoLocal.role || "MEDICO").toUpperCase(),
+        perfil: (
+          sessaoLocal.perfil ||
+          sessaoLocal.role ||
+          "MEDICO"
+        ).toUpperCase(),
       });
 
       if (token && currentEmail) {
@@ -104,7 +107,10 @@ export default function Perfil() {
                 perfil: dadosMesclados.perfil,
               });
 
-              localStorage.setItem("saspi_user", JSON.stringify(dadosMesclados));
+              localStorage.setItem(
+                "saspi_user",
+                JSON.stringify(dadosMesclados)
+              );
               document.cookie = `saspi_user=${encodeURIComponent(
                 JSON.stringify(dadosMesclados)
               )}; path=/; max-age=86400; SameSite=Lax`;
@@ -127,21 +133,39 @@ export default function Perfil() {
     setSalvo(false);
 
     const token = localStorage.getItem("saspi_token");
+    const telefoneLimpo = formData.telefone.replace(/\D/g, "");
+    const cpfLimpo = formData.cpf.replace(/\D/g, "");
+
+    const payload = {
+      nome: formData.nome.trim(),
+      telefone: telefoneLimpo.length > 0 ? telefoneLimpo : undefined,
+      cpf: cpfLimpo.length > 0 ? cpfLimpo : undefined,
+    };
 
     try {
       if (token && formData.id) {
-        await fetch(`${API_URL}/usuario/${formData.id}`, {
+        const res = await fetch(`${API_URL}/usuario/${formData.id}`, {
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({
-            nome: formData.nome.trim(),
-            telefone: formData.telefone.replace(/\D/g, ""),
-            cpf: formData.cpf.replace(/\D/g, ""),
-          }),
+          body: JSON.stringify(payload),
         });
+
+        if (!res.ok && res.status !== 404) {
+          const errData = await res.json().catch(() => null);
+          const msgStr = String(errData?.message || "").toLowerCase();
+          if (
+            res.status === 409 ||
+            msgStr.includes("p2002") ||
+            msgStr.includes("unique")
+          ) {
+            throw new Error(
+              "Erro: Este CPF já está vinculado a outro usuário no sistema!"
+            );
+          }
+        }
       }
 
       const userRaw = localStorage.getItem("saspi_user");
@@ -156,6 +180,8 @@ export default function Perfil() {
         ...sessaoAtual,
         ...formData,
         nome: formData.nome.trim(),
+        telefone: telefoneLimpo,
+        cpf: cpfLimpo,
       };
 
       localStorage.setItem("saspi_user", JSON.stringify(usuarioAtualizado));

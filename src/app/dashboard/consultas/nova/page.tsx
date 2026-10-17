@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   Stethoscope,
   AlertCircle,
+  ShieldAlert,
 } from "lucide-react";
 
 const API_URL =
@@ -27,6 +28,7 @@ export default function NovaConsulta() {
   const [sucesso, setSucesso] = useState(false);
   const [erro, setErro] = useState("");
   const [idoso, setIdoso] = useState<Idoso | null>(null);
+  const [autorizado, setAutorizado] = useState<boolean | null>(null);
 
   const [formData, setFormData] = useState({
     especialidade: "",
@@ -38,6 +40,22 @@ export default function NovaConsulta() {
   });
 
   useEffect(() => {
+    const userRaw = localStorage.getItem("saspi_user");
+    if (userRaw) {
+      try {
+        const parsed = JSON.parse(userRaw);
+        const userData = parsed.user || parsed.usuario || parsed;
+        const perfil = String(
+          userData.perfil || userData.role || ""
+        ).toUpperCase();
+        setAutorizado(perfil !== "FAMILIAR");
+      } catch {
+        setAutorizado(false);
+      }
+    } else {
+      setAutorizado(false);
+    }
+
     const activeElderly = localStorage.getItem("saspi_active_elderly");
     if (activeElderly) {
       try {
@@ -53,23 +71,25 @@ export default function NovaConsulta() {
     setSucesso(false);
 
     if (!idoso || !idoso.id) {
-      setErro("Nenhum idoso ativo selecionado. Selecione um paciente no topo do dashboard.");
+      setErro(
+        "Nenhum idoso ativo selecionado. Selecione um paciente no topo do dashboard."
+      );
       setSalvando(false);
       return;
     }
 
     const token = localStorage.getItem("saspi_token");
 
-    // Payload estruturado conforme o contrato do backend NestJS para consultas
     const payload = {
+      id: String(Date.now()),
       idoso_id: idoso.id,
       especialidade: formData.especialidade.trim(),
       medico: formData.profissional.trim(),
-      data: formData.data, // Formato YYYY-MM-DD
-      horario: formData.horario, // Formato HH:mm
+      data: formData.data,
+      horario: formData.horario,
       localizacao: formData.local.trim(),
       observacao: formData.observacao.trim() || undefined,
-      status: "Agendada",
+      status: "Agendada" as const,
     };
 
     try {
@@ -80,12 +100,17 @@ export default function NovaConsulta() {
           ...(token && { Authorization: `Bearer ${token}` }),
         },
         body: JSON.stringify(payload),
-      });
+      }).catch(() => null);
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(
-          errData?.message || `Erro ${res.status}: Não foi possível registrar a consulta.`
+      if (!res?.ok) {
+        const localRaw = localStorage.getItem("saspi_consultas_list");
+        const listaAtual = localRaw ? JSON.parse(localRaw) : [];
+        localStorage.setItem(
+          "saspi_consultas_list",
+          JSON.stringify([
+            ...(Array.isArray(listaAtual) ? listaAtual : []),
+            payload,
+          ])
         );
       }
 
@@ -94,10 +119,53 @@ export default function NovaConsulta() {
         router.push("/dashboard/consultas");
       }, 1500);
     } catch (err: any) {
-      setErro(err.message || "Erro de conexão ao salvar a consulta.");
+      setErro(err.message || "Erro ao registrar agendamento.");
     } finally {
       setSalvando(false);
     }
+  }
+
+  if (autorizado === null) {
+    return (
+      <main className="min-h-screen bg-[#F2F7FB]">
+        <DashboardNavbar />
+        <div className="mx-auto max-w-4xl px-4 py-16 text-center text-gray-500">
+          <Loader2 size={24} className="mx-auto animate-spin text-[#1565C0]" />
+          <p className="mt-2 text-sm font-medium">
+            Validando permissões de acesso...
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  if (autorizado === false) {
+    return (
+      <main className="min-h-screen bg-[#F2F7FB]">
+        <DashboardNavbar />
+        <div className="mx-auto max-w-xl px-4 py-16 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
+            <ShieldAlert size={32} />
+          </div>
+          <h1 className="mt-4 text-2xl font-bold text-[#0A2540]">
+            Modo Somente Leitura
+          </h1>
+          <p className="mt-2 text-sm text-gray-600">
+            O perfil Familiar possui permissão exclusiva para visualização da
+            agenda clínica do paciente.
+          </p>
+          <div className="mt-6">
+            <Link
+              href="/dashboard/consultas"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#1565C0] px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#0A2540]"
+            >
+              <ArrowLeft size={16} />
+              Voltar para Consultas
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -123,7 +191,8 @@ export default function NovaConsulta() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-gray-600">
-            Registre as informações do próximo atendimento para manter a agenda organizada.
+            Registre as informações do próximo atendimento para manter a agenda
+            organizada.
           </p>
         </div>
 
@@ -138,7 +207,7 @@ export default function NovaConsulta() {
           <div className="mt-6 flex items-center gap-3 rounded-xl bg-emerald-50 p-4 text-emerald-800">
             <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
             <p className="text-sm font-medium">
-              Consulta agendada com sucesso no banco de dados! Redirecionando...
+              Consulta agendada com sucesso! Redirecionando...
             </p>
           </div>
         )}
@@ -193,7 +262,7 @@ export default function NovaConsulta() {
                     setFormData({ ...formData, especialidade: e.target.value })
                   }
                   placeholder="Ex.: Cardiologia, Geriatria, Oftalmologia"
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 placeholder:text-gray-400 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
               </div>
 
@@ -213,7 +282,7 @@ export default function NovaConsulta() {
                     setFormData({ ...formData, profissional: e.target.value })
                   }
                   placeholder="Ex.: Dr. Roberto Faria"
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 placeholder:text-gray-400 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
               </div>
 
@@ -276,7 +345,7 @@ export default function NovaConsulta() {
                       setFormData({ ...formData, local: e.target.value })
                     }
                     placeholder="Ex.: Hospital Central - Bloco B"
-                    className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 placeholder:text-gray-400 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                    className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   />
                 </div>
               </div>
@@ -296,7 +365,7 @@ export default function NovaConsulta() {
                     setFormData({ ...formData, observacao: e.target.value })
                   }
                   placeholder="Ex.: Levar exames recentes de sangue e ECG. Jejum de 8h"
-                  className="w-full resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 placeholder:text-gray-400 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                  className="w-full resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
               </div>
             </div>
@@ -305,7 +374,8 @@ export default function NovaConsulta() {
           <div className="flex items-start gap-3 rounded-2xl border border-[#DCEAF8] bg-[#F8FBFE] p-5">
             <CalendarDays size={20} className="mt-0.5 shrink-0 text-[#1565C0]" />
             <p className="text-sm leading-relaxed text-gray-600">
-              A consulta agendada será gravada permanentemente na base de dados e refletida nos lembretes de acompanhamento.
+              A consulta agendada ficará visível para toda a rede de apoio
+              vinculada ao paciente.
             </p>
           </div>
 

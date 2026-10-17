@@ -14,6 +14,7 @@ import {
   ClipboardList,
   UserCheck,
   AlertCircle,
+  ShieldAlert,
 } from "lucide-react";
 
 const API_URL =
@@ -26,6 +27,8 @@ export default function NovoRegistro() {
   const [sucesso, setSucesso] = useState(false);
   const [erro, setErro] = useState("");
   const [idoso, setIdoso] = useState<Idoso | null>(null);
+  const [autorizado, setAutorizado] = useState<boolean | null>(null);
+  const [usuarioId, setUsuarioId] = useState<string>("");
 
   const [formData, setFormData] = useState({
     indicador_nome: "Frequência Cardíaca",
@@ -35,6 +38,24 @@ export default function NovoRegistro() {
   });
 
   useEffect(() => {
+    const userRaw = localStorage.getItem("saspi_user");
+    if (userRaw) {
+      try {
+        const parsed = JSON.parse(userRaw);
+        const userData = parsed.user || parsed.usuario || parsed;
+        const perfil = String(
+          userData.perfil || userData.role || ""
+        ).toUpperCase();
+
+        setUsuarioId(userData.id || "");
+        setAutorizado(perfil !== "FAMILIAR");
+      } catch {
+        setAutorizado(false);
+      }
+    } else {
+      setAutorizado(false);
+    }
+
     const activeElderly = localStorage.getItem("saspi_active_elderly");
     if (activeElderly) {
       try {
@@ -47,12 +68,57 @@ export default function NovoRegistro() {
     let novaUnidade = "bpm";
     if (nome_indicador === "Oxigenação") novaUnidade = "%";
     if (nome_indicador === "Pressão Arterial") novaUnidade = "mmHg";
+    if (nome_indicador === "Temperatura") novaUnidade = "°C";
 
     setFormData({
       ...formData,
       indicador_nome: nome_indicador,
       unidade: novaUnidade,
     });
+  }
+
+  async function obterOuCriarIndicadorId(
+    nomeIndicador: string,
+    unidadePadrao: string,
+    token: string | null
+  ): Promise<string | null> {
+    const headersAuth = {
+      "Content-Type": "application/json",
+      ...(token && { Authorization: `Bearer ${token}` }),
+    };
+
+    try {
+      const resLista = await fetch(`${API_URL}/indicador-saude`, {
+        headers: headersAuth,
+      });
+      if (resLista.ok) {
+        const lista = await resLista.json();
+        if (Array.isArray(lista)) {
+          const existente = lista.find(
+            (ind: any) =>
+              String(ind.nome || "").toLowerCase() ===
+              nomeIndicador.toLowerCase()
+          );
+          if (existente?.id) return existente.id;
+        }
+      }
+
+      const resCriar = await fetch(`${API_URL}/indicador-saude`, {
+        method: "POST",
+        headers: headersAuth,
+        body: JSON.stringify({
+          nome: nomeIndicador,
+          unidade_padrao: unidadePadrao,
+        }),
+      });
+
+      if (resCriar.ok) {
+        const criado = await resCriar.json();
+        if (criado?.id) return criado.id;
+      }
+    } catch {}
+
+    return null;
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -62,24 +128,43 @@ export default function NovoRegistro() {
     setSucesso(false);
 
     if (!idoso || !idoso.id) {
-      setErro("Nenhum idoso ativo selecionado. Selecione um paciente no topo do dashboard.");
+      setErro(
+        "Nenhum idoso ativo selecionado. Selecione um paciente no topo do dashboard."
+      );
       setSalvando(false);
       return;
     }
 
     const token = localStorage.getItem("saspi_token");
-
-    // Payload estruturado conforme o contrato do backend NestJS para a entidade registro-saude
-    const payload = {
-      idoso_id: idoso.id,
-      indicador_nome: formData.indicador_nome,
-      valor: formData.valor.trim(),
-      unidade: formData.unidade,
-      observacao: formData.observacao.trim() || undefined,
-      origem: "Manual",
-    };
+    const valorLimpo = formData.valor.trim().replace(",", ".");
+    const obsLimpa = formData.observacao.trim();
+    const numeroConvertido = Number(valorLimpo);
+    const isNumerico = !Number.isNaN(numeroConvertido) && valorLimpo !== "";
 
     try {
+      const indicadorId = await obterOuCriarIndicadorId(
+        formData.indicador_nome,
+        formData.unidade,
+        token
+      );
+
+      const valorCategoricoFinal = isNumerico
+        ? obsLimpa.length > 0
+          ? obsLimpa
+          : undefined
+        : obsLimpa.length > 0
+          ? `${formData.valor.trim()} (${obsLimpa})`
+          : formData.valor.trim();
+
+      const payload: Record<string, any> = {
+        idoso_id: idoso.id,
+        ...(indicadorId && { indicador_id: indicadorId }),
+        ...(isNumerico && { valor_numerico: numeroConvertido }),
+        ...(valorCategoricoFinal && { valor_categorico: valorCategoricoFinal }),
+        origem: "MANUAL",
+        ...(usuarioId && { usuario_id: usuarioId }),
+      };
+
       const res = await fetch(`${API_URL}/registro-saude`, {
         method: "POST",
         headers: {
@@ -89,10 +174,15 @@ export default function NovoRegistro() {
         body: JSON.stringify(payload),
       });
 
+      const errData = await res.json().catch(() => null);
+
       if (!res.ok) {
-        const errData = await res.json().catch(() => null);
+        const msg = Array.isArray(errData?.message)
+          ? errData.message.join(", ")
+          : errData?.message;
         throw new Error(
-          errData?.message || `Erro ${res.status}: Não foi possível registrar o sinal vital.`
+          msg ||
+            `Erro ${res.status}: Não foi possível registrar o sinal vital.`
         );
       }
 
@@ -105,6 +195,49 @@ export default function NovoRegistro() {
     } finally {
       setSalvando(false);
     }
+  }
+
+  if (autorizado === null) {
+    return (
+      <main className="min-h-screen bg-[#F2F7FB]">
+        <DashboardNavbar />
+        <div className="mx-auto max-w-4xl px-4 py-16 text-center text-gray-500">
+          <Loader2 size={24} className="mx-auto animate-spin text-[#1565C0]" />
+          <p className="mt-2 text-sm font-medium">
+            Validando permissões de acesso...
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  if (autorizado === false) {
+    return (
+      <main className="min-h-screen bg-[#F2F7FB]">
+        <DashboardNavbar />
+        <div className="mx-auto max-w-xl px-4 py-16 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
+            <ShieldAlert size={32} />
+          </div>
+          <h1 className="mt-4 text-2xl font-bold text-[#0A2540]">
+            Modo Somente Leitura
+          </h1>
+          <p className="mt-2 text-sm text-gray-600">
+            O perfil Familiar é dedicado ao acompanhamento remoto e visualização
+            do prontuário, não permitindo a inserção de aferições clínicas.
+          </p>
+          <div className="mt-6">
+            <Link
+              href="/dashboard/historico"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#1565C0] px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#0A2540]"
+            >
+              <ArrowLeft size={16} />
+              Voltar para o Histórico
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -130,7 +263,8 @@ export default function NovoRegistro() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-gray-600">
-            Adicione manualmente uma nova aferição para manter a linha de evolução e os gráficos atualizados.
+            Adicione manualmente uma nova aferição para manter a linha de
+            evolução e os gráficos atualizados.
           </p>
         </div>
 
@@ -145,7 +279,8 @@ export default function NovoRegistro() {
           <div className="mt-6 flex items-center gap-3 rounded-xl bg-emerald-50 p-4 text-emerald-800">
             <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
             <p className="text-sm font-medium">
-              Sinal vital gravado com sucesso no banco de dados! Redirecionando...
+              Sinal vital gravado com sucesso no banco de dados!
+              Redirecionando...
             </p>
           </div>
         )}
@@ -202,6 +337,7 @@ export default function NovoRegistro() {
                   </option>
                   <option value="Oxigenação">Oxigenação (SpO₂)</option>
                   <option value="Pressão Arterial">Pressão arterial</option>
+                  <option value="Temperatura">Temperatura corporal</option>
                 </select>
               </div>
 
@@ -223,9 +359,11 @@ export default function NovoRegistro() {
                   placeholder={
                     formData.indicador_nome === "Pressão Arterial"
                       ? "Ex.: 120/80"
-                      : "Ex.: 72"
+                      : formData.indicador_nome === "Temperatura"
+                        ? "Ex.: 36.5"
+                        : "Ex.: 72"
                   }
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 placeholder:text-gray-400 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
               </div>
 
@@ -260,7 +398,7 @@ export default function NovoRegistro() {
                     setFormData({ ...formData, observacao: e.target.value })
                   }
                   placeholder="Ex.: Aferido em repouso após 15 minutos..."
-                  className="w-full resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 placeholder:text-gray-400 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                  className="w-full resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
               </div>
             </div>
@@ -273,7 +411,9 @@ export default function NovoRegistro() {
                 className="mt-0.5 shrink-0 text-[#1565C0]"
               />
               <p className="text-sm leading-relaxed text-gray-600">
-                Este registro será gravado permanentemente na base de dados, unificando-se aos dados automáticos coletados via smartbands para alimentar o histórico integrado do S.A.S.P.I.
+                Este registro será gravado permanentemente na base de dados com
+                identificação de autor e data/hora (RN05), unificando-se aos
+                dados coletados via dispositivos vestíveis (RN07).
               </p>
             </div>
           </div>

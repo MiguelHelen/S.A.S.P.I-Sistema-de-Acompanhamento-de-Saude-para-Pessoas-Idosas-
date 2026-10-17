@@ -79,13 +79,13 @@ export default function NovoUsuario() {
 
     const token = localStorage.getItem("saspi_token");
 
-    // Limpeza rigorosa: converte campos vazios para undefined para evitar erros 500 no banco de dados
+    const emailFormatado = formData.email.trim().toLowerCase();
     const telefoneLimpo = formData.telefone.replace(/\D/g, "");
     const cpfLimpo = formData.cpf.replace(/\D/g, "");
 
     const payload = {
       nome: formData.nome.trim(),
-      email: formData.email.trim().toLowerCase(),
+      email: emailFormatado,
       senha: formData.senha,
       telefone: telefoneLimpo.length > 0 ? telefoneLimpo : undefined,
       cpf: cpfLimpo.length > 0 ? cpfLimpo : undefined,
@@ -94,6 +94,36 @@ export default function NovoUsuario() {
     };
 
     try {
+      // 1. Checagem preventiva para identificar se a colisão é de E-mail ou de CPF
+      const resExistentes = await fetch(`${API_URL}/usuario`, {
+        headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+      }).catch(() => null);
+
+      if (resExistentes?.ok) {
+        const listaUsuarios = await resExistentes.json();
+        if (Array.isArray(listaUsuarios)) {
+          const emailDuplicado = listaUsuarios.some(
+            (u: any) => String(u.email || "").toLowerCase() === emailFormatado
+          );
+          if (emailDuplicado) {
+            throw new Error(
+              "Erro: Este e-mail já está cadastrado no sistema!"
+            );
+          }
+
+          if (cpfLimpo.length > 0) {
+            const cpfDuplicado = listaUsuarios.some(
+              (u: any) =>
+                String(u.cpf || "").replace(/\D/g, "") === cpfLimpo
+            );
+            if (cpfDuplicado) {
+              throw new Error("Erro: Este CPF já está cadastrado no sistema!");
+            }
+          }
+        }
+      }
+
+      // 2. Dispara o POST de criação
       const res = await fetch(`${API_URL}/usuario`, {
         method: "POST",
         headers: {
@@ -106,16 +136,25 @@ export default function NovoUsuario() {
       const errData = await res.json().catch(() => null);
 
       if (!res.ok) {
-        let mensagemErro = errData?.message || "Erro desconhecido ao registrar usuário.";
-        
-        // Identificação de erro clara: P2002 no Prisma ou HTTP 409 indica que o registro já existe (Duplicidade)
-        if (res.status === 409 || String(mensagemErro).includes("P2002") || String(mensagemErro).toLowerCase().includes("unique")) {
-          throw new Error("Erro: Este e-mail já está cadastrado no sistema!");
-        }
+        let mensagemErro =
+          errData?.message || "Erro desconhecido ao registrar usuário.";
 
-        // Mostrando o erro real da validação do NestJS
         if (Array.isArray(errData?.message)) {
           mensagemErro = errData.message.join(", ");
+        }
+
+        const msgLower = String(mensagemErro).toLowerCase();
+
+        // Como usuario.service.ts lança new Error() quando o e-mail já existe no Supabase Auth, o NestJS retorna 500
+        if (
+          res.status === 409 ||
+          res.status === 500 ||
+          msgLower.includes("p2002") ||
+          msgLower.includes("unique") ||
+          msgLower.includes("already") ||
+          msgLower.includes("internal server error")
+        ) {
+          throw new Error("Erro: Este e-mail já está cadastrado no sistema!");
         }
 
         throw new Error(mensagemErro);

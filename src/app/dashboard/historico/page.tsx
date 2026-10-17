@@ -12,7 +12,6 @@ import {
   Filter,
   History,
   Loader2,
-  Activity,
 } from "lucide-react";
 
 interface EventoHistorico {
@@ -32,6 +31,7 @@ export default function HistoricoPage() {
   const [idoso, setIdoso] = useState<Idoso | null>(null);
   const [eventos, setEventos] = useState<EventoHistorico[]>([]);
   const [carregando, setCarregando] = useState(false);
+  const [perfilUsuario, setPerfilUsuario] = useState("");
 
   const [categoriaSelecionada, setCategoriaSelecionada] = useState<
     "todos" | "sinal_vital" | "medicamento" | "consulta"
@@ -40,40 +40,112 @@ export default function HistoricoPage() {
   const carregarHistorico = useCallback(async (idosoId: string) => {
     setCarregando(true);
     const token = localStorage.getItem("saspi_token");
+    const headers = { ...(token && { Authorization: `Bearer ${token}` }) };
 
     try {
-      const res = await fetch(`${API_URL}/registro-saude?idoso_id=${idosoId}`, {
-        headers: { ...(token && { Authorization: `Bearer ${token}` }) },
-      });
+      let resSaude = await fetch(
+        `${API_URL}/registro-saude/idoso/${idosoId}`,
+        { headers }
+      ).catch(() => null);
 
-      if (res.ok) {
-        const data = await res.json();
-        const listaMapeada: EventoHistorico[] = (Array.isArray(data) ? data : []).map(
-          (item: any) => {
-            const dataFormatada = item.created_at
-              ? new Date(item.created_at).toLocaleString("pt-BR", {
+      if (!resSaude?.ok) {
+        resSaude = await fetch(
+          `${API_URL}/registro-saude?idoso_id=${idosoId}`,
+          { headers }
+        ).catch(() => null);
+      }
+
+      let resPresc = await fetch(`${API_URL}/prescricao/idoso/${idosoId}`, {
+        headers,
+      }).catch(() => null);
+
+      if (!resPresc?.ok) {
+        resPresc = await fetch(`${API_URL}/prescricao?idoso_id=${idosoId}`, {
+          headers,
+        }).catch(() => null);
+      }
+
+      const eventosUnificados: EventoHistorico[] = [];
+
+      if (resSaude?.ok) {
+        const dataSaude = await resSaude.json();
+        const arrSaude = Array.isArray(dataSaude)
+          ? dataSaude
+          : dataSaude.data || [];
+
+        arrSaude
+          .filter((item: any) => !item.idoso_id || item.idoso_id === idosoId)
+          .forEach((item: any) => {
+            const rawDate = item.data_hora || item.created_at;
+            const dataFormatada = rawDate
+              ? new Date(rawDate).toLocaleString("pt-BR", {
                   dateStyle: "short",
                   timeStyle: "short",
                 })
               : "Registro recente";
 
-            return {
-              id: item.id,
-              tipo: "sinal_vital" as const,
-              titulo: item.indicador_nome || "Sinal Vital",
-              descricao: `${item.valor || ""} ${item.unidade || ""} ${
-                item.observacao ? `• ${item.observacao}` : ""
-              }`,
-              dataHora: dataFormatada,
-              autor: item.origem || "Equipe de Cuidado",
-            };
-          }
-        );
+            const nomeIndicador =
+              item.indicador_saude?.nome ||
+              item.indicador_nome ||
+              "Sinal Vital";
+            const unidade =
+              item.indicador_saude?.unidade_padrao || item.unidade || "";
+            const valorPrincipal =
+              item.valor_numerico !== null && item.valor_numerico !== undefined
+                ? `${item.valor_numerico} ${unidade}`.trim()
+                : `${item.valor_categorico || item.valor || ""} ${unidade}`.trim();
 
-        setEventos(listaMapeada);
-      } else {
-        setEventos([]);
+            const complemento =
+              item.valor_numerico !== null &&
+              item.valor_numerico !== undefined &&
+              item.valor_categorico
+                ? ` • ${item.valor_categorico}`
+                : item.observacao
+                  ? ` • ${item.observacao}`
+                  : "";
+
+            const autorFormatado =
+              item.usuario?.nome ||
+              (String(item.origem || "").toUpperCase() === "AUTOMATICO"
+                ? "Smartband (Automático)"
+                : "Registro Manual");
+
+            eventosUnificados.push({
+              id: `saude-${item.id}`,
+              tipo: "sinal_vital",
+              titulo: nomeIndicador,
+              descricao: `${valorPrincipal}${complemento}`,
+              dataHora: dataFormatada,
+              autor: autorFormatado,
+            });
+          });
       }
+
+      if (resPresc?.ok) {
+        const dataPresc = await resPresc.json();
+        const arrPresc = Array.isArray(dataPresc)
+          ? dataPresc
+          : dataPresc.data || [];
+
+        arrPresc
+          .filter((p: any) => !p.idoso_id || p.idoso_id === idosoId)
+          .forEach((p: any) => {
+            const dataFormatada = p.data_inicio
+              ? new Date(p.data_inicio).toLocaleDateString("pt-BR")
+              : "Prescrição ativa";
+
+            eventosUnificados.push({
+              id: `presc-${p.id}`,
+              tipo: "medicamento",
+              titulo: p.medicamento?.nome || "Prescrição Medicamentosa",
+              descricao: `${p.dosagem || ""} • ${p.frequencia || "Uso contínuo"}`,
+              dataHora: dataFormatada,
+              autor: p.usuario?.nome || "Equipe Médica",
+            });
+          });
+      }
+
+      setEventos(eventosUnificados);
     } catch {
       setEventos([]);
     } finally {
@@ -82,6 +154,17 @@ export default function HistoricoPage() {
   }, []);
 
   useEffect(() => {
+    const userRaw = localStorage.getItem("saspi_user");
+    if (userRaw) {
+      try {
+        const parsed = JSON.parse(userRaw);
+        const userData = parsed.user || parsed.usuario || parsed;
+        setPerfilUsuario(
+          String(userData.perfil || userData.role || "").toUpperCase()
+        );
+      } catch {}
+    }
+
     const activeElderly = localStorage.getItem("saspi_active_elderly");
     if (activeElderly) {
       try {
@@ -105,6 +188,8 @@ export default function HistoricoPage() {
     (evento) =>
       categoriaSelecionada === "todos" || evento.tipo === categoriaSelecionada
   );
+
+  const podeRegistrar = perfilUsuario !== "FAMILIAR";
 
   return (
     <main className="min-h-screen bg-[#F2F7FB]">
@@ -134,13 +219,15 @@ export default function HistoricoPage() {
             </p>
           </div>
 
-          <Link
-            href="/dashboard/historico/novo"
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0A2540] hover:shadow-md"
-          >
-            <Plus size={19} />
-            Novo registro
-          </Link>
+          {podeRegistrar && (
+            <Link
+              href="/dashboard/historico/novo"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0A2540] hover:shadow-md"
+            >
+              <Plus size={19} />
+              Novo registro
+            </Link>
+          )}
         </div>
 
         <div className="mt-6">
@@ -194,7 +281,9 @@ export default function HistoricoPage() {
           {carregando ? (
             <div className="flex items-center justify-center py-12 text-sm text-gray-500">
               <Loader2 size={24} className="animate-spin text-[#1565C0]" />
-              <span className="ml-2">Buscando histórico no banco de dados...</span>
+              <span className="ml-2">
+                Buscando histórico no banco de dados...
+              </span>
             </div>
           ) : eventosFiltrados.length > 0 ? (
             <ul className="mt-8 space-y-4">
@@ -235,7 +324,7 @@ export default function HistoricoPage() {
 
                   <div className="flex items-center gap-2 sm:text-right">
                     <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-[#1565C0]">
-                      Origem: <strong>{evento.autor}</strong>
+                      Responsável: <strong>{evento.autor}</strong>
                     </span>
                   </div>
                 </li>
@@ -244,7 +333,7 @@ export default function HistoricoPage() {
           ) : (
             <div className="mt-8 rounded-xl border border-dashed border-gray-200 p-8 text-center text-sm text-gray-500">
               {idoso
-                ? `Nenhum registro encontrado no banco para ${idoso.nome}.`
+                ? `Nenhum registro encontrado para ${idoso.nome} nesta categoria.`
                 : "Selecione um paciente para exibir os registros."}
             </div>
           )}

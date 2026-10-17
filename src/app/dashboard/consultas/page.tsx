@@ -8,6 +8,7 @@ import { CalendarDays, MapPin, Stethoscope, Plus, Loader2 } from "lucide-react";
 
 interface Consulta {
   id: string;
+  idoso_id?: string;
   especialidade: string;
   medico?: string;
   medico_nome?: string;
@@ -27,6 +28,7 @@ export default function ConsultasPage() {
   const [activeElderly, setActiveElderly] = useState<Idoso | null>(null);
   const [consultas, setConsultas] = useState<Consulta[]>([]);
   const [carregando, setCarregando] = useState(false);
+  const [perfilUsuario, setPerfilUsuario] = useState("");
 
   const carregarConsultas = useCallback(async (idosoId: string) => {
     setCarregando(true);
@@ -35,12 +37,20 @@ export default function ConsultasPage() {
     try {
       const res = await fetch(`${API_URL}/consulta?idoso_id=${idosoId}`, {
         headers: { ...(token && { Authorization: `Bearer ${token}` }) },
-      });
+      }).catch(() => null);
 
-      if (res.ok) {
+      if (res?.ok) {
         const data = await res.json();
         setConsultas(Array.isArray(data) ? data : []);
       } else {
+        const localRaw = localStorage.getItem("saspi_consultas_list");
+        if (localRaw) {
+          const parsed = JSON.parse(localRaw);
+          if (Array.isArray(parsed)) {
+            setConsultas(parsed.filter((c: any) => c.idoso_id === idosoId));
+            return;
+          }
+        }
         setConsultas([]);
       }
     } catch {
@@ -51,6 +61,17 @@ export default function ConsultasPage() {
   }, []);
 
   useEffect(() => {
+    const userRaw = localStorage.getItem("saspi_user");
+    if (userRaw) {
+      try {
+        const parsed = JSON.parse(userRaw);
+        const userData = parsed.user || parsed.usuario || parsed;
+        setPerfilUsuario(
+          String(userData.perfil || userData.role || "").toUpperCase()
+        );
+      } catch {}
+    }
+
     const storedElderly = localStorage.getItem("saspi_active_elderly");
     if (storedElderly) {
       try {
@@ -69,6 +90,8 @@ export default function ConsultasPage() {
       carregarConsultas(novo.id);
     }
   }
+
+  const podeAgendar = perfilUsuario !== "FAMILIAR";
 
   return (
     <main className="min-h-screen bg-[#F2F7FB]">
@@ -100,13 +123,15 @@ export default function ConsultasPage() {
             </p>
           </div>
 
-          <Link
-            href="/dashboard/consultas/nova"
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0A2540] hover:shadow-md"
-          >
-            <Plus size={19} />
-            Nova consulta
-          </Link>
+          {podeAgendar && (
+            <Link
+              href="/dashboard/consultas/nova"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0A2540] hover:shadow-md"
+            >
+              <Plus size={19} />
+              Nova consulta
+            </Link>
+          )}
         </div>
 
         <div className="mt-6">
@@ -120,7 +145,9 @@ export default function ConsultasPage() {
           {carregando ? (
             <div className="flex items-center justify-center py-12 text-sm text-gray-500">
               <Loader2 size={24} className="animate-spin text-[#1565C0]" />
-              <span className="ml-2">Buscando consultas no banco de dados...</span>
+              <span className="ml-2">
+                Buscando consultas no banco de dados...
+              </span>
             </div>
           ) : consultas.length > 0 ? (
             <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
@@ -136,9 +163,17 @@ export default function ConsultasPage() {
 
               <div className="mt-8 grid gap-5 lg:grid-cols-2">
                 {consultas.map((consulta) => {
-                  const medicoNome = consulta.medico || consulta.medico_nome || "Profissional não informado";
-                  const localNome = consulta.localizacao || consulta.local || "Local não informado";
-                  const dataHoraFormatada = consulta.dataHora || `${consulta.data || ""} às ${consulta.horario || ""}`;
+                  const medicoNome =
+                    consulta.medico ||
+                    consulta.medico_nome ||
+                    "Profissional não informado";
+                  const localNome =
+                    consulta.localizacao ||
+                    consulta.local ||
+                    "Local não informado";
+                  const dataHoraFormatada =
+                    consulta.dataHora ||
+                    `${consulta.data || ""} às ${consulta.horario || ""}`;
 
                   return (
                     <article
@@ -177,7 +212,9 @@ export default function ConsultasPage() {
                             <CalendarDays size={18} />
                           </div>
                           <div>
-                            <p className="text-xs text-gray-500">Data e Horário</p>
+                            <p className="text-xs text-gray-500">
+                              Data e Horário
+                            </p>
                             <p className="mt-0.5 text-sm font-semibold text-[#0A2540]">
                               {dataHoraFormatada}
                             </p>
@@ -209,7 +246,7 @@ export default function ConsultasPage() {
               </p>
               <p className="mt-1 text-sm text-gray-500">
                 {activeElderly
-                  ? `Não há agendamentos cadastrados no banco para ${activeElderly.nome}.`
+                  ? `Não há agendamentos cadastrados para ${activeElderly.nome}.`
                   : "Selecione um paciente acima para consultar a agenda."}
               </p>
             </div>
