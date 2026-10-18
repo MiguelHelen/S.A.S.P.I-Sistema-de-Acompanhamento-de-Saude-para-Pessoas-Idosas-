@@ -155,11 +155,11 @@ export default function GerenciarIdososPage() {
         },
         body: JSON.stringify({
           nome: idosoEditando.nome.trim(),
-          cpf: cpfLimpo.length > 0 ? cpfLimpo : undefined,
+          cpf: cpfLimpo,
           data_nascimento: dataNascStr,
           sexo: idosoEditando.sexo || "Feminino",
-          telefone: telLimpo.length > 0 ? telLimpo : undefined,
-          endereco: (idosoEditando.endereco || "").trim() || undefined,
+          telefone: telLimpo,
+          endereco: (idosoEditando.endereco || "").trim(),
         }),
       });
 
