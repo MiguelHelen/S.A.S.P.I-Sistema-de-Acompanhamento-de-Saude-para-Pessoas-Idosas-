@@ -3,8 +3,12 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import DashboardNavbar from "@/components/DashboardNavbar";
-import MetricCard from "@/components/MetricCard";
+import MetricCard, {
+  avaliarIndicadorClinico,
+  gerarAlertasClinicos,
+} from "@/components/MetricCard";
 import InfoCard from "@/components/InfoCard";
+import HealthChart, { PontoGraficoSaude } from "@/components/HealthChart";
 import PatientSelector, { Idoso } from "@/components/PatientSelector";
 import {
   HeartPulse,
@@ -20,6 +24,7 @@ import {
   UserCheck,
   Loader2,
   Link2,
+  AlertTriangle,
 } from "lucide-react";
 
 const API_URL =
@@ -45,9 +50,12 @@ export default function Dashboard() {
   });
 
   const [idosoAtivo, setIdosoAtivo] = useState<Idoso | null>(null);
+  const [pontosGrafico, setPontosGrafico] = useState<PontoGraficoSaude[]>([]);
   const [resumoClinico, setResumoClinico] = useState({
     fc: "--",
     spo2: "--",
+    temp: "--",
+    pa: "--/--",
     proximoMedTitulo: "Nenhuma prescrição ativa",
     proximoMedSub: "Sem agendamento",
     proximaConsultaTitulo: "Sem agendamento",
@@ -111,12 +119,9 @@ export default function Dashboard() {
 
   const perfilUpper = user.perfil;
   const isAdmin = perfilUpper === "ADMINISTRADOR" || perfilUpper === "ADMIN";
-  const isMedicoOuEnfermeiro =
-    perfilUpper === "MEDICO" || perfilUpper === "ENFERMEIRO";
-  const isLeituraSomente =
-    perfilUpper === "FAMILIAR" || perfilUpper === "CUIDADOR";
+  const isMedico = perfilUpper === "MEDICO";
+  const isLeituraSomente = perfilUpper === "FAMILIAR";
 
-  // Carrega contadores reais para o Painel Administrativo
   useEffect(() => {
     if (!isAdmin) return;
     const token = localStorage.getItem("saspi_token");
@@ -143,7 +148,6 @@ export default function Dashboard() {
       .catch(() => {});
   }, [isAdmin, user.clinica_id]);
 
-  // Carrega os dados reais do paciente ativo usando as rotas dedicadas /idoso/:id
   useEffect(() => {
     async function carregarResumoPaciente(idosoId: string) {
       const token = localStorage.getItem("saspi_token");
@@ -164,42 +168,46 @@ export default function Dashboard() {
 
         let fcVal = "--";
         let spo2Val = "--";
+        let tempVal = "--";
+        let paVal = "--/--";
         let medTitulo = "Nenhuma prescrição ativa";
         let medSub = "Sem agendamento";
         let consTitulo = "Sem agendamento";
         let consSub = "Consulte a agenda clínica";
+        const serieFc: PontoGraficoSaude[] = [];
 
         if (resReg?.ok) {
           const regs = await resReg.json();
           if (Array.isArray(regs)) {
-            const fcReg = regs.find((r: any) =>
-              String(r.indicador_saude?.nome || r.indicador_nome || "")
-                .toLowerCase()
-                .includes("card")
-            );
-            const spo2Reg = regs.find((r: any) => {
-              const n = String(
+            regs.forEach((r: any) => {
+              const nomeInd = String(
                 r.indicador_saude?.nome || r.indicador_nome || ""
               ).toLowerCase();
-              return n.includes("oxig") || n.includes("spo");
-            });
+              const valBruto = String(
+                r.valor_numerico ?? r.valor_categorico ?? r.valor ?? "--"
+              );
 
-            if (fcReg) {
-              fcVal = String(
-                fcReg.valor_numerico ??
-                  fcReg.valor_categorico ??
-                  fcReg.valor ??
-                  "--"
-              );
-            }
-            if (spo2Reg) {
-              spo2Val = String(
-                spo2Reg.valor_numerico ??
-                  spo2Reg.valor_categorico ??
-                  spo2Reg.valor ??
-                  "--"
-              );
-            }
+              if (nomeInd.includes("card")) {
+                if (fcVal === "--") fcVal = valBruto;
+                const num = Number(r.valor_numerico ?? r.valor);
+                if (!Number.isNaN(num)) {
+                  const dt = r.data_hora || r.created_at;
+                  const hora = dt
+                    ? new Date(dt).toLocaleTimeString("pt-BR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : "Recente";
+                  serieFc.push({ horario: hora, valor: num });
+                }
+              } else if (nomeInd.includes("oxig") || nomeInd.includes("spo")) {
+                if (spo2Val === "--") spo2Val = valBruto;
+              } else if (nomeInd.includes("temp")) {
+                if (tempVal === "--") tempVal = valBruto;
+              } else if (nomeInd.includes("press")) {
+                if (paVal === "--/--") paVal = valBruto;
+              }
+            });
           }
         }
 
@@ -237,9 +245,12 @@ export default function Dashboard() {
           }
         }
 
+        setPontosGrafico(serieFc.reverse());
         setResumoClinico({
           fc: fcVal,
           spo2: spo2Val,
+          temp: tempVal,
+          pa: paVal,
           proximoMedTitulo: medTitulo,
           proximoMedSub: medSub,
           proximaConsultaTitulo: consTitulo,
@@ -267,6 +278,15 @@ export default function Dashboard() {
     return `Olá, ${primeiroNome}!`;
   }
 
+  const avaliacaoFc = avaliarIndicadorClinico("fc", resumoClinico.fc);
+  const avaliacaoSpo2 = avaliarIndicadorClinico("spo2", resumoClinico.spo2);
+  const alertasAtivos = gerarAlertasClinicos({
+    fc: resumoClinico.fc,
+    spo2: resumoClinico.spo2,
+    temp: resumoClinico.temp,
+    pa: resumoClinico.pa,
+  });
+
   if (carregandoSessao) {
     return (
       <main className="min-h-screen bg-[#F2F7FB]">
@@ -289,7 +309,7 @@ export default function Dashboard() {
               {isAdmin
                 ? "Painel Administrativo"
                 : isLeituraSomente
-                  ? "Acompanhamento Assistencial Compartilhado"
+                  ? "Acompanhamento Familiar (Somente Leitura)"
                   : "Acompanhamento Clínico Assistencial"}
             </span>
 
@@ -528,12 +548,42 @@ export default function Dashboard() {
 
             {idosoAtivo ? (
               <>
+                {/* BANNER DE ALERTAS CLÍNICOS ATIVOS */}
+                {alertasAtivos.length > 0 && (
+                  <div className="rounded-2xl border border-red-200 bg-red-50/90 p-5 shadow-sm">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
+                        <AlertTriangle size={22} />
+                      </div>
+                      <div className="flex-1">
+                        <h2 className="text-sm font-bold uppercase tracking-wider text-red-800">
+                          Atenção Clínica — Indicadores fora do padrão seguro (
+                          {alertasAtivos.length})
+                        </h2>
+                        <ul className="mt-2 space-y-1.5 text-sm text-red-700">
+                          {alertasAtivos.map((al) => (
+                            <li key={al.id} className="flex flex-wrap gap-1.5">
+                              <strong>• {al.indicador}:</strong>
+                              <span>{al.mensagem}</span>
+                              <span className="text-xs text-red-600/80">
+                                ({al.referencia})
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                   <MetricCard
                     title="Frequência Cardíaca"
                     value={resumoClinico.fc}
                     unit="bpm"
                     icon={<HeartPulse size={22} />}
+                    statusLabel={avaliacaoFc.label}
+                    statusTone={avaliacaoFc.tone}
                   />
 
                   <MetricCard
@@ -541,6 +591,8 @@ export default function Dashboard() {
                     value={resumoClinico.spo2}
                     unit="%"
                     icon={<Activity size={22} />}
+                    statusLabel={avaliacaoSpo2.label}
+                    statusTone={avaliacaoSpo2.tone}
                   />
 
                   <InfoCard
@@ -578,19 +630,29 @@ export default function Dashboard() {
                       </Link>
                     </div>
 
-                    <div className="mt-6 flex h-64 flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50/50 p-6 text-center">
-                      <Activity size={32} className="text-gray-300" />
-                      <p className="mt-2 text-sm font-medium text-[#0A2540]">
-                        {resumoClinico.fc !== "--" ||
-                        resumoClinico.spo2 !== "--"
-                          ? `Última aferição sincronizada: FC ${resumoClinico.fc} bpm | SpO₂ ${resumoClinico.spo2}%`
-                          : "Nenhum registro de telemetria recente"}
-                      </p>
-                      <p className="mt-1 text-xs text-gray-500">
-                        Os dados são atualizados conforme sincronização do
-                        dispositivo vestível ou aferição manual.
-                      </p>
-                    </div>
+                    {pontosGrafico.length > 0 ? (
+                      <div className="mt-6">
+                        <HealthChart dados={pontosGrafico} />
+                        <p className="mt-3 text-center text-xs text-gray-500">
+                          Última aferição sincronizada: FC {resumoClinico.fc}{" "}
+                          bpm | SpO₂ {resumoClinico.spo2}%
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="mt-6 flex h-64 flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50/50 p-6 text-center">
+                        <Activity size={32} className="text-gray-300" />
+                        <p className="mt-2 text-sm font-medium text-[#0A2540]">
+                          {resumoClinico.fc !== "--" ||
+                          resumoClinico.spo2 !== "--"
+                            ? `Última aferição sincronizada: FC ${resumoClinico.fc} bpm | SpO₂ ${resumoClinico.spo2}%`
+                            : "Nenhum registro de telemetria recente"}
+                        </p>
+                        <p className="mt-1 text-xs text-gray-500">
+                          Os dados são atualizados conforme sincronização do
+                          dispositivo vestível ou aferição manual.
+                        </p>
+                      </div>
+                    )}
                   </section>
 
                   <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
@@ -602,7 +664,22 @@ export default function Dashboard() {
                     </p>
 
                     <div className="mt-6 space-y-4">
-                      <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/50 p-6 text-center">
+                      {alertasAtivos.map((al) => (
+                        <div
+                          key={al.id}
+                          className="rounded-xl border border-red-200 bg-red-50/70 p-4"
+                        >
+                          <div className="flex items-center gap-2 text-xs font-bold uppercase text-red-700">
+                            <AlertTriangle size={15} />
+                            Alerta: {al.indicador} ({al.valorFormatado})
+                          </div>
+                          <p className="mt-1 text-xs text-red-600">
+                            {al.mensagem}
+                          </p>
+                        </div>
+                      ))}
+
+                      <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/50 p-5 text-center">
                         <Pill size={24} className="mx-auto text-gray-300" />
                         <p className="mt-2 text-sm font-medium text-gray-600">
                           {resumoClinico.proximoMedTitulo}
@@ -611,9 +688,9 @@ export default function Dashboard() {
                           {resumoClinico.proximoMedTitulo !==
                           "Nenhuma prescrição ativa"
                             ? resumoClinico.proximoMedSub
-                            : isMedicoOuEnfermeiro
+                            : isMedico
                               ? "Cadastre prescrições no módulo de Medicamentos."
-                              : "Aguardando novas prescrições da equipe clínica."}
+                              : "Aguardando novas prescrições médicas."}
                         </p>
                       </div>
 

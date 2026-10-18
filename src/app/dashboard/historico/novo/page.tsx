@@ -11,7 +11,6 @@ import {
   Save,
   Loader2,
   CheckCircle2,
-  ClipboardList,
   UserCheck,
   AlertCircle,
   ShieldAlert,
@@ -74,7 +73,34 @@ export default function NovoRegistro() {
       ...formData,
       indicador_nome: nome_indicador,
       unidade: novaUnidade,
+      valor: "",
     });
+  }
+
+  function handleValorChange(raw: string) {
+    if (formData.indicador_nome === "Pressão Arterial") {
+      // Permite exclusivamente números e uma barra '/' (Ex: 120/80)
+      const apenasNumerosEBarra = raw
+        .replace(/[^0-9/]/g, "")
+        .replace(/(\/.*)\//g, "$1")
+        .slice(0, 7);
+      setFormData({ ...formData, valor: apenasNumerosEBarra });
+      return;
+    }
+
+    if (formData.indicador_nome === "Temperatura") {
+      const apenasDecimal = raw
+        .replace(/[^0-9.,]/g, "")
+        .replace(",", ".")
+        .replace(/(\..*)\./g, "$1")
+        .slice(0, 5);
+      setFormData({ ...formData, valor: apenasDecimal });
+      return;
+    }
+
+    // Frequência Cardíaca e Oxigenação: apenas dígitos inteiros positivos
+    const apenasInteiros = raw.replace(/\D/g, "").slice(0, 3);
+    setFormData({ ...formData, valor: apenasInteiros });
   }
 
   async function obterOuCriarIndicadorId(
@@ -128,9 +154,7 @@ export default function NovoRegistro() {
     setSucesso(false);
 
     if (!idoso || !idoso.id) {
-      setErro(
-        "Nenhum idoso ativo selecionado. Selecione um paciente no topo do dashboard."
-      );
+      setErro("Nenhum paciente ativo selecionado.");
       setSalvando(false);
       return;
     }
@@ -138,8 +162,67 @@ export default function NovoRegistro() {
     const token = localStorage.getItem("saspi_token");
     const valorLimpo = formData.valor.trim().replace(",", ".");
     const obsLimpa = formData.observacao.trim();
+
+    if (formData.indicador_nome === "Pressão Arterial") {
+      const matchPa = valorLimpo.match(/^(\d{2,3})\/(\d{2,3})$/);
+      if (!matchPa) {
+        setErro(
+          "Formato de Pressão Arterial inválido. Informe apenas números no formato Sistólica/Diastólica (Ex.: 120/80)."
+        );
+        setSalvando(false);
+        return;
+      }
+      const sist = Number(matchPa[1]);
+      const diast = Number(matchPa[2]);
+      if (sist < 50 || sist > 300 || diast < 30 || diast > 200) {
+        setErro(
+          "Valores de Pressão Arterial fora dos limites fisiológicos válidos (Ex.: 120/80)."
+        );
+        setSalvando(false);
+        return;
+      }
+    }
+
     const numeroConvertido = Number(valorLimpo);
-    const isNumerico = !Number.isNaN(numeroConvertido) && valorLimpo !== "";
+    const isNumerico =
+      formData.indicador_nome !== "Pressão Arterial" &&
+      !Number.isNaN(numeroConvertido) &&
+      valorLimpo !== "";
+
+    if (formData.indicador_nome !== "Pressão Arterial" && !isNumerico) {
+      setErro("O valor inserido é inválido. Digite apenas números.");
+      setSalvando(false);
+      return;
+    }
+
+    if (isNumerico) {
+      if (
+        formData.indicador_nome === "Frequência Cardíaca" &&
+        (numeroConvertido < 20 || numeroConvertido > 250)
+      ) {
+        setErro(
+          "A Frequência Cardíaca deve estar entre 20 e 250 bpm."
+        );
+        setSalvando(false);
+        return;
+      }
+      if (
+        formData.indicador_nome === "Oxigenação" &&
+        (numeroConvertido < 50 || numeroConvertido > 100)
+      ) {
+        setErro("A Oxigenação (SpO₂) deve estar entre 50% e 100%.");
+        setSalvando(false);
+        return;
+      }
+      if (
+        formData.indicador_nome === "Temperatura" &&
+        (numeroConvertido < 30 || numeroConvertido > 45)
+      ) {
+        setErro("A Temperatura corporal deve estar entre 30 °C e 45 °C.");
+        setSalvando(false);
+        return;
+      }
+    }
 
     try {
       const indicadorId = await obterOuCriarIndicadorId(
@@ -153,8 +236,8 @@ export default function NovoRegistro() {
           ? obsLimpa
           : undefined
         : obsLimpa.length > 0
-          ? `${formData.valor.trim()} (${obsLimpa})`
-          : formData.valor.trim();
+          ? `${valorLimpo} (${obsLimpa})`
+          : valorLimpo;
 
       const payload: Record<string, any> = {
         idoso_id: idoso.id,
@@ -181,11 +264,11 @@ export default function NovoRegistro() {
           ? errData.message.join(", ")
           : errData?.message;
         throw new Error(
-          msg ||
-            `Erro ${res.status}: Não foi possível registrar o sinal vital.`
+          msg || `Erro ${res.status}: Não foi possível registrar o sinal vital.`
         );
       }
 
+      window.dispatchEvent(new Event("saspi_elderly_updated"));
       setSucesso(true);
       setTimeout(() => {
         router.push("/dashboard/historico");
@@ -203,9 +286,7 @@ export default function NovoRegistro() {
         <DashboardNavbar />
         <div className="mx-auto max-w-4xl px-4 py-16 text-center text-gray-500">
           <Loader2 size={24} className="mx-auto animate-spin text-[#1565C0]" />
-          <p className="mt-2 text-sm font-medium">
-            Validando permissões de acesso...
-          </p>
+          <p className="mt-2 text-sm font-medium">Validando permissões...</p>
         </div>
       </main>
     );
@@ -223,16 +304,15 @@ export default function NovoRegistro() {
             Modo Somente Leitura
           </h1>
           <p className="mt-2 text-sm text-gray-600">
-            O perfil Familiar é dedicado ao acompanhamento remoto e visualização
-            do prontuário, não permitindo a inserção de aferições clínicas.
+            O perfil Familiar é dedicado ao acompanhamento remoto e
+            visualização, não permitindo a inserção de aferições clínicas.
           </p>
           <div className="mt-6">
             <Link
               href="/dashboard/historico"
               className="inline-flex items-center gap-2 rounded-xl bg-[#1565C0] px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#0A2540]"
             >
-              <ArrowLeft size={16} />
-              Voltar para o Histórico
+              <ArrowLeft size={16} /> Voltar para o Histórico
             </Link>
           </div>
         </div>
@@ -249,23 +329,16 @@ export default function NovoRegistro() {
           href="/dashboard/historico"
           className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-[#1565C0]"
         >
-          <ArrowLeft size={17} />
-          Voltar para o histórico
+          <ArrowLeft size={17} /> Voltar para o histórico
         </Link>
 
         <div className="mt-8">
           <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
             Registro de saúde
           </span>
-
           <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0A2540] md:text-4xl">
             Novo registro de saúde
           </h1>
-
-          <p className="mt-2 max-w-2xl text-gray-600">
-            Adicione manualmente uma nova aferição para manter a linha de
-            evolução e os gráficos atualizados.
-          </p>
         </div>
 
         {erro && (
@@ -280,7 +353,6 @@ export default function NovoRegistro() {
             <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
             <p className="text-sm font-medium">
               Sinal vital gravado com sucesso no banco de dados!
-              Redirecionando...
             </p>
           </div>
         )}
@@ -292,7 +364,7 @@ export default function NovoRegistro() {
             </div>
             <div>
               <span className="text-xs font-semibold uppercase tracking-wider text-[#1565C0]">
-                Aferição vinculada ao paciente:
+                Paciente:
               </span>
               <p className="text-sm font-bold">
                 {idoso.nome} ({idoso.idade} anos)
@@ -307,27 +379,19 @@ export default function NovoRegistro() {
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#E8F1FB] text-[#1565C0]">
                 <HeartPulse size={22} />
               </div>
-
               <div>
                 <h2 className="font-semibold text-[#0A2540]">
-                  Informações do indicador
+                  Informações da Aferição
                 </h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  Informe qual sinal vital foi aferido na rotina de cuidados.
-                </p>
               </div>
             </div>
 
             <div className="mt-6 grid gap-5 md:grid-cols-2">
               <div className="md:col-span-2">
-                <label
-                  htmlFor="indicador"
-                  className="mb-2 block text-sm font-medium text-[#0A2540]"
-                >
+                <label className="mb-2 block text-sm font-medium text-[#0A2540]">
                   Indicador de saúde *
                 </label>
                 <select
-                  id="indicador"
                   value={formData.indicador_nome}
                   onChange={(e) => handleIndicadorChange(e.target.value)}
                   className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
@@ -342,20 +406,19 @@ export default function NovoRegistro() {
               </div>
 
               <div>
-                <label
-                  htmlFor="valor"
-                  className="mb-2 block text-sm font-medium text-[#0A2540]"
-                >
+                <label className="mb-2 block text-sm font-medium text-[#0A2540]">
                   Valor aferido *
                 </label>
                 <input
-                  id="valor"
                   type="text"
+                  inputMode={
+                    formData.indicador_nome === "Temperatura"
+                      ? "decimal"
+                      : "numeric"
+                  }
                   required
                   value={formData.valor}
-                  onChange={(e) =>
-                    setFormData({ ...formData, valor: e.target.value })
-                  }
+                  onChange={(e) => handleValorChange(e.target.value)}
                   placeholder={
                     formData.indicador_nome === "Pressão Arterial"
                       ? "Ex.: 120/80"
@@ -368,14 +431,10 @@ export default function NovoRegistro() {
               </div>
 
               <div>
-                <label
-                  htmlFor="unidade"
-                  className="mb-2 block text-sm font-medium text-[#0A2540]"
-                >
-                  Unidade de medida
+                <label className="mb-2 block text-sm font-medium text-[#0A2540]">
+                  Unidade
                 </label>
                 <input
-                  id="unidade"
                   type="text"
                   readOnly
                   value={formData.unidade}
@@ -384,14 +443,10 @@ export default function NovoRegistro() {
               </div>
 
               <div className="md:col-span-2">
-                <label
-                  htmlFor="observacao"
-                  className="mb-2 block text-sm font-medium text-[#0A2540]"
-                >
+                <label className="mb-2 block text-sm font-medium text-[#0A2540]">
                   Observações clínicas
                 </label>
                 <textarea
-                  id="observacao"
                   rows={4}
                   value={formData.observacao}
                   onChange={(e) =>
@@ -404,20 +459,6 @@ export default function NovoRegistro() {
             </div>
           </section>
 
-          <div className="rounded-2xl border border-[#DCEAF8] bg-[#F8FBFE] p-5">
-            <div className="flex gap-3">
-              <ClipboardList
-                size={20}
-                className="mt-0.5 shrink-0 text-[#1565C0]"
-              />
-              <p className="text-sm leading-relaxed text-gray-600">
-                Este registro será gravado permanentemente na base de dados com
-                identificação de autor e data/hora (RN05), unificando-se aos
-                dados coletados via dispositivos vestíveis (RN07).
-              </p>
-            </div>
-          </div>
-
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
             <Link
               href="/dashboard/historico"
@@ -425,18 +466,17 @@ export default function NovoRegistro() {
             >
               Cancelar
             </Link>
-
             <button
               type="submit"
               disabled={salvando || !idoso}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-6 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0A2540] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-6 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md disabled:opacity-70"
             >
               {salvando ? (
                 <Loader2 size={18} className="animate-spin" />
               ) : (
                 <Save size={18} />
               )}
-              {salvando ? "Gravando no banco..." : "Salvar registro"}
+              Salvar registro
             </button>
           </div>
         </form>
