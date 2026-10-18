@@ -7,8 +7,9 @@ export class CreatePrescricaoDto {
   @IsUUID()
   medicamento_id: string;
 
+  @IsOptional()
   @IsUUID()
-  usuario_id: string;
+  usuario_id?: string;
 
   @IsOptional()
   @IsString()

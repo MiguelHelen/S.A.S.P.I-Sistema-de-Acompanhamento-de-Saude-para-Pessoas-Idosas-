@@ -1,18 +1,29 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ForbiddenException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class PrescricaoService {
   constructor(private prisma: PrismaService) {}
 
-  private async validarAcesso(idosoId: string, authId: string, operacao: 'leitura' | 'escrita') {
+  private async validarAcesso(
+    idosoId: string,
+    authId: string,
+    operacao: 'leitura' | 'escrita',
+  ) {
     const usuarioLogado = await this.prisma.usuario.findUnique({
       where: { auth_id: authId },
     });
     if (!usuarioLogado) throw new ForbiddenException('Usuário inválido.');
 
     if (usuarioLogado.perfil === 'ADMINISTRADOR' && operacao === 'escrita') {
-      throw new ForbiddenException('Administradores não podem registrar prescrições clínicas.');
+      throw new ForbiddenException(
+        'Administradores não podem registrar prescrições clínicas.',
+      );
     }
 
     if (usuarioLogado.perfil !== 'ADMINISTRADOR') {
@@ -20,7 +31,9 @@ export class PrescricaoService {
         where: { usuario_id: usuarioLogado.id, idoso_id: idosoId },
       });
       if (!vinculo) {
-        throw new ForbiddenException('Acesso negado: você não tem vínculo com este paciente.');
+        throw new ForbiddenException(
+          'Acesso negado: você não tem vínculo com este paciente.',
+        );
       }
     }
 
@@ -34,7 +47,22 @@ export class PrescricaoService {
   }
 
   async create(data: any, authId: string) {
-    const autorValidado = await this.validarAcesso(data.idoso_id, authId, 'escrita');
+    const autorValidado = await this.validarAcesso(
+      data.idoso_id,
+      authId,
+      'escrita',
+    );
+
+    const dataInicio = data.data_inicio
+      ? new Date(data.data_inicio)
+      : new Date();
+    const dataFim = data.data_fim ? new Date(data.data_fim) : undefined;
+
+    if (dataFim && dataFim < dataInicio) {
+      throw new BadRequestException(
+        'A data de término da prescrição não pode ser anterior à data de início.',
+      );
+    }
 
     return this.prisma.prescricao.create({
       data: {
@@ -44,8 +72,8 @@ export class PrescricaoService {
         dosagem: data.dosagem,
         frequencia: data.frequencia,
         status: data.status || 'ATIVA',
-        data_inicio: data.data_inicio ? new Date(data.data_inicio) : undefined,
-        data_fim: data.data_fim ? new Date(data.data_fim) : undefined,
+        data_inicio: data.data_inicio ? dataInicio : undefined,
+        data_fim: dataFim,
       },
       include: { medicamento: true, usuario: true },
     });
@@ -83,7 +111,9 @@ export class PrescricaoService {
   }
 
   async encerrar(id: string, authId: string) {
-    const prescricao = await this.prisma.prescricao.findUnique({ where: { id } });
+    const prescricao = await this.prisma.prescricao.findUnique({
+      where: { id },
+    });
     if (!prescricao) throw new NotFoundException('Prescrição não encontrada');
 
     await this.validarAcesso(prescricao.idoso_id, authId, 'escrita');
