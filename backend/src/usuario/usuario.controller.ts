@@ -8,6 +8,7 @@ import {
   Param,
   Query,
   UseGuards,
+  Request,
 } from '@nestjs/common';
 import { UsuarioService } from './usuario.service';
 import { AuthGuard } from '../auth/auth.guard';
@@ -20,8 +21,8 @@ export class UsuarioController {
   constructor(private readonly usuarioService: UsuarioService) {}
 
   @Post()
-  create(@Body() body: CreateUsuarioDto) {
-    return this.usuarioService.create(body);
+  create(@Body() body: CreateUsuarioDto, @Request() req: any) {
+    return this.usuarioService.create(body, req.user.id);
   }
 
   @Get()
@@ -38,12 +39,16 @@ export class UsuarioController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: UpdateUsuarioDto) {
-    return this.usuarioService.update(id, body);
+  update(
+    @Param('id') id: string,
+    @Body() body: UpdateUsuarioDto,
+    @Request() req: any,
+  ) {
+    return this.usuarioService.update(id, body, req.user.id);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.usuarioService.remove(id);
+  remove(@Param('id') id: string, @Request() req: any) {
+    return this.usuarioService.remove(id, req.user.id);
   }
 }

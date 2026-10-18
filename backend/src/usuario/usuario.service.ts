@@ -3,7 +3,8 @@ import {
   ConflictException,
   BadRequestException,
   NotFoundException,
-  InternalServerErrorException
+  ForbiddenException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SupabaseService } from '../supabase/supabase.service';
@@ -15,15 +16,32 @@ export class UsuarioService {
     private supabase: SupabaseService,
   ) {}
 
-  async create(dto: {
-    nome: string;
-    email: string;
-    senha: string;
-    cpf?: string;
-    telefone?: string;
-    perfil: string;
-    clinica_id: string;
-  }) {
+  private async obterUsuarioLogado(authId?: string) {
+    if (!authId) return null;
+    return this.prisma.usuario.findUnique({
+      where: { auth_id: authId },
+    });
+  }
+
+  async create(
+    dto: {
+      nome: string;
+      email: string;
+      senha: string;
+      cpf?: string;
+      telefone?: string;
+      perfil: string;
+      clinica_id: string;
+    },
+    authId?: string,
+  ) {
+    const solicitante = await this.obterUsuarioLogado(authId);
+    if (solicitante && solicitante.perfil !== 'ADMINISTRADOR') {
+      throw new ForbiddenException(
+        'Apenas Administradores podem cadastrar novos usuários na instituição.',
+      );
+    }
+
     const emailLimpo = dto.email.trim().toLowerCase();
     const cpfLimpo = dto.cpf ? dto.cpf.replace(/\D/g, '') : undefined;
 
@@ -31,15 +49,20 @@ export class UsuarioService {
       throw new BadRequestException('O CPF informado deve conter 11 digitos.');
     }
 
-    const emailExistente = await this.prisma.usuario.findUnique({ where: { email: emailLimpo } });
-    if (emailExistente) throw new ConflictException('Este e-mail ja esta cadastrado no sistema.');
+    const emailExistente = await this.prisma.usuario.findUnique({
+      where: { email: emailLimpo },
+    });
+    if (emailExistente)
+      throw new ConflictException('Este e-mail ja esta cadastrado no sistema.');
 
     if (cpfLimpo) {
-      const cpfExistente = await this.prisma.usuario.findUnique({ where: { cpf: cpfLimpo } });
-      if (cpfExistente) throw new ConflictException('Este CPF ja esta cadastrado no sistema.');
+      const cpfExistente = await this.prisma.usuario.findUnique({
+        where: { cpf: cpfLimpo },
+      });
+      if (cpfExistente)
+        throw new ConflictException('Este CPF ja esta cadastrado no sistema.');
     }
 
-    // Passo 1: Criação no Supabase Auth
     const { data, error } = await this.supabase.client.auth.admin.createUser({
       email: emailLimpo,
       password: dto.senha,
@@ -47,12 +70,13 @@ export class UsuarioService {
     });
 
     if (error) {
-      throw new BadRequestException(`Falha ao criar credencial de acesso: ${error.message}`);
+      throw new BadRequestException(
+        `Falha ao criar credencial de acesso: ${error.message}`,
+      );
     }
 
     const newAuthId = data.user.id;
 
-    // Passo 2: Gravação no Banco de Negócio com Rollback manual
     try {
       return await this.prisma.usuario.create({
         data: {
@@ -65,10 +89,13 @@ export class UsuarioService {
           clinica_id: dto.clinica_id,
         },
       });
-    } catch (dbError) {
-      // ROLLBACK: Se o Prisma falhou, apaga o usuário do Supabase para evitar sujeira/fantasmas
-      await this.supabase.client.auth.admin.deleteUser(newAuthId).catch(() => null);
-      throw new InternalServerErrorException('Falha ao gravar no banco. Criação desfeita.');
+    } catch {
+      await this.supabase.client.auth.admin
+        .deleteUser(newAuthId)
+        .catch(() => null);
+      throw new InternalServerErrorException(
+        'Falha ao gravar no banco. Criação desfeita.',
+      );
     }
   }
 
@@ -95,10 +122,30 @@ export class UsuarioService {
       telefone?: string;
       perfil?: string;
     },
+    authId?: string,
   ) {
     const atual = await this.prisma.usuario.findUnique({ where: { id } });
     if (!atual) {
       throw new NotFoundException('Usuario nao encontrado.');
+    }
+
+    const solicitante = await this.obterUsuarioLogado(authId);
+    const isAdmin = solicitante?.perfil === 'ADMINISTRADOR';
+
+    if (solicitante && !isAdmin && solicitante.id !== id) {
+      throw new ForbiddenException(
+        'Você só possui permissão para editar os seus próprios dados de perfil.',
+      );
+    }
+
+    if (
+      data.perfil !== undefined &&
+      data.perfil !== atual.perfil &&
+      !isAdmin
+    ) {
+      throw new ForbiddenException(
+        'Apenas Administradores podem alterar o nível de acesso (perfil) de um usuário.',
+      );
     }
 
     const cpfLimpo =
@@ -132,23 +179,43 @@ export class UsuarioService {
               ? data.telefone.replace(/\D/g, '')
               : null,
         }),
-        ...(data.perfil !== undefined && { perfil: data.perfil as any }),
+        ...(isAdmin &&
+          data.perfil !== undefined && { perfil: data.perfil as any }),
       },
     });
   }
 
-  async remove(id: string) {
+  async remove(id: string, authId?: string) {
+    const solicitante = await this.obterUsuarioLogado(authId);
+    if (solicitante && solicitante.perfil !== 'ADMINISTRADOR') {
+      throw new ForbiddenException(
+        'Apenas Administradores podem remover usuários do sistema.',
+      );
+    }
+
     const atual = await this.prisma.usuario.findUnique({ where: { id } });
     if (!atual) {
       throw new NotFoundException('Usuario nao encontrado.');
     }
 
-    // Primeiro tenta deletar a regra de negócio (se falhar pela FK constraint, o Auth fica intacto)
+    // RN08: Verifica se o profissional possui registros clínicos vinculados
+    const [qtdPrescricoes, qtdRegistros] = await Promise.all([
+      this.prisma.prescricao.count({ where: { usuario_id: id } }),
+      this.prisma.registro_saude.count({ where: { usuario_id: id } }),
+    ]);
+
+    if (qtdPrescricoes > 0 || qtdRegistros > 0) {
+      throw new ConflictException(
+        'Não é possível excluir este usuário pois ele possui prescrições ou registros clínicos vinculados no prontuário (RN08).',
+      );
+    }
+
     await this.prisma.usuario.delete({ where: { id } });
 
-    // Se passou do Prisma, a deleção é concluída tirando do Supabase
     if (atual.auth_id) {
-      await this.supabase.client.auth.admin.deleteUser(atual.auth_id).catch(() => null);
+      await this.supabase.client.auth.admin
+        .deleteUser(atual.auth_id)
+        .catch(() => null);
     }
 
     return { deleted: true };

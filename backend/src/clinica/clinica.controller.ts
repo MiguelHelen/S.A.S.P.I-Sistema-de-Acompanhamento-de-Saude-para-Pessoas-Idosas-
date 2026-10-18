@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Put, Body, Param, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Body,
+  Param,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
 import { ClinicaService } from './clinica.service';
 import { AuthGuard } from '../auth/auth.guard';
 import { CreateClinicaDto } from './dto/create-clinica.dto';
@@ -25,7 +34,11 @@ export class ClinicaController {
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() body: UpdateClinicaDto) {
-    return this.clinicaService.update(id, body);
+  update(
+    @Param('id') id: string,
+    @Body() body: UpdateClinicaDto,
+    @Request() req: any,
+  ) {
+    return this.clinicaService.update(id, body, req.user.id);
   }
 }
