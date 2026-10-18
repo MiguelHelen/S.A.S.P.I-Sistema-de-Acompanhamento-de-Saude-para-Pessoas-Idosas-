@@ -23,6 +23,8 @@ import {
   Bell,
   AlertTriangle,
   UserCheck,
+  Menu,
+  X,
 } from "lucide-react";
 
 interface UsuarioLogado {
@@ -79,6 +81,7 @@ export default function DashboardNavbar() {
   const router = useRouter();
   const [dropdownAberto, setDropdownAberto] = useState(false);
   const [notificacoesAbertas, setNotificacoesAbertas] = useState(false);
+  const [menuMobileAberto, setMenuMobileAberto] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
 
@@ -175,7 +178,6 @@ export default function DashboardNavbar() {
         return;
       }
 
-      // 1. Notificações de sinais vitais fora do padrão para o paciente ativo
       const activeElderlyRaw = localStorage.getItem("saspi_active_elderly");
       let idosoAtivo: { id?: string; nome?: string } | null = null;
       if (activeElderlyRaw) {
@@ -265,7 +267,6 @@ export default function DashboardNavbar() {
         }
       }
 
-      // 2. Notificações de vínculo atribuído pela Administração ao usuário logado
       const resMeusVinculos = await fetch(
         `${API_URL}/usuario-idoso/usuario/${userId}`,
         { headers }
@@ -663,8 +664,50 @@ export default function DashboardNavbar() {
               </div>
             )}
           </div>
+
+          {/* BOTÃO HAMBÚRGUER PARA NAVEGAÇÃO MOBILE (RNF04) */}
+          <button
+            type="button"
+            onClick={() => setMenuMobileAberto((prev) => !prev)}
+            aria-label={menuMobileAberto ? "Fechar menu de navegação" : "Abrir menu de navegação"}
+            aria-expanded={menuMobileAberto}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-100 bg-gray-50/70 text-[#0A2540] transition hover:bg-[#E8F1FB] hover:text-[#1565C0] md:hidden"
+          >
+            {menuMobileAberto ? <X size={20} /> : <Menu size={20} />}
+          </button>
         </div>
       </div>
+
+      {/* MENU DE NAVEGAÇÃO MOBILE RECOLHÍVEL */}
+      {menuMobileAberto && (
+        <div className="border-t border-gray-100 bg-white px-4 py-3 shadow-sm md:hidden">
+          <nav className="flex flex-col gap-1">
+            {navLinksAtivos.map((link) => {
+              const Icon = link.icon;
+              const ativo =
+                link.href === "/dashboard"
+                  ? pathname === "/dashboard"
+                  : pathname.startsWith(link.href);
+
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMenuMobileAberto(false)}
+                  className={`flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-sm font-medium transition ${
+                    ativo
+                      ? "bg-[#E8F1FB] text-[#1565C0]"
+                      : "text-gray-600 hover:bg-gray-50 hover:text-[#0A2540]"
+                  }`}
+                >
+                  <Icon size={17} />
+                  {link.label}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+      )}
     </header>
   );
 }
