@@ -108,7 +108,6 @@ export default function HistoricoPage() {
                 ? "Smartband (Automático)"
                 : "Registro Manual");
 
-            // AVALIAÇÃO DE CORES DA TIMELINE (Novo)
             let tagAvaliacao: "normal" | "warning" | "critical" | "neutral" = "neutral";
             const valParaAvaliar = item.valor_categorico || String(item.valor_numerico || "");
             const nomeLow = String(nomeIndicador).toLowerCase();
@@ -344,14 +343,12 @@ export default function HistoricoPage() {
                 const iconBgClass = 
                   evento.tone === "critical" ? "bg-red-100 text-red-700" :
                   evento.tone === "warning" ? "bg-amber-100 text-amber-700" :
-                  evento.tone === "normal" ? "bg-emerald-50 text-emerald-700" :
-                  evento.tipo === "medicamento" ? "bg-[#E6F4EF] text-[#26A69A]" :
-                  "bg-[#E8F1FB] text-[#1565C0]";
+                  "bg-gray-50 text-gray-600 border border-gray-200"; // Modificado para Normal/Neutral
 
                 const borderClass = 
                   evento.tone === "critical" ? "border-red-200 bg-red-50/30 hover:border-red-300" :
                   evento.tone === "warning" ? "border-amber-200 bg-amber-50/30 hover:border-amber-300" :
-                  "border-gray-100 bg-[#FAFCFE] hover:border-[#BFD8F2] hover:bg-white";
+                  "border-gray-200 bg-white hover:border-[#BFD8F2] hover:bg-gray-50"; // Fundo branco clássico
 
                 return (
                   <li
