@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { UserCheck, Users, Loader2, AlertCircle } from "lucide-react";
+import { Users, Loader2, AlertCircle } from "lucide-react";
 
 export interface Idoso {
   id: string;
@@ -76,7 +76,6 @@ export default function PatientSelector({
     }
 
     try {
-      // Busca direta na rota de vinculos do usuario que ja traz include: { idoso: true }
       const resVinculos = await fetch(
         `${API_URL}/usuario-idoso/usuario/${userId}`,
         {
@@ -196,12 +195,24 @@ export default function PatientSelector({
     <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm md:p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#E8F1FB] text-[#1565C0]">
-            <Users size={22} />
-          </div>
+          {ativo ? (
+            <img
+              src={`https://ui-avatars.com/api/?name=${encodeURIComponent(
+                ativo.nome
+              )}&background=1565C0&color=fff&size=96&bold=true`}
+              alt={`Foto de ${ativo.nome}`}
+              className="h-12 w-12 shrink-0 rounded-full object-cover shadow-sm ring-2 ring-[#E8F1FB]"
+            />
+          ) : (
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#E8F1FB] text-[#1565C0]">
+              <Users size={22} />
+            </div>
+          )}
           <div>
             <h2 className="text-base font-semibold text-[#0A2540]">
-              Paciente em Acompanhamento
+              {ativo
+                ? `Paciente em Acompanhamento: ${ativo.nome}`
+                : "Paciente em Acompanhamento"}
             </h2>
             <p className="text-sm text-gray-500">
               {isFamiliarUnico
@@ -227,8 +238,14 @@ export default function PatientSelector({
             </p>
           </div>
         ) : isFamiliarUnico && ativo ? (
-          <div className="inline-flex items-center gap-2.5 rounded-xl bg-[#1565C0] px-4 py-2.5 text-sm font-medium text-white shadow-sm">
-            <UserCheck size={16} className="text-white" />
+          <div className="inline-flex items-center gap-2.5 rounded-xl bg-[#1565C0] py-2 pl-2.5 pr-4 text-sm font-medium text-white shadow-sm">
+            <img
+              src={`https://ui-avatars.com/api/?name=${encodeURIComponent(
+                ativo.nome
+              )}&background=ffffff&color=1565C0&size=64&bold=true`}
+              alt={ativo.nome}
+              className="h-6 w-6 rounded-full"
+            />
             <span>{ativo.nome}</span>
             {ativo.idade > 0 && (
               <span className="text-xs text-blue-100">
@@ -245,15 +262,20 @@ export default function PatientSelector({
                   key={idoso.id}
                   type="button"
                   onClick={() => handleSelect(idoso)}
-                  className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition ${
+                  className={`inline-flex items-center gap-2.5 rounded-xl py-2 pl-2.5 pr-4 text-sm font-medium transition ${
                     isSelected
                       ? "bg-[#1565C0] text-white shadow-sm ring-2 ring-[#1565C0]/20"
                       : "border border-gray-200 bg-gray-50 text-gray-700 hover:border-blue-200 hover:bg-[#F2F7FB]"
                   }`}
                 >
-                  <UserCheck
-                    size={16}
-                    className={isSelected ? "text-white" : "text-gray-400"}
+                  <img
+                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(
+                      idoso.nome
+                    )}&background=${
+                      isSelected ? "ffffff" : "E8F1FB"
+                    }&color=1565C0&size=64&bold=true`}
+                    alt={idoso.nome}
+                    className="h-6 w-6 rounded-full"
                   />
                   <span>{idoso.nome}</span>
                   {idoso.idade > 0 && (
