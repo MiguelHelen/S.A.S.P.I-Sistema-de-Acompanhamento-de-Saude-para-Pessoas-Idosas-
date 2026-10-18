@@ -24,13 +24,9 @@ export class PrescricaoService {
       }
     }
 
-    if (
-      operacao === 'escrita' &&
-      usuarioLogado.perfil !== 'MEDICO' &&
-      usuarioLogado.perfil !== 'ENFERMEIRO'
-    ) {
+    if (operacao === 'escrita' && usuarioLogado.perfil !== 'MEDICO') {
       throw new ForbiddenException(
-        'Apenas Médicos e Enfermeiros possuem permissão para registrar prescrições.',
+        'Apenas Médicos possuem permissão clínica para registrar ou encerrar prescrições de medicamentos.',
       );
     }
 
