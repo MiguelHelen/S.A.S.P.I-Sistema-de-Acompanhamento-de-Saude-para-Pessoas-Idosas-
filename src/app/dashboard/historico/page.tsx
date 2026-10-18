@@ -21,6 +21,7 @@ interface EventoHistorico {
   descricao: string;
   dataHora: string;
   autor: string;
+  timestamp: number;
 }
 
 const API_URL =
@@ -67,6 +68,7 @@ export default function HistoricoPage() {
           .filter((item: any) => !item.idoso_id || item.idoso_id === idosoId)
           .forEach((item: any) => {
             const rawDate = item.data_hora || item.created_at;
+            const parsedTime = rawDate ? new Date(rawDate).getTime() : 0;
             const dataFormatada = rawDate
               ? new Date(rawDate).toLocaleString("pt-BR", {
                   dateStyle: "short",
@@ -107,6 +109,7 @@ export default function HistoricoPage() {
               descricao: `${valorPrincipal}${complemento}`,
               dataHora: dataFormatada,
               autor: autorFormatado,
+              timestamp: Number.isNaN(parsedTime) ? 0 : parsedTime,
             });
           });
       }
@@ -120,6 +123,9 @@ export default function HistoricoPage() {
         arrPresc
           .filter((p: any) => !p.idoso_id || p.idoso_id === idosoId)
           .forEach((p: any) => {
+            const parsedTime = p.data_inicio
+              ? new Date(p.data_inicio).getTime()
+              : 0;
             const dataFormatada = p.data_inicio
               ? new Date(p.data_inicio).toLocaleDateString("pt-BR", {
                   timeZone: "UTC",
@@ -133,6 +139,7 @@ export default function HistoricoPage() {
               descricao: `${p.dosagem || ""} • ${p.frequencia || "Uso contínuo"}`,
               dataHora: dataFormatada,
               autor: p.usuario?.nome || "Equipe Médica",
+              timestamp: Number.isNaN(parsedTime) ? 0 : parsedTime,
             });
           });
       }
@@ -146,6 +153,8 @@ export default function HistoricoPage() {
         arrCons
           .filter((c: any) => !c.idoso_id || c.idoso_id === idosoId)
           .forEach((c: any) => {
+            const rawIso = c.created_at || c.data;
+            const parsedTime = rawIso ? new Date(rawIso).getTime() : 0;
             const dataFormatada = c.data
               ? `${new Date(c.data).toLocaleDateString("pt-BR", { timeZone: "UTC" })} às ${c.horario || ""}`
               : "Consulta agendada";
@@ -157,10 +166,13 @@ export default function HistoricoPage() {
               descricao: `${c.localizacao || ""} • Status: ${c.status || "Agendada"}`,
               dataHora: dataFormatada,
               autor: c.medico || "Médico Responsável",
+              timestamp: Number.isNaN(parsedTime) ? 0 : parsedTime,
             });
           });
       }
 
+      // Ordena cronologicamente do evento mais recente para o mais antigo
+      eventosUnificados.sort((a, b) => b.timestamp - a.timestamp);
       setEventos(eventosUnificados);
     } catch {
       setEventos([]);
