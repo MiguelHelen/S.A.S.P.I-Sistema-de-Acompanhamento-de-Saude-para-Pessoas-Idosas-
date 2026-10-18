@@ -355,7 +355,7 @@ export default function NovoIdoso() {
                   htmlFor="cpf"
                   className="mb-2 block text-sm font-medium text-[#0A2540]"
                 >
-                  CPF (opcional, 11 dígitos numéricos)
+                  CPF (11 dígitos numéricos) *
                 </label>
                 <div className="relative">
                   <IdCard
@@ -365,6 +365,7 @@ export default function NovoIdoso() {
                   <input
                     id="cpf"
                     type="text"
+                    required 
                     inputMode="numeric"
                     maxLength={11}
                     value={formData.cpf}
@@ -436,7 +437,7 @@ export default function NovoIdoso() {
                   htmlFor="telefone"
                   className="mb-2 block text-sm font-medium text-[#0A2540]"
                 >
-                  Telefone / Contato do Responsável (com DDD)
+                  Telefone / Contato do Responsável (com DDD) *
                 </label>
                 <div className="relative">
                   <Phone
@@ -446,6 +447,7 @@ export default function NovoIdoso() {
                   <input
                     id="telefone"
                     type="tel"
+                    required
                     inputMode="numeric"
                     maxLength={11}
                     value={formData.telefone}
