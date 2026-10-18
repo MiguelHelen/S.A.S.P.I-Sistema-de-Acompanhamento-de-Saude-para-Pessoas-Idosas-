@@ -23,7 +23,14 @@ export const metadata: Metadata = {
   title: "S.A.S.P.I. | Sistema de Acompanhamento de Saúde",
   description:
     "Plataforma digital integrada para organização de rotinas, histórico clínico e cuidado compartilhado da saúde de pessoas idosas.",
-  keywords: ["saúde", "idosos", "acompanhamento", "prontuário", "telemetria", "cuidado"],
+  keywords: [
+    "saúde",
+    "idosos",
+    "acompanhamento",
+    "prontuário",
+    "telemetria",
+    "cuidado",
+  ],
   authors: [{ name: "Equipe S.A.S.P.I." }],
   openGraph: {
     title: "S.A.S.P.I. | Cuidado Inteligente",
@@ -44,6 +51,7 @@ export default function RootLayout({
     <html
       lang="pt-BR"
       suppressHydrationWarning
+      data-scroll-behavior="smooth"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased scroll-smooth`}
     >
       <body className="flex min-h-full flex-col bg-white text-gray-900 selection:bg-[#1565C0] selection:text-white">
