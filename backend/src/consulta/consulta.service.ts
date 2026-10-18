@@ -7,18 +7,26 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateConsultaDto } from './dto/create-consulta.dto';
 
+const STATUS_VALIDOS = ['Agendada', 'Confirmada', 'Realizada', 'Cancelada'];
+
 @Injectable()
 export class ConsultaService {
   constructor(private prisma: PrismaService) {}
 
-  private async validarAcesso(idosoId: string, authId: string, operacao: 'leitura' | 'escrita') {
+  private async validarAcesso(
+    idosoId: string,
+    authId: string,
+    operacao: 'leitura' | 'escrita',
+  ) {
     const usuarioLogado = await this.prisma.usuario.findUnique({
       where: { auth_id: authId },
     });
     if (!usuarioLogado) throw new ForbiddenException('Usuário inválido.');
 
     if (usuarioLogado.perfil === 'ADMINISTRADOR' && operacao === 'escrita') {
-      throw new ForbiddenException('Administradores não podem agendar consultas clínicas.');
+      throw new ForbiddenException(
+        'Administradores não podem agendar ou alterar consultas clínicas.',
+      );
     }
 
     if (usuarioLogado.perfil !== 'ADMINISTRADOR') {
@@ -31,7 +39,9 @@ export class ConsultaService {
     }
 
     if (operacao === 'escrita' && usuarioLogado.perfil === 'FAMILIAR') {
-      throw new ForbiddenException('Familiares possuem permissão apenas de leitura.');
+      throw new ForbiddenException(
+        'Familiares possuem permissão apenas de leitura.',
+      );
     }
 
     return usuarioLogado;
@@ -42,7 +52,11 @@ export class ConsultaService {
       throw new BadRequestException('ID do paciente obrigatório.');
     }
 
-    const autorValidado = await this.validarAcesso(dto.idoso_id, authId, 'escrita');
+    const autorValidado = await this.validarAcesso(
+      dto.idoso_id,
+      authId,
+      'escrita',
+    );
 
     const rows = await this.prisma.$queryRawUnsafe<any[]>(
       `INSERT INTO public.consulta (idoso_id, usuario_id, especialidade, medico, data, horario, localizacao, observacao, status)
@@ -70,6 +84,12 @@ export class ConsultaService {
   }
 
   async updateStatus(id: string, status: string, authId: string) {
+    if (!STATUS_VALIDOS.includes(status)) {
+      throw new BadRequestException(
+        `Status inválido. Valores permitidos: ${STATUS_VALIDOS.join(', ')}`,
+      );
+    }
+
     const consultaCheck = await this.prisma.$queryRawUnsafe<any[]>(
       `SELECT id, idoso_id FROM public.consulta WHERE id = $1::uuid`,
       id,
@@ -99,10 +119,12 @@ export class ConsultaService {
 
     await this.validarAcesso(consultaCheck[0].idoso_id, authId, 'escrita');
 
+    // RN08 (Soft Delete): Preserva o registro no histórico marcando como Cancelada
     await this.prisma.$queryRawUnsafe(
-      `DELETE FROM public.consulta WHERE id = $1::uuid`,
+      `UPDATE public.consulta SET status = $1 WHERE id = $2::uuid`,
+      'Cancelada',
       id,
     );
-    return { deleted: true };
+    return { deleted: true, status: 'Cancelada' };
   }
 }

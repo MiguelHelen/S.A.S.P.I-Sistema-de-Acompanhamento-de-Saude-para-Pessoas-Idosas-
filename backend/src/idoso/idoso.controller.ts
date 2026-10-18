@@ -21,8 +21,8 @@ export class IdosoController {
   constructor(private readonly idosoService: IdosoService) {}
 
   @Post()
-  create(@Body() body: CreateIdosoDto) {
-    return this.idosoService.create(body);
+  create(@Body() body: CreateIdosoDto, @Request() req: any) {
+    return this.idosoService.create(body, req.user.id);
   }
 
   @Get()
@@ -37,12 +37,16 @@ export class IdosoController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: UpdateIdosoDto) {
-    return this.idosoService.update(id, body);
+  update(
+    @Param('id') id: string,
+    @Body() body: UpdateIdosoDto,
+    @Request() req: any,
+  ) {
+    return this.idosoService.update(id, body, req.user.id);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.idosoService.remove(id);
+  remove(@Param('id') id: string, @Request() req: any) {
+    return this.idosoService.remove(id, req.user.id);
   }
 }

@@ -11,6 +11,18 @@ import { PrismaService } from '../prisma/prisma.service';
 export class IdosoService {
   constructor(private prisma: PrismaService) {}
 
+  private async exigirAdministrador(authId?: string) {
+    if (!authId) return;
+    const user = await this.prisma.usuario.findUnique({
+      where: { auth_id: authId },
+    });
+    if (!user || user.perfil !== 'ADMINISTRADOR') {
+      throw new ForbiddenException(
+        'Apenas Administradores podem cadastrar, editar ou excluir pacientes da instituição.',
+      );
+    }
+  }
+
   private validarDataNascimento(dataStr: string): Date {
     const nasc = new Date(dataStr);
     const hoje = new Date();
@@ -24,15 +36,20 @@ export class IdosoService {
     return nasc;
   }
 
-  async create(data: {
-    nome: string;
-    cpf?: string;
-    data_nascimento: string;
-    sexo?: string;
-    telefone?: string;
-    endereco?: string;
-    clinica_id: string;
-  }) {
+  async create(
+    data: {
+      nome: string;
+      cpf?: string;
+      data_nascimento: string;
+      sexo?: string;
+      telefone?: string;
+      endereco?: string;
+      clinica_id: string;
+    },
+    authId?: string,
+  ) {
+    await this.exigirAdministrador(authId);
+
     const dataNascValida = this.validarDataNascimento(data.data_nascimento);
     const cpfLimpo = data.cpf ? data.cpf.replace(/\D/g, '') : undefined;
 
@@ -65,14 +82,7 @@ export class IdosoService {
   }
 
   async findAllSeguro(clinicaId: string, authId: string) {
-    const user = await this.prisma.usuario.findUnique({
-      where: { auth_id: authId },
-    });
-    if (!user || user.perfil !== 'ADMINISTRADOR') {
-      throw new ForbiddenException(
-        'Acesso restrito: apenas a gestão da clínica pode listar o diretório completo de pacientes.',
-      );
-    }
+    await this.exigirAdministrador(authId);
     return this.prisma.idoso.findMany({
       where: { clinica_id: clinicaId },
       orderBy: { nome: 'asc' },
@@ -100,7 +110,10 @@ export class IdosoService {
       telefone?: string;
       endereco?: string;
     },
+    authId?: string,
   ) {
+    await this.exigirAdministrador(authId);
+
     const atual = await this.prisma.idoso.findUnique({ where: { id } });
     if (!atual) {
       throw new NotFoundException('Paciente nao encontrado.');
@@ -150,11 +163,32 @@ export class IdosoService {
     });
   }
 
-  async remove(id: string) {
+  async remove(id: string, authId?: string) {
+    await this.exigirAdministrador(authId);
+
     const atual = await this.prisma.idoso.findUnique({ where: { id } });
     if (!atual) {
       throw new NotFoundException('Paciente nao encontrado.');
     }
+
+    // RN08: Impede exclusão física caso o paciente já possua prontuário clínico
+    const [qtdRegistros, qtdPrescricoes, rowsConsultas] = await Promise.all([
+      this.prisma.registro_saude.count({ where: { idoso_id: id } }),
+      this.prisma.prescricao.count({ where: { idoso_id: id } }),
+      this.prisma.$queryRawUnsafe<{ total: number }[]>(
+        `SELECT COUNT(*)::int AS total FROM public.consulta WHERE idoso_id = $1::uuid`,
+        id,
+      ),
+    ]);
+
+    const qtdConsultas = Number(rowsConsultas?.[0]?.total || 0);
+
+    if (qtdRegistros > 0 || qtdPrescricoes > 0 || qtdConsultas > 0) {
+      throw new ConflictException(
+        'Não é possível excluir este paciente pois ele possui registros clínicos, prescrições ou agendamentos vinculados no prontuário (RN08).',
+      );
+    }
+
     return this.prisma.idoso.delete({ where: { id } });
   }
 }
