@@ -83,6 +83,23 @@ export default function NovoUsuario() {
     const telefoneLimpo = formData.telefone.replace(/\D/g, "");
     const cpfLimpo = formData.cpf.replace(/\D/g, "");
 
+    if (cpfLimpo.length > 0 && cpfLimpo.length !== 11) {
+      setErro("O CPF informado deve conter exatamente 11 dígitos numéricos.");
+      setSalvando(false);
+      return;
+    }
+
+    if (
+      telefoneLimpo.length > 0 &&
+      (telefoneLimpo.length < 10 || telefoneLimpo.length > 11)
+    ) {
+      setErro(
+        "O telefone informado deve conter 10 ou 11 dígitos numéricos (com DDD)."
+      );
+      setSalvando(false);
+      return;
+    }
+
     const payload = {
       nome: formData.nome.trim(),
       email: emailFormatado,
@@ -94,7 +111,6 @@ export default function NovoUsuario() {
     };
 
     try {
-      // 1. Checagem preventiva para identificar se a colisão é de E-mail ou de CPF
       const resExistentes = await fetch(`${API_URL}/usuario`, {
         headers: { ...(token && { Authorization: `Bearer ${token}` }) },
       }).catch(() => null);
@@ -123,7 +139,6 @@ export default function NovoUsuario() {
         }
       }
 
-      // 2. Dispara o POST de criação
       const res = await fetch(`${API_URL}/usuario`, {
         method: "POST",
         headers: {
@@ -145,7 +160,6 @@ export default function NovoUsuario() {
 
         const msgLower = String(mensagemErro).toLowerCase();
 
-        // Como usuario.service.ts lança new Error() quando o e-mail já existe no Supabase Auth, o NestJS retorna 500
         if (
           res.status === 409 ||
           res.status === 500 ||
@@ -154,7 +168,7 @@ export default function NovoUsuario() {
           msgLower.includes("already") ||
           msgLower.includes("internal server error")
         ) {
-          throw new Error("Erro: Este e-mail já está cadastrado no sistema!");
+          throw new Error("Erro: Este e-mail ou CPF já está cadastrado no sistema!");
         }
 
         throw new Error(mensagemErro);
@@ -162,7 +176,7 @@ export default function NovoUsuario() {
 
       setSucesso(true);
       setTimeout(() => {
-        router.push("/dashboard");
+        router.push("/dashboard/usuarios");
       }, 1500);
     } catch (err: any) {
       setErro(err.message || "Erro de conexão ao salvar usuário.");
@@ -220,11 +234,11 @@ export default function NovoUsuario() {
 
       <div className="mx-auto max-w-4xl px-4 py-8 md:px-8">
         <Link
-          href="/dashboard"
+          href="/dashboard/usuarios"
           className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-[#1565C0]"
         >
           <ArrowLeft size={17} />
-          Voltar para o Dashboard
+          Voltar para lista de usuários
         </Link>
 
         <div className="mt-8">
@@ -367,7 +381,7 @@ export default function NovoUsuario() {
                   htmlFor="telefone"
                   className="mb-2 block text-sm font-medium text-[#0A2540]"
                 >
-                  Telefone
+                  Telefone (opcional, com DDD)
                 </label>
                 <div className="relative">
                   <Phone
@@ -377,11 +391,18 @@ export default function NovoUsuario() {
                   <input
                     id="telefone"
                     type="tel"
+                    inputMode="numeric"
+                    maxLength={11}
                     value={formData.telefone}
                     onChange={(e) =>
-                      setFormData({ ...formData, telefone: e.target.value })
+                      setFormData({
+                        ...formData,
+                        telefone: e.target.value
+                          .replace(/\D/g, "")
+                          .slice(0, 11),
+                      })
                     }
-                    placeholder="(11) 90000-0000"
+                    placeholder="Ex.: 11988887777"
                     className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   />
                 </div>
@@ -392,7 +413,7 @@ export default function NovoUsuario() {
                   htmlFor="cpf"
                   className="mb-2 block text-sm font-medium text-[#0A2540]"
                 >
-                  CPF
+                  CPF (opcional, 11 dígitos numéricos)
                 </label>
                 <div className="relative">
                   <IdCard
@@ -402,11 +423,16 @@ export default function NovoUsuario() {
                   <input
                     id="cpf"
                     type="text"
+                    inputMode="numeric"
+                    maxLength={11}
                     value={formData.cpf}
                     onChange={(e) =>
-                      setFormData({ ...formData, cpf: e.target.value })
+                      setFormData({
+                        ...formData,
+                        cpf: e.target.value.replace(/\D/g, "").slice(0, 11),
+                      })
                     }
-                    placeholder="000.000.000-00"
+                    placeholder="Somente números (11 dígitos)"
                     className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   />
                 </div>
@@ -455,7 +481,7 @@ export default function NovoUsuario() {
 
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
             <Link
-              href="/dashboard"
+              href="/dashboard/usuarios"
               className="rounded-xl border border-gray-300 bg-white px-6 py-3 text-center font-medium text-gray-700 transition hover:bg-gray-50"
             >
               Cancelar

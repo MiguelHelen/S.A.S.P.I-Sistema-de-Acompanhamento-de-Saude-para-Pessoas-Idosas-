@@ -107,6 +107,17 @@ export default function NovoIdoso() {
       return;
     }
 
+    if (
+      telefoneLimpo.length > 0 &&
+      (telefoneLimpo.length < 10 || telefoneLimpo.length > 11)
+    ) {
+      setErro(
+        "O telefone informado deve conter 10 ou 11 dígitos numéricos (com DDD)."
+      );
+      setSalvando(false);
+      return;
+    }
+
     const payload = {
       nome: formData.nome.trim(),
       cpf: cpfLimpo.length > 0 ? cpfLimpo : undefined,
@@ -344,7 +355,7 @@ export default function NovoIdoso() {
                   htmlFor="cpf"
                   className="mb-2 block text-sm font-medium text-[#0A2540]"
                 >
-                  CPF (opcional)
+                  CPF (opcional, 11 dígitos numéricos)
                 </label>
                 <div className="relative">
                   <IdCard
@@ -354,12 +365,16 @@ export default function NovoIdoso() {
                   <input
                     id="cpf"
                     type="text"
-                    maxLength={14}
+                    inputMode="numeric"
+                    maxLength={11}
                     value={formData.cpf}
                     onChange={(e) =>
-                      setFormData({ ...formData, cpf: e.target.value })
+                      setFormData({
+                        ...formData,
+                        cpf: e.target.value.replace(/\D/g, "").slice(0, 11),
+                      })
                     }
-                    placeholder="000.000.000-00"
+                    placeholder="Somente números (11 dígitos)"
                     className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   />
                 </div>
@@ -421,7 +436,7 @@ export default function NovoIdoso() {
                   htmlFor="telefone"
                   className="mb-2 block text-sm font-medium text-[#0A2540]"
                 >
-                  Telefone / Contato do Responsável
+                  Telefone / Contato do Responsável (com DDD)
                 </label>
                 <div className="relative">
                   <Phone
@@ -431,11 +446,18 @@ export default function NovoIdoso() {
                   <input
                     id="telefone"
                     type="tel"
+                    inputMode="numeric"
+                    maxLength={11}
                     value={formData.telefone}
                     onChange={(e) =>
-                      setFormData({ ...formData, telefone: e.target.value })
+                      setFormData({
+                        ...formData,
+                        telefone: e.target.value
+                          .replace(/\D/g, "")
+                          .slice(0, 11),
+                      })
                     }
-                    placeholder="(11) 98888-7777"
+                    placeholder="Ex.: 11988887777"
                     className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   />
                 </div>

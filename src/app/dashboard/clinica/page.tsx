@@ -86,7 +86,8 @@ export default function ClinicaPage() {
             endereco: data.endereco || "",
           });
         }
-      } catch {} finally {
+      } catch {
+      } finally {
         setCarregando(false);
       }
     }
@@ -106,6 +107,23 @@ export default function ClinicaPage() {
     const telefoneLimpo = formData.telefone.replace(/\D/g, "");
     const emailLimpo = formData.email.trim();
     const enderecoLimpo = formData.endereco.trim();
+
+    if (cnpjLimpo.length > 0 && cnpjLimpo.length !== 14) {
+      setErro("O CNPJ informado deve conter exatamente 14 dígitos numéricos.");
+      setSalvando(false);
+      return;
+    }
+
+    if (
+      telefoneLimpo.length > 0 &&
+      (telefoneLimpo.length < 10 || telefoneLimpo.length > 11)
+    ) {
+      setErro(
+        "O telefone institucional deve conter 10 ou 11 dígitos numéricos (com DDD)."
+      );
+      setSalvando(false);
+      return;
+    }
 
     const payload = {
       nome: formData.nome.trim(),
@@ -296,7 +314,7 @@ export default function ClinicaPage() {
                   htmlFor="cnpj"
                   className="mb-2 block text-sm font-medium text-[#0A2540]"
                 >
-                  CNPJ
+                  CNPJ (14 dígitos numéricos)
                 </label>
                 <div className="relative">
                   <FileText
@@ -306,11 +324,16 @@ export default function ClinicaPage() {
                   <input
                     id="cnpj"
                     type="text"
+                    inputMode="numeric"
+                    maxLength={14}
                     value={formData.cnpj}
                     onChange={(e) =>
-                      setFormData({ ...formData, cnpj: e.target.value })
+                      setFormData({
+                        ...formData,
+                        cnpj: e.target.value.replace(/\D/g, "").slice(0, 14),
+                      })
                     }
-                    placeholder="00.000.000/0001-00"
+                    placeholder="Somente números (14 dígitos)"
                     className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   />
                 </div>
@@ -321,7 +344,7 @@ export default function ClinicaPage() {
                   htmlFor="telefone"
                   className="mb-2 block text-sm font-medium text-[#0A2540]"
                 >
-                  Telefone Institucional
+                  Telefone Institucional (com DDD)
                 </label>
                 <div className="relative">
                   <Phone
@@ -331,11 +354,18 @@ export default function ClinicaPage() {
                   <input
                     id="telefone"
                     type="tel"
+                    inputMode="numeric"
+                    maxLength={11}
                     value={formData.telefone}
                     onChange={(e) =>
-                      setFormData({ ...formData, telefone: e.target.value })
+                      setFormData({
+                        ...formData,
+                        telefone: e.target.value
+                          .replace(/\D/g, "")
+                          .slice(0, 11),
+                      })
                     }
-                    placeholder="(11) 3333-4444"
+                    placeholder="Ex.: 1133334444"
                     className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   />
                 </div>
@@ -388,6 +418,10 @@ export default function ClinicaPage() {
                     placeholder="Av. Paulista, 1000 - Bela Vista, São Paulo - SP"
                     className="w-full resize-none rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   />
+                  <span className="mt-1 block text-xs text-gray-500">
+                    Insira o endereço completo (Rua, Número, CEP, Cidade e
+                    Estado).
+                  </span>
                 </div>
               </div>
             </div>

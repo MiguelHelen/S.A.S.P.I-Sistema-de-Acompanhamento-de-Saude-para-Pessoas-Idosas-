@@ -45,7 +45,7 @@ export default function GerenciarIdososPage() {
   const [erroAcao, setErroAcao] = useState("");
 
   const [idosoEditando, setIdosoEditando] = useState<IdosoRegistro | null>(
-    null,
+    null
   );
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
 
@@ -71,7 +71,7 @@ export default function GerenciarIdososPage() {
         const parsed = JSON.parse(userRaw);
         const userData = parsed.user || parsed.usuario || parsed;
         const perfil = String(
-          userData.perfil || userData.role || "",
+          userData.perfil || userData.role || ""
         ).toUpperCase();
 
         if (perfil !== "ADMINISTRADOR" && perfil !== "ADMIN") {
@@ -97,8 +97,8 @@ export default function GerenciarIdososPage() {
           const lista = Array.isArray(data) ? data : data.data || [];
           setIdosos(
             lista.filter(
-              (i: IdosoRegistro) => !i.clinica_id || i.clinica_id === clinicaId,
-            ),
+              (i: IdosoRegistro) => !i.clinica_id || i.clinica_id === clinicaId
+            )
           );
         }
       } catch {
@@ -126,7 +126,7 @@ export default function GerenciarIdososPage() {
 
     if (!dataNascStr || anoNasc < 1900 || new Date(dataNascStr) > new Date()) {
       setErroAcao(
-        "Data de nascimento inválida. Informe uma data real entre 1900 e hoje.",
+        "Data de nascimento inválida. Informe uma data real entre 1900 e hoje."
       );
       setSalvandoEdicao(false);
       return;
@@ -134,6 +134,14 @@ export default function GerenciarIdososPage() {
 
     if (cpfLimpo.length > 0 && cpfLimpo.length !== 11) {
       setErroAcao("O CPF do paciente deve conter 11 dígitos numéricos.");
+      setSalvandoEdicao(false);
+      return;
+    }
+
+    if (telLimpo.length > 0 && (telLimpo.length < 10 || telLimpo.length > 11)) {
+      setErroAcao(
+        "O telefone do paciente deve conter 10 ou 11 dígitos numéricos (com DDD)."
+      );
       setSalvandoEdicao(false);
       return;
     }
@@ -176,8 +184,8 @@ export default function GerenciarIdososPage() {
                 telefone: telLimpo || null,
                 endereco: (idosoEditando.endereco || "").trim() || null,
               }
-            : i,
-        ),
+            : i
+        )
       );
 
       setIdosoEditando(null);
@@ -215,11 +223,11 @@ export default function GerenciarIdososPage() {
           rawMsg.includes("p2003")
         ) {
           throw new Error(
-            "Não é possível excluir este paciente pois ele possui registros clínicos, prescrições ou agendamentos vinculados no prontuário.",
+            "Não é possível excluir este paciente pois ele possui registros clínicos, prescrições ou agendamentos vinculados no prontuário."
           );
         }
         throw new Error(
-          errData?.message || "Erro ao remover paciente do banco de dados.",
+          errData?.message || "Erro ao remover paciente do banco de dados."
         );
       }
 
@@ -375,20 +383,31 @@ export default function GerenciarIdososPage() {
                     const dataBr = i.data_nascimento
                       ? new Date(i.data_nascimento).toLocaleDateString(
                           "pt-BR",
-                          { timeZone: "UTC" },
+                          { timeZone: "UTC" }
                         )
                       : "--";
 
                     return (
                       <tr key={i.id} className="transition hover:bg-gray-50/50">
                         <td className="px-6 py-4">
-                          <p className="font-semibold text-[#0A2540]">
-                            {i.nome}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {i.sexo || "Não informado"} • Tel:{" "}
-                            {i.telefone || "Não informado"}
-                          </p>
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={`https://ui-avatars.com/api/?name=${encodeURIComponent(
+                                i.nome
+                              )}&background=E8F1FB&color=1565C0&size=64&bold=true`}
+                              alt={i.nome}
+                              className="h-9 w-9 shrink-0 rounded-full object-cover"
+                            />
+                            <div>
+                              <p className="font-semibold text-[#0A2540]">
+                                {i.nome}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {i.sexo || "Não informado"} • Tel:{" "}
+                                {i.telefone || "Não informado"}
+                              </p>
+                            </div>
+                          </div>
                         </td>
                         <td className="px-6 py-4">
                           <span className="font-semibold text-[#0A2540]">
@@ -528,30 +547,38 @@ export default function GerenciarIdososPage() {
                     </label>
                     <input
                       type="text"
+                      inputMode="numeric"
+                      maxLength={11}
                       value={idosoEditando.cpf || ""}
                       onChange={(e) =>
                         setIdosoEditando({
                           ...idosoEditando,
-                          cpf: e.target.value,
+                          cpf: e.target.value.replace(/\D/g, "").slice(0, 11),
                         })
                       }
+                      placeholder="Somente números"
                       className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#1565C0]"
                     />
                   </div>
 
                   <div>
                     <label className="mb-1 block text-xs font-semibold uppercase text-gray-500">
-                      Telefone
+                      Telefone (10 ou 11 dígitos)
                     </label>
                     <input
-                      type="text"
+                      type="tel"
+                      inputMode="numeric"
+                      maxLength={11}
                       value={idosoEditando.telefone || ""}
                       onChange={(e) =>
                         setIdosoEditando({
                           ...idosoEditando,
-                          telefone: e.target.value,
+                          telefone: e.target.value
+                            .replace(/\D/g, "")
+                            .slice(0, 11),
                         })
                       }
+                      placeholder="Ex.: 11988887777"
                       className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#1565C0]"
                     />
                   </div>

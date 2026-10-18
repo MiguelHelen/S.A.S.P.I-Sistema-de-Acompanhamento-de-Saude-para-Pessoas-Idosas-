@@ -136,10 +136,27 @@ export default function Perfil() {
     const telefoneLimpo = formData.telefone.replace(/\D/g, "");
     const cpfLimpo = formData.cpf.replace(/\D/g, "");
 
+    if (cpfLimpo.length > 0 && cpfLimpo.length !== 11) {
+      setErro("O CPF informado deve conter exatamente 11 dígitos numéricos.");
+      setSalvando(false);
+      return;
+    }
+
+    if (
+      telefoneLimpo.length > 0 &&
+      (telefoneLimpo.length < 10 || telefoneLimpo.length > 11)
+    ) {
+      setErro(
+        "O telefone informado deve conter 10 ou 11 dígitos numéricos (com DDD)."
+      );
+      setSalvando(false);
+      return;
+    }
+
     const payload = {
       nome: formData.nome.trim(),
-      telefone: telefoneLimpo.length > 0 ? telefoneLimpo : undefined,
-      cpf: cpfLimpo.length > 0 ? cpfLimpo : undefined,
+      telefone: telefoneLimpo,
+      cpf: cpfLimpo,
     };
 
     try {
@@ -153,7 +170,7 @@ export default function Perfil() {
           body: JSON.stringify(payload),
         });
 
-        if (!res.ok && res.status !== 404) {
+        if (!res.ok) {
           const errData = await res.json().catch(() => null);
           const msgStr = String(errData?.message || "").toLowerCase();
           if (
@@ -165,6 +182,12 @@ export default function Perfil() {
               "Erro: Este CPF já está vinculado a outro usuário no sistema!"
             );
           }
+          const msgErro = Array.isArray(errData?.message)
+            ? errData.message.join(", ")
+            : errData?.message;
+          throw new Error(
+            msgErro || "Não foi possível atualizar os dados no servidor."
+          );
         }
       }
 
@@ -245,9 +268,13 @@ export default function Perfil() {
 
         <div className="mt-8 grid gap-6 lg:grid-cols-[280px_1fr]">
           <aside className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-[#E8F1FB] text-[#1565C0]">
-              <UserRound size={36} />
-            </div>
+            <img
+              src={`https://ui-avatars.com/api/?name=${encodeURIComponent(
+                formData.nome || "Usuario"
+              )}&background=1565C0&color=fff&size=128&bold=true`}
+              alt={formData.nome}
+              className="h-20 w-20 rounded-2xl object-cover shadow-sm"
+            />
 
             <h2 className="mt-5 text-xl font-semibold text-[#0A2540]">
               {formData.nome}
@@ -299,7 +326,7 @@ export default function Perfil() {
                   htmlFor="nome"
                   className="mb-2 block text-sm font-medium text-[#0A2540]"
                 >
-                  Nome completo
+                  Nome completo *
                 </label>
                 <div className="relative">
                   <UserRound
@@ -346,7 +373,7 @@ export default function Perfil() {
                   htmlFor="telefone"
                   className="mb-2 block text-sm font-medium text-[#0A2540]"
                 >
-                  Telefone
+                  Telefone (10 ou 11 dígitos)
                 </label>
                 <div className="relative">
                   <Phone
@@ -356,11 +383,18 @@ export default function Perfil() {
                   <input
                     id="telefone"
                     type="tel"
+                    inputMode="numeric"
+                    maxLength={11}
                     value={formData.telefone}
                     onChange={(e) =>
-                      setFormData({ ...formData, telefone: e.target.value })
+                      setFormData({
+                        ...formData,
+                        telefone: e.target.value
+                          .replace(/\D/g, "")
+                          .slice(0, 11),
+                      })
                     }
-                    placeholder="(11) 90000-0000"
+                    placeholder="Ex.: 11988887777"
                     className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   />
                 </div>
@@ -371,7 +405,7 @@ export default function Perfil() {
                   htmlFor="cpf"
                   className="mb-2 block text-sm font-medium text-[#0A2540]"
                 >
-                  CPF
+                  CPF (11 dígitos numéricos)
                 </label>
                 <div className="relative">
                   <IdCard
@@ -381,11 +415,16 @@ export default function Perfil() {
                   <input
                     id="cpf"
                     type="text"
+                    inputMode="numeric"
+                    maxLength={11}
                     value={formData.cpf}
                     onChange={(e) =>
-                      setFormData({ ...formData, cpf: e.target.value })
+                      setFormData({
+                        ...formData,
+                        cpf: e.target.value.replace(/\D/g, "").slice(0, 11),
+                      })
                     }
-                    placeholder="000.000.000-00"
+                    placeholder="Somente números (11 dígitos)"
                     className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   />
                 </div>
