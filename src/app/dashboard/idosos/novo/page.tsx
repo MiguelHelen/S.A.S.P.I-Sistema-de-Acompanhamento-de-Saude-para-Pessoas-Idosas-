@@ -144,9 +144,9 @@ export default function NovoIdoso() {
               (i: any) => String(i.cpf || "").replace(/\D/g, "") === cpfLimpo
             );
             if (cpfJaExiste) {
-              throw new Error(
-                "Erro: Já existe um paciente cadastrado com este CPF no sistema!"
-              );
+              setErro("Este CPF já está associado a outro paciente na base de dados.");
+              setSalvando(false);
+              return;
             }
           }
         }

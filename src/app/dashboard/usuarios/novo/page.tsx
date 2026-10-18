@@ -111,6 +111,7 @@ export default function NovoUsuario() {
     };
 
     try {
+      // VALIDAÇÃO PRÉVIA DE UNICIDADE
       const resExistentes = await fetch(`${API_URL}/usuario`, {
         headers: { ...(token && { Authorization: `Bearer ${token}` }) },
       }).catch(() => null);
@@ -122,9 +123,9 @@ export default function NovoUsuario() {
             (u: any) => String(u.email || "").toLowerCase() === emailFormatado
           );
           if (emailDuplicado) {
-            throw new Error(
-              "Erro: Este e-mail já está cadastrado no sistema!"
-            );
+            setErro("Este e-mail já está em uso por outro usuário no sistema.");
+            setSalvando(false);
+            return;
           }
 
           if (cpfLimpo.length > 0) {
@@ -133,12 +134,15 @@ export default function NovoUsuario() {
                 String(u.cpf || "").replace(/\D/g, "") === cpfLimpo
             );
             if (cpfDuplicado) {
-              throw new Error("Erro: Este CPF já está cadastrado no sistema!");
+              setErro("Este CPF já está associado a outro registro na base de dados.");
+              setSalvando(false);
+              return;
             }
           }
         }
       }
 
+      // CRIAÇÃO REAL
       const res = await fetch(`${API_URL}/usuario`, {
         method: "POST",
         headers: {
