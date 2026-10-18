@@ -11,6 +11,8 @@ import {
   Ban,
   CheckCircle2,
   AlertCircle,
+  CalendarDays,
+  UserCheck,
 } from "lucide-react";
 
 interface Prescricao {
@@ -28,7 +30,7 @@ interface Prescricao {
   frequencia?: string;
   status?: string;
   data_inicio?: string;
-  data_fim?: string;
+  data_fim?: string | null;
 }
 
 const API_URL =
@@ -116,12 +118,18 @@ export default function MedicamentosPage() {
       );
 
       if (!res.ok) {
-        throw new Error("Não foi possível encerrar a prescrição.");
+        const errData = await res.json().catch(() => null);
+        throw new Error(
+          errData?.message || "Não foi possível encerrar a prescrição."
+        );
       }
 
+      const hojeIso = new Date().toISOString();
       setPrescricoes((prev) =>
         prev.map((p) =>
-          p.id === idPrescricao ? { ...p, status: "ENCERRADA" } : p
+          p.id === idPrescricao
+            ? { ...p, status: "ENCERRADA", data_fim: hojeIso }
+            : p
         )
       );
       setMensagem(
@@ -135,9 +143,8 @@ export default function MedicamentosPage() {
     }
   }
 
-  // Apenas Medico e Enfermeiro podem criar ou encerrar prescricoes
-  const podePrescrever =
-    perfilUsuario === "MEDICO" || perfilUsuario === "ENFERMEIRO";
+  // Alinhado ao PrescricaoService do backend: apenas MEDICO registra ou encerra prescrições
+  const podePrescrever = perfilUsuario === "MEDICO";
 
   return (
     <main className="min-h-screen bg-[#F2F7FB]">
@@ -238,25 +245,52 @@ export default function MedicamentosPage() {
                   {prescricoes.map((p) => {
                     const isAtiva =
                       String(p.status || "ATIVA").toUpperCase() === "ATIVA";
+                    const dataInicioBr = p.data_inicio
+                      ? new Date(p.data_inicio).toLocaleDateString("pt-BR", {
+                          timeZone: "UTC",
+                        })
+                      : null;
+                    const dataFimBr = p.data_fim
+                      ? new Date(p.data_fim).toLocaleDateString("pt-BR", {
+                          timeZone: "UTC",
+                        })
+                      : null;
 
                     return (
                       <div
                         key={p.id}
-                        className="flex flex-col justify-between gap-3 py-4 sm:flex-row sm:items-center"
+                        className="flex flex-col justify-between gap-4 py-5 sm:flex-row sm:items-center"
                       >
-                        <div>
-                          <p className="font-semibold text-[#0A2540]">
+                        <div className="space-y-1">
+                          <p className="text-base font-semibold text-[#0A2540]">
                             {p.medicamento?.nome || "Medicamento Prescrito"}
                           </p>
-                          <p className="text-sm text-gray-500">
+                          <p className="text-sm font-medium text-gray-600">
                             {p.dosagem || "Dosagem padrão"} •{" "}
                             {p.frequencia || "Uso contínuo"}
                           </p>
                           {p.medicamento?.descricao && (
-                            <p className="mt-1 text-xs text-gray-400">
-                              Orientação: {p.medicamento.descricao}
+                            <p className="text-xs text-gray-500">
+                              Orientações: {p.medicamento.descricao}
                             </p>
                           )}
+                          <div className="flex flex-wrap items-center gap-4 pt-1 text-xs text-gray-400">
+                            {dataInicioBr && (
+                              <span className="inline-flex items-center gap-1">
+                                <CalendarDays size={13} />
+                                Início: {dataInicioBr}
+                                {dataFimBr
+                                  ? ` • Fim: ${dataFimBr}`
+                                  : " • Uso contínuo"}
+                              </span>
+                            )}
+                            {p.usuario?.nome && (
+                              <span className="inline-flex items-center gap-1 text-[#1565C0]">
+                                <UserCheck size={13} />
+                                Prescrito por: Dr(a). {p.usuario.nome}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         <div className="flex items-center gap-3">
@@ -275,7 +309,7 @@ export default function MedicamentosPage() {
                               type="button"
                               disabled={encerrandoId === p.id}
                               onClick={() => encerrarPrescricao(p.id)}
-                              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
                             >
                               {encerrandoId === p.id ? (
                                 <Loader2 size={13} className="animate-spin" />

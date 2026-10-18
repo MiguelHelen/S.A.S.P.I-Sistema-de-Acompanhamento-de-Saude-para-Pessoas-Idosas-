@@ -7,9 +7,7 @@ import DashboardNavbar from "@/components/DashboardNavbar";
 import type { Idoso } from "@/components/PatientSelector";
 import {
   ArrowLeft,
-  CalendarDays,
   MapPin,
-  UserCheck,
   Save,
   Loader2,
   CheckCircle2,
@@ -74,19 +72,16 @@ export default function NovaConsulta() {
     setSucesso(false);
 
     if (!idoso || !idoso.id) {
-      setErro(
-        "Nenhum paciente ativo selecionado. Selecione um paciente no topo do painel."
-      );
+      setErro("Nenhum paciente ativo selecionado.");
       setSalvando(false);
       return;
     }
 
-    // Tratamento de Data para evitar ERRO 500 no DateTime do PostgreSQL
     let dataFormatada = formData.data;
     try {
       const dataObj = new Date(formData.data);
       if (Number.isNaN(dataObj.getTime())) throw new Error();
-      dataFormatada = dataObj.toISOString().split("T")[0]; // YYYY-MM-DD
+      dataFormatada = dataObj.toISOString().split("T")[0];
     } catch {
       setErro("Data selecionada é inválida.");
       setSalvando(false);
@@ -123,9 +118,7 @@ export default function NovaConsulta() {
         const msg = Array.isArray(errData?.message)
           ? errData.message.join(", ")
           : errData?.message;
-        throw new Error(
-          msg || `Erro ${res.status}: Falha ao registrar agendamento.`
-        );
+        throw new Error(msg || `Erro ${res.status}: Falha ao registrar agendamento.`);
       }
 
       setSucesso(true);
@@ -159,19 +152,13 @@ export default function NovaConsulta() {
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
             <ShieldAlert size={32} />
           </div>
-          <h1 className="mt-4 text-2xl font-bold text-[#0A2540]">
-            Modo Somente Leitura
-          </h1>
+          <h1 className="mt-4 text-2xl font-bold text-[#0A2540]">Modo Somente Leitura</h1>
           <p className="mt-2 text-sm text-gray-600">
             O perfil Familiar possui permissão exclusiva para visualização da agenda clínica.
           </p>
           <div className="mt-6">
-            <Link
-              href="/dashboard/consultas"
-              className="inline-flex items-center gap-2 rounded-xl bg-[#1565C0] px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#0A2540]"
-            >
-              <ArrowLeft size={16} />
-              Voltar para Consultas
+            <Link href="/dashboard/consultas" className="inline-flex items-center gap-2 rounded-xl bg-[#1565C0] px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#0A2540]">
+              <ArrowLeft size={16} /> Voltar para Consultas
             </Link>
           </div>
         </div>
@@ -184,26 +171,13 @@ export default function NovaConsulta() {
       <DashboardNavbar />
 
       <div className="mx-auto max-w-4xl px-4 py-8 md:px-8">
-        <Link
-          href="/dashboard/consultas"
-          className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-[#1565C0]"
-        >
-          <ArrowLeft size={17} />
-          Voltar para consultas
+        <Link href="/dashboard/consultas" className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-[#1565C0]">
+          <ArrowLeft size={17} /> Voltar para consultas
         </Link>
 
         <div className="mt-8">
-          <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
-            Agenda de saúde
-          </span>
-
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0A2540] md:text-4xl">
-            Nova consulta
-          </h1>
-
-          <p className="mt-2 max-w-2xl text-gray-600">
-            Registre as informações do próximo atendimento para manter a agenda organizada.
-          </p>
+          <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">Agenda de saúde</span>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0A2540] md:text-4xl">Nova consulta</h1>
         </div>
 
         {erro && (
@@ -216,9 +190,7 @@ export default function NovaConsulta() {
         {sucesso && (
           <div className="mt-6 flex items-center gap-3 rounded-xl bg-emerald-50 p-4 text-emerald-800">
             <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
-            <p className="text-sm font-medium">
-              Consulta agendada com sucesso! Redirecionando...
-            </p>
+            <p className="text-sm font-medium">Consulta agendada com sucesso! Redirecionando...</p>
           </div>
         )}
 
@@ -228,11 +200,8 @@ export default function NovaConsulta() {
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#E8F1FB] text-[#1565C0]">
                 <Stethoscope size={22} />
               </div>
-
               <div>
-                <h2 className="font-semibold text-[#0A2540]">
-                  Informações da consulta
-                </h2>
+                <h2 className="font-semibold text-[#0A2540]">Informações da consulta</h2>
               </div>
             </div>
 
@@ -244,7 +213,8 @@ export default function NovaConsulta() {
                   required
                   value={formData.especialidade}
                   onChange={(e) => setFormData({ ...formData, especialidade: e.target.value })}
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-[#1565C0]"
+                  placeholder="Ex.: Cardiologia"
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-500 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
               </div>
 
@@ -255,7 +225,8 @@ export default function NovaConsulta() {
                   required
                   value={formData.profissional}
                   onChange={(e) => setFormData({ ...formData, profissional: e.target.value })}
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-[#1565C0]"
+                  placeholder="Ex.: Dr. Silva"
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-500 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
               </div>
 
@@ -266,7 +237,7 @@ export default function NovaConsulta() {
                   required
                   value={formData.data}
                   onChange={(e) => setFormData({ ...formData, data: e.target.value })}
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-[#1565C0]"
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
               </div>
 
@@ -277,20 +248,21 @@ export default function NovaConsulta() {
                   required
                   value={formData.horario}
                   onChange={(e) => setFormData({ ...formData, horario: e.target.value })}
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-[#1565C0]"
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
               </div>
 
               <div className="md:col-span-2">
                 <label className="mb-2 block text-sm font-medium text-[#0A2540]">Local da consulta *</label>
                 <div className="relative">
-                  <MapPin size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <MapPin size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
                   <input
                     type="text"
                     required
                     value={formData.local}
                     onChange={(e) => setFormData({ ...formData, local: e.target.value })}
-                    className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm outline-none focus:border-[#1565C0]"
+                    placeholder="Nome da clínica ou hospital"
+                    className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-900 placeholder:text-gray-500 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   />
                 </div>
               </div>
@@ -301,7 +273,8 @@ export default function NovaConsulta() {
                   rows={4}
                   value={formData.observacao}
                   onChange={(e) => setFormData({ ...formData, observacao: e.target.value })}
-                  className="w-full resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-[#1565C0]"
+                  placeholder="Ex.: Chegar com 15 minutos de antecedência. Exames necessários."
+                  className="w-full resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-500 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
               </div>
             </div>

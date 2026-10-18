@@ -7,7 +7,6 @@ import DashboardNavbar from "@/components/DashboardNavbar";
 import type { Idoso } from "@/components/PatientSelector";
 import {
   ArrowLeft,
-  Clock3,
   Pill,
   Save,
   Loader2,
@@ -30,10 +29,14 @@ export default function NovoMedicamento() {
   const [autorizado, setAutorizado] = useState<boolean | null>(null);
   const [usuarioId, setUsuarioId] = useState<string>("");
 
+  const hojeIso = new Date().toISOString().split("T")[0];
+
   const [formData, setFormData] = useState({
     nome: "",
     dosagem: "",
     horario_primeira_dose: "",
+    data_inicio: hojeIso,
+    data_fim: "",
     frequencia: "Uma vez ao dia (24h)",
     orientacoes: "",
   });
@@ -49,13 +52,7 @@ export default function NovoMedicamento() {
         ).toUpperCase();
 
         setUsuarioId(userData.id || "");
-
-        // Apenas Medicos e Enfermeiros possuem habilitacao clinica para prescrever
-        if (perfil === "MEDICO" || perfil === "ENFERMEIRO") {
-          setAutorizado(true);
-        } else {
-          setAutorizado(false);
-        }
+        setAutorizado(perfil === "MEDICO");
       } catch {
         setAutorizado(false);
       }
@@ -71,11 +68,11 @@ export default function NovoMedicamento() {
     }
   }, []);
 
-  async function obterOuCriarMedicamentoId(
+  async function obterOuCriarMedicamento(
     nomeMed: string,
     descricaoMed: string | undefined,
     token: string | null
-  ): Promise<string | null> {
+  ): Promise<{ id: string; jaExistiaSemDescricao: boolean } | null> {
     const headersAuth = {
       "Content-Type": "application/json",
       ...(token && { Authorization: `Bearer ${token}` }),
@@ -92,22 +89,30 @@ export default function NovoMedicamento() {
             (m: any) =>
               String(m.nome || "").toLowerCase() === nomeMed.toLowerCase()
           );
-          if (existente?.id) return existente.id;
+          if (existente?.id) {
+            return {
+              id: existente.id,
+              jaExistiaSemDescricao: Boolean(
+                descricaoMed &&
+                  (!existente.descricao ||
+                    existente.descricao.trim() !== descricaoMed.trim())
+              ),
+            };
+          }
         }
       }
 
       const resCriar = await fetch(`${API_URL}/medicamento`, {
         method: "POST",
         headers: headersAuth,
-        body: JSON.stringify({
-          nome: nomeMed,
-          descricao: descricaoMed,
-        }),
+        body: JSON.stringify({ nome: nomeMed, descricao: descricaoMed }),
       });
 
       if (resCriar.ok) {
         const criado = await resCriar.json();
-        if (criado?.id) return criado.id;
+        if (criado?.id) {
+          return { id: criado.id, jaExistiaSemDescricao: false };
+        }
       }
     } catch {}
 
@@ -136,34 +141,56 @@ export default function NovoMedicamento() {
       return;
     }
 
+    if (
+      formData.data_fim &&
+      formData.data_inicio &&
+      new Date(formData.data_fim) < new Date(formData.data_inicio)
+    ) {
+      setErro(
+        "A data de término do tratamento não pode ser anterior à data de início."
+      );
+      setSalvando(false);
+      return;
+    }
+
     const token = localStorage.getItem("saspi_token");
     const nomeLimpo = formData.nome.trim();
     const orientacoesLimpas = formData.orientacoes.trim() || undefined;
-    const frequenciaCompleta = formData.horario_primeira_dose
-      ? `${formData.frequencia} (Início às ${formData.horario_primeira_dose})`
-      : formData.frequencia;
 
     try {
-      const medicamentoId = await obterOuCriarMedicamentoId(
+      const medResult = await obterOuCriarMedicamento(
         nomeLimpo,
         orientacoesLimpas,
         token
       );
 
-      if (!medicamentoId) {
+      if (!medResult?.id) {
         throw new Error(
           "Não foi possível registrar o medicamento no catálogo do banco de dados."
         );
       }
 
-      // Contrato estrito conforme CreatePrescricaoDto (sem propriedade extra 'status')
+      let frequenciaCompleta = formData.horario_primeira_dose
+        ? `${formData.frequencia} (Início às ${formData.horario_primeira_dose})`
+        : formData.frequencia;
+
+      if (medResult.jaExistiaSemDescricao && orientacoesLimpas) {
+        frequenciaCompleta = `${frequenciaCompleta} • Obs: ${orientacoesLimpas}`.slice(
+          0,
+          100
+        );
+      }
+
       const payload = {
         idoso_id: idoso.id,
-        medicamento_id: medicamentoId,
+        medicamento_id: medResult.id,
         usuario_id: usuarioId,
         dosagem: formData.dosagem.trim(),
         frequencia: frequenciaCompleta,
-        data_inicio: new Date().toISOString().split("T")[0],
+        data_inicio: formData.data_inicio || hojeIso,
+        data_fim: formData.data_fim
+          ? new Date(formData.data_fim).toISOString().split("T")[0]
+          : undefined,
       };
 
       const res = await fetch(`${API_URL}/prescricao`, {
@@ -223,12 +250,12 @@ export default function NovoMedicamento() {
             Acesso Restrito
           </h1>
           <p className="mt-2 text-sm text-gray-600">
-            Apenas Médicos e Enfermeiros possuem habilitação clínica para
-            cadastrar novas prescrições medicamentosas.
+            Apenas Médicos possuem habilitação clínica para cadastrar ou
+            encerrar prescrições medicamentosas.
           </p>
           <div className="mt-6">
             <Link
-              href="/dashboard"
+              href="/dashboard/medicamentos"
               className="inline-flex items-center gap-2 rounded-xl bg-[#1565C0] px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#0A2540]"
             >
               <ArrowLeft size={16} />
@@ -257,11 +284,9 @@ export default function NovoMedicamento() {
           <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
             Rotina de cuidados
           </span>
-
           <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0A2540] md:text-4xl">
             Nova Prescrição
           </h1>
-
           <p className="mt-2 max-w-2xl text-gray-600">
             Cadastre um novo medicamento para organizar a rotina e os alertas do
             paciente.
@@ -280,7 +305,6 @@ export default function NovoMedicamento() {
             <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
             <p className="text-sm font-medium">
               Prescrição gravada com sucesso no banco de dados!
-              Redirecionando...
             </p>
           </div>
         )}
@@ -307,27 +331,23 @@ export default function NovoMedicamento() {
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#E6F4EF] text-[#26A69A]">
                 <Pill size={22} />
               </div>
-
               <div>
                 <h2 className="font-semibold text-[#0A2540]">
                   Dados da Medicação
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Preencha o nome, dosagem e regras de administração.
+                  Preencha o nome, dosagem, período de tratamento e regras de
+                  administração.
                 </p>
               </div>
             </div>
 
             <div className="mt-6 grid gap-5 md:grid-cols-2">
               <div className="md:col-span-2">
-                <label
-                  htmlFor="nome"
-                  className="mb-2 block text-sm font-medium text-[#0A2540]"
-                >
+                <label className="mb-2 block text-sm font-medium text-[#0A2540]">
                   Nome do medicamento *
                 </label>
                 <input
-                  id="nome"
                   type="text"
                   required
                   value={formData.nome}
@@ -340,14 +360,10 @@ export default function NovoMedicamento() {
               </div>
 
               <div>
-                <label
-                  htmlFor="dosagem"
-                  className="mb-2 block text-sm font-medium text-[#0A2540]"
-                >
+                <label className="mb-2 block text-sm font-medium text-[#0A2540]">
                   Dosagem / Concentração *
                 </label>
                 <input
-                  id="dosagem"
                   type="text"
                   required
                   value={formData.dosagem}
@@ -360,14 +376,10 @@ export default function NovoMedicamento() {
               </div>
 
               <div>
-                <label
-                  htmlFor="horario_primeira_dose"
-                  className="mb-2 block text-sm font-medium text-[#0A2540]"
-                >
+                <label className="mb-2 block text-sm font-medium text-[#0A2540]">
                   Horário da Primeira Dose *
                 </label>
                 <input
-                  id="horario_primeira_dose"
                   type="time"
                   required
                   value={formData.horario_primeira_dose}
@@ -382,14 +394,10 @@ export default function NovoMedicamento() {
               </div>
 
               <div className="md:col-span-2">
-                <label
-                  htmlFor="frequencia"
-                  className="mb-2 block text-sm font-medium text-[#0A2540]"
-                >
+                <label className="mb-2 block text-sm font-medium text-[#0A2540]">
                   Frequência / Intervalo *
                 </label>
                 <select
-                  id="frequencia"
                   value={formData.frequencia}
                   onChange={(e) =>
                     setFormData({ ...formData, frequencia: e.target.value })
@@ -412,15 +420,44 @@ export default function NovoMedicamento() {
                 </select>
               </div>
 
+              <div>
+                <label className="mb-2 block text-sm font-medium text-[#0A2540]">
+                  Data de Início do Tratamento *
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={formData.data_inicio}
+                  onChange={(e) =>
+                    setFormData({ ...formData, data_inicio: e.target.value })
+                  }
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-[#0A2540]">
+                  Data Fim do Tratamento (Opcional)
+                </label>
+                <input
+                  type="date"
+                  min={formData.data_inicio || undefined}
+                  value={formData.data_fim}
+                  onChange={(e) =>
+                    setFormData({ ...formData, data_fim: e.target.value })
+                  }
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                />
+                <span className="mt-1 block text-xs text-gray-400">
+                  Deixe em branco para uso contínuo.
+                </span>
+              </div>
+
               <div className="md:col-span-2">
-                <label
-                  htmlFor="orientacoes"
-                  className="mb-2 block text-sm font-medium text-[#0A2540]"
-                >
+                <label className="mb-2 block text-sm font-medium text-[#0A2540]">
                   Orientações e Instruções de uso (opcional)
                 </label>
                 <textarea
-                  id="orientacoes"
                   rows={4}
                   value={formData.orientacoes}
                   onChange={(e) =>
@@ -433,14 +470,6 @@ export default function NovoMedicamento() {
             </div>
           </section>
 
-          <div className="flex items-start gap-3 rounded-2xl border border-[#D7EEE9] bg-[#F5FBF9] p-5">
-            <Clock3 size={20} className="mt-0.5 shrink-0 text-[#26A69A]" />
-            <p className="text-sm leading-relaxed text-gray-600">
-              A prescrição ficará imediatamente visível para a equipe de cuidado
-              e familiares vinculados ao paciente.
-            </p>
-          </div>
-
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
             <Link
               href="/dashboard/medicamentos"
@@ -448,7 +477,6 @@ export default function NovoMedicamento() {
             >
               Cancelar
             </Link>
-
             <button
               type="submit"
               disabled={salvando || !idoso}
