@@ -4,7 +4,10 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import DashboardNavbar from "@/components/DashboardNavbar";
 import PatientSelector, { Idoso } from "@/components/PatientSelector";
-import MetricCard from "@/components/MetricCard";
+import MetricCard, {
+  avaliarIndicadorClinico,
+  gerarAlertasClinicos,
+} from "@/components/MetricCard";
 import HealthChart, { PontoGraficoSaude } from "@/components/HealthChart";
 import {
   HeartPulse,
@@ -14,6 +17,7 @@ import {
   Clock,
   Plus,
   Loader2,
+  AlertTriangle,
 } from "lucide-react";
 
 const API_URL =
@@ -135,6 +139,11 @@ export default function SaudePage() {
   }
 
   const podeRegistrar = perfilUsuario !== "FAMILIAR";
+  const avFc = avaliarIndicadorClinico("fc", metricas.fc);
+  const avSpo2 = avaliarIndicadorClinico("spo2", metricas.spo2);
+  const avTemp = avaliarIndicadorClinico("temp", metricas.temp);
+  const avPa = avaliarIndicadorClinico("pa", metricas.pa);
+  const alertasClinicos = gerarAlertasClinicos(metricas);
 
   return (
     <main className="min-h-screen bg-[#F2F7FB]">
@@ -173,30 +182,65 @@ export default function SaudePage() {
             selectedId={idosoAtivo?.id}
           />
 
+          {alertasClinicos.length > 0 && (
+            <div className="rounded-2xl border border-red-200 bg-red-50/90 p-5 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
+                  <AlertTriangle size={22} />
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-red-800">
+                    Alertas de Monitoramento Fisiológico (
+                    {alertasClinicos.length})
+                  </h2>
+                  <ul className="mt-2 space-y-1.5 text-sm text-red-700">
+                    {alertasClinicos.map((al) => (
+                      <li key={al.id} className="flex flex-wrap gap-1.5">
+                        <strong>• {al.indicador}:</strong>
+                        <span>{al.mensagem}</span>
+                        <span className="text-xs text-red-600/80">
+                          ({al.referencia})
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <MetricCard
               title="Frequência Cardíaca"
               value={metricas.fc}
               unit="bpm"
               icon={<HeartPulse size={22} />}
+              statusLabel={avFc.label}
+              statusTone={avFc.tone}
             />
             <MetricCard
               title="Saturação (SpO2)"
               value={metricas.spo2}
               unit="%"
               icon={<Activity size={22} />}
+              statusLabel={avSpo2.label}
+              statusTone={avSpo2.tone}
             />
             <MetricCard
               title="Temperatura"
               value={metricas.temp}
               unit="°C"
               icon={<Thermometer size={22} />}
+              statusLabel={avTemp.label}
+              statusTone={avTemp.tone}
             />
             <MetricCard
               title="Pressão Arterial"
               value={metricas.pa}
               unit="mmHg"
               icon={<Droplet size={22} />}
+              statusLabel={avPa.label}
+              statusTone={avPa.tone}
             />
           </div>
 
@@ -230,6 +274,15 @@ export default function SaudePage() {
                   Assim que a smartband transmitir os dados ou for realizado um
                   registro clínico, o gráfico aparecerá aqui.
                 </p>
+                {podeRegistrar && (
+                  <Link
+                    href="/dashboard/historico/novo"
+                    className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#E8F1FB] px-4 py-2 text-sm font-medium text-[#1565C0] transition hover:bg-[#1565C0] hover:text-white"
+                  >
+                    <Plus size={16} />
+                    Lançar Registro Manual
+                  </Link>
+                )}
               </div>
             )}
           </div>
