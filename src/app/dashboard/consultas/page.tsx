@@ -121,6 +121,7 @@ export default function ConsultasPage() {
       setConsultas((prev) =>
         prev.map((c) => (c.id === id ? { ...c, status: novoStatus } : c))
       );
+      window.dispatchEvent(new Event("saspi_elderly_updated"));
       setMensagem(
         `Status da consulta atualizado para "${novoStatus}" com sucesso!`
       );
