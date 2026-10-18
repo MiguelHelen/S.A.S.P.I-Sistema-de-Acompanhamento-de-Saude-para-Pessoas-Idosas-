@@ -44,7 +44,7 @@ export default function GerenciarUsuariosPage() {
   const [erroAcao, setErroAcao] = useState("");
 
   const [usuarioEditando, setUsuarioEditando] = useState<UsuarioItem | null>(
-    null,
+    null
   );
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
 
@@ -68,7 +68,7 @@ export default function GerenciarUsuariosPage() {
         const parsed = JSON.parse(userRaw);
         const userData = parsed.user || parsed.usuario || parsed;
         const perfil = String(
-          userData.perfil || userData.role || "",
+          userData.perfil || userData.role || ""
         ).toUpperCase();
 
         if (perfil !== "ADMINISTRADOR" && perfil !== "ADMIN") {
@@ -94,8 +94,8 @@ export default function GerenciarUsuariosPage() {
           const lista = Array.isArray(data) ? data : data.data || [];
           setUsuarios(
             lista.filter(
-              (u: UsuarioItem) => !u.clinica_id || u.clinica_id === clinicaId,
-            ),
+              (u: UsuarioItem) => !u.clinica_id || u.clinica_id === clinicaId
+            )
           );
         }
       } catch {
@@ -121,6 +121,14 @@ export default function GerenciarUsuariosPage() {
 
     if (cpfLimpo.length > 0 && cpfLimpo.length !== 11) {
       setErroAcao("O CPF deve conter exatamente 11 dígitos numéricos.");
+      setSalvandoEdicao(false);
+      return;
+    }
+
+    if (telLimpo.length > 0 && (telLimpo.length < 10 || telLimpo.length > 11)) {
+      setErroAcao(
+        "O telefone deve conter 10 ou 11 dígitos numéricos (com DDD)."
+      );
       setSalvandoEdicao(false);
       return;
     }
@@ -159,8 +167,8 @@ export default function GerenciarUsuariosPage() {
                 telefone: telLimpo || null,
                 perfil: usuarioEditando.perfil,
               }
-            : u,
-        ),
+            : u
+        )
       );
 
       setUsuarioEditando(null);
@@ -198,11 +206,11 @@ export default function GerenciarUsuariosPage() {
           rawMsg.includes("p2003")
         ) {
           throw new Error(
-            "Não é possível excluir este usuário pois ele possui prescrições ou registros de atendimento vinculados.",
+            "Não é possível excluir este usuário pois ele possui prescrições ou registros de atendimento vinculados."
           );
         }
         throw new Error(
-          errData?.message || "Não foi possível remover este usuário.",
+          errData?.message || "Não foi possível remover este usuário."
         );
       }
 
@@ -379,8 +387,21 @@ export default function GerenciarUsuariosPage() {
                   {usuariosFiltrados.map((u) => (
                     <tr key={u.id} className="transition hover:bg-gray-50/50">
                       <td className="px-6 py-4">
-                        <p className="font-semibold text-[#0A2540]">{u.nome}</p>
-                        <p className="text-xs text-gray-500">{u.email}</p>
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={`https://ui-avatars.com/api/?name=${encodeURIComponent(
+                              u.nome
+                            )}&background=E8F1FB&color=1565C0&size=64&bold=true`}
+                            alt={u.nome}
+                            className="h-9 w-9 shrink-0 rounded-full object-cover"
+                          />
+                          <div>
+                            <p className="font-semibold text-[#0A2540]">
+                              {u.nome}
+                            </p>
+                            <p className="text-xs text-gray-500">{u.email}</p>
+                          </div>
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <span className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-[#1565C0]">
@@ -467,32 +488,38 @@ export default function GerenciarUsuariosPage() {
                     </label>
                     <input
                       type="text"
+                      inputMode="numeric"
+                      maxLength={11}
                       value={usuarioEditando.cpf || ""}
                       onChange={(e) =>
                         setUsuarioEditando({
                           ...usuarioEditando,
-                          cpf: e.target.value,
+                          cpf: e.target.value.replace(/\D/g, "").slice(0, 11),
                         })
                       }
-                      placeholder="000.000.000-00"
+                      placeholder="Somente números"
                       className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#1565C0]"
                     />
                   </div>
 
                   <div>
                     <label className="mb-1 block text-xs font-semibold uppercase text-gray-500">
-                      Telefone
+                      Telefone (10 ou 11 dígitos)
                     </label>
                     <input
-                      type="text"
+                      type="tel"
+                      inputMode="numeric"
+                      maxLength={11}
                       value={usuarioEditando.telefone || ""}
                       onChange={(e) =>
                         setUsuarioEditando({
                           ...usuarioEditando,
-                          telefone: e.target.value,
+                          telefone: e.target.value
+                            .replace(/\D/g, "")
+                            .slice(0, 11),
                         })
                       }
-                      placeholder="(11) 99999-9999"
+                      placeholder="Ex.: 11999999999"
                       className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#1565C0]"
                     />
                   </div>
