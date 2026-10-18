@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -17,7 +17,18 @@ export class ClinicaService {
     return this.prisma.clinica.findUnique({ where: { id } });
   }
 
-  update(id: string, data: any) {
+  async update(id: string, data: any, authId?: string) {
+    if (authId) {
+      const solicitante = await this.prisma.usuario.findUnique({
+        where: { auth_id: authId },
+      });
+      if (solicitante && solicitante.perfil !== 'ADMINISTRADOR') {
+        throw new ForbiddenException(
+          'Apenas Administradores possuem permissão para alterar os dados da clínica.',
+        );
+      }
+    }
+
     return this.prisma.clinica.update({
       where: { id },
       data: {

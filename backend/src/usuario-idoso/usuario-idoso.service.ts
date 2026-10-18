@@ -2,6 +2,7 @@ import {
   Injectable,
   ConflictException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -9,11 +10,28 @@ import { PrismaService } from '../prisma/prisma.service';
 export class UsuarioIdosoService {
   constructor(private prisma: PrismaService) {}
 
-  async create(data: {
-    usuario_id: string;
-    idoso_id: string;
-    tipo_vinculo: string;
-  }) {
+  private async exigirAdministrador(authId?: string) {
+    if (!authId) return;
+    const solicitante = await this.prisma.usuario.findUnique({
+      where: { auth_id: authId },
+    });
+    if (solicitante && solicitante.perfil !== 'ADMINISTRADOR') {
+      throw new ForbiddenException(
+        'Apenas Administradores possuem permissão para atribuir ou remover vínculos institucionais.',
+      );
+    }
+  }
+
+  async create(
+    data: {
+      usuario_id: string;
+      idoso_id: string;
+      tipo_vinculo: string;
+    },
+    authId?: string,
+  ) {
+    await this.exigirAdministrador(authId);
+
     const usuario = await this.prisma.usuario.findUnique({
       where: { id: data.usuario_id },
     });
@@ -82,7 +100,8 @@ export class UsuarioIdosoService {
     });
   }
 
-  remove(id: string) {
+  async remove(id: string, authId?: string) {
+    await this.exigirAdministrador(authId);
     return this.prisma.usuario_idoso.delete({
       where: { id },
     });
