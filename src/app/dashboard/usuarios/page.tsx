@@ -142,8 +142,8 @@ export default function GerenciarUsuariosPage() {
         },
         body: JSON.stringify({
           nome: usuarioEditando.nome.trim(),
-          cpf: cpfLimpo.length > 0 ? cpfLimpo : undefined,
-          telefone: telLimpo.length > 0 ? telLimpo : undefined,
+          cpf: cpfLimpo,
+          telefone: telLimpo,
           perfil: usuarioEditando.perfil,
         }),
       });
