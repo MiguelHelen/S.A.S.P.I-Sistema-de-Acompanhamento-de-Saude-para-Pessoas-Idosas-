@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
 import { DispositivoVestivelService } from './dispositivo-vestivel.service';
 import { AuthGuard } from '../auth/auth.guard';
 import { CreateDispositivoVestivelDto } from './dto/create-dispositivo-vestivel.dto';
@@ -10,18 +18,18 @@ export class DispositivoVestivelController {
     private readonly dispositivoVestivelService: DispositivoVestivelService,
   ) {}
 
-    @Post()
-  create(@Body() body: CreateDispositivoVestivelDto) {
-    return this.dispositivoVestivelService.create(body);
+  @Post()
+  create(@Body() body: CreateDispositivoVestivelDto, @Request() req: any) {
+    return this.dispositivoVestivelService.create(body, req.user.id);
   }
 
   @Get()
-  findAll() {
-    return this.dispositivoVestivelService.findAll();
+  findAll(@Request() req: any) {
+    return this.dispositivoVestivelService.findAll(req.user.id);
   }
 
   @Get('idoso/:idosoId')
-  findByIdoso(@Param('idosoId') idosoId: string) {
-    return this.dispositivoVestivelService.findByIdoso(idosoId);
+  findByIdoso(@Param('idosoId') idosoId: string, @Request() req: any) {
+    return this.dispositivoVestivelService.findByIdoso(idosoId, req.user.id);
   }
 }
