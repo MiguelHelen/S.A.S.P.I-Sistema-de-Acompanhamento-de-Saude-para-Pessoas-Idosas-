@@ -11,6 +11,7 @@ import {
 import { RegistroSaudeService } from './registro-saude.service';
 import { AuthGuard } from '../auth/auth.guard';
 import { CreateRegistroSaudeDto } from './dto/create-registro-saude.dto';
+import { CreateRegistroSaudeLoteDto } from './dto/create-registro-saude-lote.dto';
 
 @Controller('registro-saude')
 @UseGuards(AuthGuard)
@@ -20,6 +21,11 @@ export class RegistroSaudeController {
   @Post()
   create(@Body() body: CreateRegistroSaudeDto, @Request() req: any) {
     return this.registroSaudeService.create(body, req.user.id);
+  }
+
+  @Post('lote')
+  createLote(@Body() body: CreateRegistroSaudeLoteDto, @Request() req: any) {
+    return this.registroSaudeService.createLote(body, req.user.id);
   }
 
   @Get()
