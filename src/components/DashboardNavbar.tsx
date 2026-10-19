@@ -23,6 +23,9 @@ import {
   Bell,
   AlertTriangle,
   UserCheck,
+  Menu,
+  X,
+  CheckCheck,
 } from "lucide-react";
 
 interface UsuarioLogado {
@@ -79,6 +82,7 @@ export default function DashboardNavbar() {
   const router = useRouter();
   const [dropdownAberto, setDropdownAberto] = useState(false);
   const [notificacoesAbertas, setNotificacoesAbertas] = useState(false);
+  const [menuMobileAberto, setMenuMobileAberto] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
 
@@ -86,6 +90,7 @@ export default function DashboardNavbar() {
   const [nomeClinica, setNomeClinica] = useState<string>("");
   const [buscandoClinica, setBuscandoClinica] = useState(false);
   const [notificacoes, setNotificacoes] = useState<NotificacaoSistema[]>([]);
+  const [notificacoesLidas, setNotificacoesLidas] = useState<string[]>([]);
 
   const buscarNomeClinica = useCallback(
     async (cId: string, token: string | null) => {
@@ -122,7 +127,7 @@ export default function DashboardNavbar() {
         setBuscandoClinica(false);
       }
     },
-    []
+    [],
   );
 
   const carregarNotificacoes = useCallback(async () => {
@@ -143,6 +148,13 @@ export default function DashboardNavbar() {
     }
 
     if (!userId) return;
+
+    const lidasStorage = localStorage.getItem(`saspi_notif_lidas_${userId}`);
+    if (lidasStorage) {
+      try {
+        setNotificacoesLidas(JSON.parse(lidasStorage));
+      } catch {}
+    }
 
     const headers = { Authorization: `Bearer ${token}` };
     const listaNotif: NotificacaoSistema[] = [];
@@ -175,7 +187,6 @@ export default function DashboardNavbar() {
         return;
       }
 
-      // 1. Notificações de sinais vitais fora do padrão para o paciente ativo
       const activeElderlyRaw = localStorage.getItem("saspi_active_elderly");
       let idosoAtivo: { id?: string; nome?: string } | null = null;
       if (activeElderlyRaw) {
@@ -204,10 +215,10 @@ export default function DashboardNavbar() {
 
             regs.forEach((r: any) => {
               const nomeInd = String(
-                r.indicador_saude?.nome || r.indicador_nome || ""
+                r.indicador_saude?.nome || r.indicador_nome || "",
               ).toLowerCase();
               const val = String(
-                r.valor_numerico ?? r.valor_categorico ?? r.valor ?? "--"
+                r.valor_numerico ?? r.valor_categorico ?? r.valor ?? "--",
               );
               if (nomeInd.includes("card") && fc === "--") fc = val;
               else if (
@@ -244,7 +255,7 @@ export default function DashboardNavbar() {
             cons
               .filter(
                 (c: any) =>
-                  c.status !== "Cancelada" && c.status !== "Realizada"
+                  c.status !== "Cancelada" && c.status !== "Realizada",
               )
               .slice(0, 2)
               .forEach((c: any) => {
@@ -265,10 +276,9 @@ export default function DashboardNavbar() {
         }
       }
 
-      // 2. Notificações de vínculo atribuído pela Administração ao usuário logado
       const resMeusVinculos = await fetch(
         `${API_URL}/usuario-idoso/usuario/${userId}`,
-        { headers }
+        { headers },
       ).catch(() => null);
 
       if (resMeusVinculos?.ok) {
@@ -307,10 +317,7 @@ export default function DashboardNavbar() {
       const userData = parsed.user || parsed.usuario || parsed;
 
       const cId =
-        userData.clinica_id ||
-        userData.clinicaId ||
-        userData.clinica?.id ||
-        "";
+        userData.clinica_id || userData.clinicaId || userData.clinica?.id || "";
 
       const cNomeInicial =
         userData.clinica?.nome || userData.clinica_nome || "";
@@ -374,13 +381,44 @@ export default function DashboardNavbar() {
     localStorage.removeItem("saspi_elderly_list");
     document.cookie = "saspi_token=; path=/; max-age=0; SameSite=Lax";
     document.cookie = "saspi_user=; path=/; max-age=0; SameSite=Lax";
+
+    window.dispatchEvent(new Event("saspi_user_updated"));
+
     router.push("/login");
+  }
+
+  function marcarComoLida(id: string, event: React.MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!usuario?.id) return;
+
+    const novasLidas = [...notificacoesLidas, id];
+    setNotificacoesLidas(novasLidas);
+    localStorage.setItem(
+      `saspi_notif_lidas_${usuario.id}`,
+      JSON.stringify(novasLidas),
+    );
+  }
+
+  function marcarTodasComoLidas() {
+    if (!usuario?.id) return;
+    const todosIds = notificacoes.map((n) => n.id);
+    setNotificacoesLidas(todosIds);
+    localStorage.setItem(
+      `saspi_notif_lidas_${usuario.id}`,
+      JSON.stringify(todosIds),
+    );
   }
 
   const isAdmin =
     usuario?.perfil === "ADMINISTRADOR" || usuario?.perfil === "ADMIN";
   const navLinksAtivos = isAdmin ? ADMIN_NAV_LINKS : CLINICAL_NAV_LINKS;
-  const qtdCriticas = notificacoes.filter((n) => n.critico).length;
+
+  const notificacoesNaoLidas = notificacoes.filter(
+    (n) => !notificacoesLidas.includes(n.id),
+  );
+  const qtdCriticas = notificacoesNaoLidas.filter((n) => n.critico).length;
 
   return (
     <header className="sticky top-0 z-40 border-b border-gray-100 bg-white/95 backdrop-blur-md">
@@ -449,80 +487,121 @@ export default function DashboardNavbar() {
               className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-gray-100 bg-gray-50/70 text-gray-600 transition hover:bg-[#E8F1FB] hover:text-[#1565C0]"
             >
               <Bell size={19} />
-              {notificacoes.length > 0 && (
+              {notificacoesNaoLidas.length > 0 && (
                 <span
                   className={`absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white shadow-sm ${
                     qtdCriticas > 0 ? "bg-red-600" : "bg-[#1565C0]"
                   }`}
                 >
-                  {notificacoes.length}
+                  {notificacoesNaoLidas.length}
                 </span>
               )}
             </button>
 
             {notificacoesAbertas && (
-              <div className="absolute right-0 mt-2 w-80 sm:w-96 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-xl ring-1 ring-black/5">
+              <div className="absolute right-0 mt-2 w-80 sm:w-105 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-xl ring-1 ring-black/5 z-50">
                 <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50/60 px-4 py-3">
                   <span className="text-sm font-bold text-[#0A2540]">
-                    Notificações e Alertas ({notificacoes.length})
+                    Notificações e Alertas ({notificacoesNaoLidas.length})
                   </span>
-                  {qtdCriticas > 0 && (
-                    <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-[11px] font-semibold text-red-700">
-                      {qtdCriticas} alerta(s) clínico(s)
-                    </span>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {qtdCriticas > 0 && (
+                      <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-[11px] font-semibold text-red-700">
+                        {qtdCriticas} clínico(s)
+                      </span>
+                    )}
+                    {notificacoesNaoLidas.length > 0 && (
+                      <button
+                        onClick={marcarTodasComoLidas}
+                        className="flex items-center gap-1 text-[11px] font-medium text-[#1565C0] hover:text-[#0A2540] transition"
+                        title="Marcar todas como lidas"
+                      >
+                        <CheckCheck size={14} />
+                        Lidas
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                <div className="max-h-80 divide-y divide-gray-100 overflow-y-auto">
-                  {notificacoes.length === 0 ? (
-                    <div className="p-6 text-center text-sm text-gray-500">
-                      Nenhuma notificação ou alerta pendente no momento.
+                <div className="max-h-87.5 divide-y divide-gray-100 overflow-y-auto">
+                  {notificacoesNaoLidas.length === 0 ? (
+                    <div className="p-8 text-center">
+                      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 mb-3">
+                        <CheckCheck size={24} />
+                      </div>
+                      <p className="text-sm font-medium text-[#0A2540]">
+                        Tudo limpo!
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Nenhuma notificação ou alerta pendente.
+                      </p>
                     </div>
                   ) : (
-                    notificacoes.map((n) => (
-                      <Link
-                        key={n.id}
-                        href={n.href}
-                        onClick={() => setNotificacoesAbertas(false)}
-                        className={`flex items-start gap-3 p-4 transition hover:bg-gray-50 ${
-                          n.critico ? "bg-red-50/40" : ""
-                        }`}
-                      >
-                        <div
-                          className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-                            n.tipo === "alerta_clinico"
-                              ? "bg-red-100 text-red-600"
-                              : n.tipo === "vinculo"
-                                ? "bg-[#E8F1FB] text-[#1565C0]"
-                                : "bg-[#E6F4EF] text-[#26A69A]"
+                    notificacoesNaoLidas.map((n) => (
+                      <div key={n.id} className="relative group">
+                        <Link
+                          href={n.href}
+                          onClick={() => {
+                            setNotificacoesAbertas(false);
+                            // Marcar como lida automaticamente ao clicar no link
+                            if (!notificacoesLidas.includes(n.id)) {
+                              const novasLidas = [...notificacoesLidas, n.id];
+                              setNotificacoesLidas(novasLidas);
+                              if (usuario?.id)
+                                localStorage.setItem(
+                                  `saspi_notif_lidas_${usuario.id}`,
+                                  JSON.stringify(novasLidas),
+                                );
+                            }
+                          }}
+                          className={`flex items-start gap-3 p-4 pr-10 transition hover:bg-gray-50 ${
+                            n.critico ? "bg-red-50/40" : ""
                           }`}
                         >
-                          {n.tipo === "alerta_clinico" ? (
-                            <AlertTriangle size={16} />
-                          ) : n.tipo === "vinculo" ? (
-                            <UserCheck size={16} />
-                          ) : (
-                            <CalendarDays size={16} />
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p
-                            className={`text-xs font-bold ${
-                              n.critico ? "text-red-700" : "text-[#0A2540]"
+                          <div
+                            className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                              n.tipo === "alerta_clinico"
+                                ? "bg-red-100 text-red-600"
+                                : n.tipo === "vinculo"
+                                  ? "bg-[#E8F1FB] text-[#1565C0]"
+                                  : "bg-[#E6F4EF] text-[#26A69A]"
                             }`}
                           >
-                            {n.titulo}
-                          </p>
-                          <p className="mt-1 text-xs leading-relaxed text-gray-600">
-                            {n.descricao}
-                          </p>
-                          {n.dataHora && (
-                            <p className="mt-1 text-[11px] text-gray-400">
-                              Registrado em {n.dataHora}
+                            {n.tipo === "alerta_clinico" ? (
+                              <AlertTriangle size={16} />
+                            ) : n.tipo === "vinculo" ? (
+                              <UserCheck size={16} />
+                            ) : (
+                              <CalendarDays size={16} />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p
+                              className={`text-xs font-bold ${
+                                n.critico ? "text-red-700" : "text-[#0A2540]"
+                              }`}
+                            >
+                              {n.titulo}
                             </p>
-                          )}
-                        </div>
-                      </Link>
+                            <p className="mt-1 text-xs leading-relaxed text-gray-600">
+                              {n.descricao}
+                            </p>
+                            {n.dataHora && (
+                              <p className="mt-1 text-[11px] text-gray-400">
+                                Registrado em {n.dataHora}
+                              </p>
+                            )}
+                          </div>
+                        </Link>
+
+                        <button
+                          onClick={(e) => marcarComoLida(n.id, e)}
+                          className="absolute right-3 top-4 p-1.5 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition opacity-0 group-hover:opacity-100"
+                          title="Descartar notificação"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
                     ))
                   )}
                 </div>
@@ -541,7 +620,7 @@ export default function DashboardNavbar() {
               {usuario ? (
                 <img
                   src={`https://ui-avatars.com/api/?name=${encodeURIComponent(
-                    usuario.nome
+                    usuario.nome,
                   )}&background=1565C0&color=fff&size=64&bold=true`}
                   alt={usuario.nome}
                   className="h-9 w-9 shrink-0 rounded-full object-cover shadow-sm"
@@ -577,7 +656,7 @@ export default function DashboardNavbar() {
             </button>
 
             {dropdownAberto && usuario && (
-              <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-gray-100 bg-white p-2 shadow-lg ring-1 ring-black/5">
+              <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-gray-100 bg-white p-2 shadow-lg ring-1 ring-black/5 z-50">
                 <div className="border-b border-gray-100 px-3 py-2 md:hidden">
                   <p className="text-sm font-semibold text-[#0A2540]">
                     {usuario.nome}
@@ -663,8 +742,54 @@ export default function DashboardNavbar() {
               </div>
             )}
           </div>
+
+          {/* BOTÃO HAMBÚRGUER PARA NAVEGAÇÃO MOBILE (RNF04) */}
+          <button
+            type="button"
+            onClick={() => setMenuMobileAberto((prev) => !prev)}
+            aria-label={
+              menuMobileAberto
+                ? "Fechar menu de navegação"
+                : "Abrir menu de navegação"
+            }
+            aria-expanded={menuMobileAberto}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-100 bg-gray-50/70 text-[#0A2540] transition hover:bg-[#E8F1FB] hover:text-[#1565C0] md:hidden"
+          >
+            {menuMobileAberto ? <X size={20} /> : <Menu size={20} />}
+          </button>
         </div>
       </div>
+
+      {/* MENU DE NAVEGAÇÃO MOBILE RECOLHÍVEL */}
+      {menuMobileAberto && (
+        <div className="border-t border-gray-100 bg-white px-4 py-3 shadow-sm md:hidden">
+          <nav className="flex flex-col gap-1">
+            {navLinksAtivos.map((link) => {
+              const Icon = link.icon;
+              const ativo =
+                link.href === "/dashboard"
+                  ? pathname === "/dashboard"
+                  : pathname.startsWith(link.href);
+
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMenuMobileAberto(false)}
+                  className={`flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-sm font-medium transition ${
+                    ativo
+                      ? "bg-[#E8F1FB] text-[#1565C0]"
+                      : "text-gray-600 hover:bg-gray-50 hover:text-[#0A2540]"
+                  }`}
+                >
+                  <Icon size={17} />
+                  {link.label}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+      )}
     </header>
   );
 }

@@ -101,6 +101,10 @@ export default function Login() {
         clinica_nome: "Clínica - S.A.S.P.I.",
       };
 
+      // Limpa pacientes da sessão anterior para evitar requisições 403 entre trocas de contas
+      localStorage.removeItem("saspi_active_elderly");
+      localStorage.removeItem("saspi_elderly_list");
+
       localStorage.setItem("saspi_user", JSON.stringify(usuarioSalvar));
       window.dispatchEvent(new Event("saspi_user_updated"));
 
