@@ -14,6 +14,7 @@ import {
   Stethoscope,
   AlertCircle,
   ShieldAlert,
+  UserCheck,
 } from "lucide-react";
 
 const API_URL =
@@ -28,6 +29,8 @@ export default function NovaConsulta() {
   const [idoso, setIdoso] = useState<Idoso | null>(null);
   const [autorizado, setAutorizado] = useState<boolean | null>(null);
   const [usuarioId, setUsuarioId] = useState<string>("");
+
+  const hojeIso = new Date().toISOString().split("T")[0];
 
   const [formData, setFormData] = useState({
     especialidade: "",
@@ -47,7 +50,7 @@ export default function NovaConsulta() {
         const perfil = String(
           userData.perfil || userData.role || ""
         ).toUpperCase();
-        
+
         setUsuarioId(userData.id || "");
         setAutorizado(perfil !== "FAMILIAR");
       } catch {
@@ -79,11 +82,14 @@ export default function NovaConsulta() {
 
     let dataFormatada = formData.data;
     try {
+      const ano = Number(formData.data.split("-")[0]);
       const dataObj = new Date(formData.data);
-      if (Number.isNaN(dataObj.getTime())) throw new Error();
+      if (Number.isNaN(dataObj.getTime()) || ano < 2024 || ano > 2100) {
+        throw new Error();
+      }
       dataFormatada = dataObj.toISOString().split("T")[0];
     } catch {
-      setErro("Data selecionada é inválida.");
+      setErro("Data selecionada é inválida. Informe uma data válida.");
       setSalvando(false);
       return;
     }
@@ -118,9 +124,12 @@ export default function NovaConsulta() {
         const msg = Array.isArray(errData?.message)
           ? errData.message.join(", ")
           : errData?.message;
-        throw new Error(msg || `Erro ${res.status}: Falha ao registrar agendamento.`);
+        throw new Error(
+          msg || `Erro ${res.status}: Falha ao registrar agendamento.`
+        );
       }
 
+      window.dispatchEvent(new Event("saspi_elderly_updated"));
       setSucesso(true);
       setTimeout(() => {
         router.push("/dashboard/consultas");
@@ -152,12 +161,18 @@ export default function NovaConsulta() {
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
             <ShieldAlert size={32} />
           </div>
-          <h1 className="mt-4 text-2xl font-bold text-[#0A2540]">Modo Somente Leitura</h1>
+          <h1 className="mt-4 text-2xl font-bold text-[#0A2540]">
+            Modo Somente Leitura
+          </h1>
           <p className="mt-2 text-sm text-gray-600">
-            O perfil Familiar possui permissão exclusiva para visualização da agenda clínica.
+            O perfil Familiar possui permissão exclusiva para visualização da
+            agenda clínica.
           </p>
           <div className="mt-6">
-            <Link href="/dashboard/consultas" className="inline-flex items-center gap-2 rounded-xl bg-[#1565C0] px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#0A2540]">
+            <Link
+              href="/dashboard/consultas"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#1565C0] px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#0A2540]"
+            >
               <ArrowLeft size={16} /> Voltar para Consultas
             </Link>
           </div>
@@ -171,13 +186,20 @@ export default function NovaConsulta() {
       <DashboardNavbar />
 
       <div className="mx-auto max-w-4xl px-4 py-8 md:px-8">
-        <Link href="/dashboard/consultas" className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-[#1565C0]">
+        <Link
+          href="/dashboard/consultas"
+          className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-[#1565C0]"
+        >
           <ArrowLeft size={17} /> Voltar para consultas
         </Link>
 
         <div className="mt-8">
-          <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">Agenda de saúde</span>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0A2540] md:text-4xl">Nova consulta</h1>
+          <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
+            Agenda de saúde
+          </span>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0A2540] md:text-4xl">
+            Nova consulta
+          </h1>
         </div>
 
         {erro && (
@@ -190,7 +212,25 @@ export default function NovaConsulta() {
         {sucesso && (
           <div className="mt-6 flex items-center gap-3 rounded-xl bg-emerald-50 p-4 text-emerald-800">
             <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
-            <p className="text-sm font-medium">Consulta agendada com sucesso! Redirecionando...</p>
+            <p className="text-sm font-medium">
+              Consulta agendada com sucesso! Redirecionando...
+            </p>
+          </div>
+        )}
+
+        {idoso && (
+          <div className="mt-6 flex items-center gap-3 rounded-2xl border border-blue-100 bg-[#E8F1FB] p-4 text-[#0A2540]">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#1565C0] shadow-sm">
+              <UserCheck size={20} />
+            </div>
+            <div>
+              <span className="text-xs font-semibold uppercase tracking-wider text-[#1565C0]">
+                Consulta vinculada ao paciente:
+              </span>
+              <p className="text-sm font-bold">
+                {idoso.nome} {idoso.idade > 0 ? `(${idoso.idade} anos)` : ""}
+              </p>
+            </div>
           </div>
         )}
 
@@ -201,66 +241,93 @@ export default function NovaConsulta() {
                 <Stethoscope size={22} />
               </div>
               <div>
-                <h2 className="font-semibold text-[#0A2540]">Informações da consulta</h2>
+                <h2 className="font-semibold text-[#0A2540]">
+                  Informações da consulta
+                </h2>
               </div>
             </div>
 
             <div className="mt-6 grid gap-5 md:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm font-medium text-[#0A2540]">Especialidade *</label>
+                <label className="mb-2 block text-sm font-medium text-[#0A2540]">
+                  Especialidade *
+                </label>
                 <input
                   type="text"
                   required
                   value={formData.especialidade}
-                  onChange={(e) => setFormData({ ...formData, especialidade: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, especialidade: e.target.value })
+                  }
                   placeholder="Ex.: Cardiologia"
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-500 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-[#0A2540]">Profissional *</label>
+                <label className="mb-2 block text-sm font-medium text-[#0A2540]">
+                  Profissional *
+                </label>
                 <input
                   type="text"
                   required
                   value={formData.profissional}
-                  onChange={(e) => setFormData({ ...formData, profissional: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, profissional: e.target.value })
+                  }
                   placeholder="Ex.: Dr. Silva"
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-500 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-[#0A2540]">Data *</label>
+                <label className="mb-2 block text-sm font-medium text-[#0A2540]">
+                  Data *
+                </label>
                 <input
                   type="date"
                   required
+                  min={hojeIso}
+                  max="2100-12-31"
                   value={formData.data}
-                  onChange={(e) => setFormData({ ...formData, data: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, data: e.target.value })
+                  }
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-[#0A2540]">Horário *</label>
+                <label className="mb-2 block text-sm font-medium text-[#0A2540]">
+                  Horário *
+                </label>
                 <input
                   type="time"
                   required
                   value={formData.horario}
-                  onChange={(e) => setFormData({ ...formData, horario: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, horario: e.target.value })
+                  }
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
               </div>
 
               <div className="md:col-span-2">
-                <label className="mb-2 block text-sm font-medium text-[#0A2540]">Local da consulta *</label>
+                <label className="mb-2 block text-sm font-medium text-[#0A2540]">
+                  Local da consulta *
+                </label>
                 <div className="relative">
-                  <MapPin size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <MapPin
+                    size={18}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500"
+                  />
                   <input
                     type="text"
                     required
                     value={formData.local}
-                    onChange={(e) => setFormData({ ...formData, local: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, local: e.target.value })
+                    }
                     placeholder="Nome da clínica ou hospital"
                     className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-900 placeholder:text-gray-500 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   />
@@ -268,11 +335,15 @@ export default function NovaConsulta() {
               </div>
 
               <div className="md:col-span-2">
-                <label className="mb-2 block text-sm font-medium text-[#0A2540]">Observações e Preparos</label>
+                <label className="mb-2 block text-sm font-medium text-[#0A2540]">
+                  Observações e Preparos
+                </label>
                 <textarea
                   rows={4}
                   value={formData.observacao}
-                  onChange={(e) => setFormData({ ...formData, observacao: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, observacao: e.target.value })
+                  }
                   placeholder="Ex.: Chegar com 15 minutos de antecedência. Exames necessários."
                   className="w-full resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-500 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
@@ -293,7 +364,11 @@ export default function NovaConsulta() {
               disabled={salvando || !idoso}
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-6 py-3 font-medium text-white shadow-sm disabled:opacity-70"
             >
-              {salvando ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+              {salvando ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <Save size={18} />
+              )}
               Salvar consulta
             </button>
           </div>

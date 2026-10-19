@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import DashboardNavbar from "@/components/DashboardNavbar";
 import PatientSelector, { Idoso } from "@/components/PatientSelector";
+import { avaliarIndicadorClinico } from "@/components/MetricCard";
 import {
   CalendarDays,
   HeartPulse,
@@ -12,6 +13,8 @@ import {
   Filter,
   History,
   Loader2,
+  AlertTriangle,
+  Info,
 } from "lucide-react";
 
 interface EventoHistorico {
@@ -21,6 +24,10 @@ interface EventoHistorico {
   descricao: string;
   dataHora: string;
   autor: string;
+  timestamp: number;
+  tone?: "normal" | "warning" | "critical" | "neutral";
+  nome_indicador?: string;
+  valor_numerico?: number | null;
 }
 
 const API_URL =
@@ -67,6 +74,7 @@ export default function HistoricoPage() {
           .filter((item: any) => !item.idoso_id || item.idoso_id === idosoId)
           .forEach((item: any) => {
             const rawDate = item.data_hora || item.created_at;
+            const parsedTime = rawDate ? new Date(rawDate).getTime() : 0;
             const dataFormatada = rawDate
               ? new Date(rawDate).toLocaleString("pt-BR", {
                   dateStyle: "short",
@@ -100,6 +108,20 @@ export default function HistoricoPage() {
                 ? "Smartband (Automático)"
                 : "Registro Manual");
 
+            let tagAvaliacao: "normal" | "warning" | "critical" | "neutral" = "neutral";
+            const valParaAvaliar = item.valor_categorico || String(item.valor_numerico || "");
+            const nomeLow = String(nomeIndicador).toLowerCase();
+
+            if (nomeLow.includes("card") || nomeLow.includes("freq")) {
+              tagAvaliacao = avaliarIndicadorClinico("fc", valParaAvaliar).tone;
+            } else if (nomeLow.includes("oxig") || nomeLow.includes("spo")) {
+              tagAvaliacao = avaliarIndicadorClinico("spo2", valParaAvaliar).tone;
+            } else if (nomeLow.includes("temp")) {
+              tagAvaliacao = avaliarIndicadorClinico("temp", valParaAvaliar).tone;
+            } else if (nomeLow.includes("press") || nomeLow.includes("pa")) {
+              tagAvaliacao = avaliarIndicadorClinico("pa", valParaAvaliar).tone;
+            }
+
             eventosUnificados.push({
               id: `saude-${item.id}`,
               tipo: "sinal_vital",
@@ -107,6 +129,8 @@ export default function HistoricoPage() {
               descricao: `${valorPrincipal}${complemento}`,
               dataHora: dataFormatada,
               autor: autorFormatado,
+              timestamp: Number.isNaN(parsedTime) ? 0 : parsedTime,
+              tone: tagAvaliacao,
             });
           });
       }
@@ -120,6 +144,9 @@ export default function HistoricoPage() {
         arrPresc
           .filter((p: any) => !p.idoso_id || p.idoso_id === idosoId)
           .forEach((p: any) => {
+            const parsedTime = p.data_inicio
+              ? new Date(p.data_inicio).getTime()
+              : 0;
             const dataFormatada = p.data_inicio
               ? new Date(p.data_inicio).toLocaleDateString("pt-BR", {
                   timeZone: "UTC",
@@ -133,6 +160,8 @@ export default function HistoricoPage() {
               descricao: `${p.dosagem || ""} • ${p.frequencia || "Uso contínuo"}`,
               dataHora: dataFormatada,
               autor: p.usuario?.nome || "Equipe Médica",
+              timestamp: Number.isNaN(parsedTime) ? 0 : parsedTime,
+              tone: "neutral",
             });
           });
       }
@@ -146,6 +175,8 @@ export default function HistoricoPage() {
         arrCons
           .filter((c: any) => !c.idoso_id || c.idoso_id === idosoId)
           .forEach((c: any) => {
+            const rawIso = c.created_at || c.data;
+            const parsedTime = rawIso ? new Date(rawIso).getTime() : 0;
             const dataFormatada = c.data
               ? `${new Date(c.data).toLocaleDateString("pt-BR", { timeZone: "UTC" })} às ${c.horario || ""}`
               : "Consulta agendada";
@@ -157,10 +188,14 @@ export default function HistoricoPage() {
               descricao: `${c.localizacao || ""} • Status: ${c.status || "Agendada"}`,
               dataHora: dataFormatada,
               autor: c.medico || "Médico Responsável",
+              timestamp: Number.isNaN(parsedTime) ? 0 : parsedTime,
+              tone: "neutral",
             });
           });
       }
 
+      // Ordena cronologicamente do evento mais recente para o mais antigo
+      eventosUnificados.sort((a, b) => b.timestamp - a.timestamp);
       setEventos(eventosUnificados);
     } catch {
       setEventos([]);
@@ -303,53 +338,67 @@ export default function HistoricoPage() {
             </div>
           ) : eventosFiltrados.length > 0 ? (
             <ul className="mt-8 space-y-4">
-              {eventosFiltrados.map((evento) => (
-                <li
-                  key={evento.id}
-                  className="flex flex-col gap-4 rounded-2xl border border-gray-100 bg-[#FAFCFE] p-5 transition hover:border-[#BFD8F2] hover:bg-white hover:shadow-sm sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="flex items-start gap-4">
-                    {evento.tipo === "sinal_vital" && (
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#E8F1FB] text-[#1565C0]">
-                        <HeartPulse size={24} />
-                      </div>
-                    )}
-                    {evento.tipo === "medicamento" && (
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#E6F4EF] text-[#26A69A]">
-                        <Pill size={24} />
-                      </div>
-                    )}
-                    {evento.tipo === "consulta" && (
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#E8F1FB] text-[#1565C0]">
-                        <CalendarDays size={24} />
-                      </div>
-                    )}
+              {eventosFiltrados.map((evento) => {
+                // Determina as cores de acordo com a gravidade do evento
+                const iconBgClass = 
+                  evento.tone === "critical" ? "bg-red-100 text-red-700" :
+                  evento.tone === "warning" ? "bg-amber-100 text-amber-700" :
+                  "bg-gray-50 text-gray-600 border border-gray-200"; // Modificado para Normal/Neutral
 
-                    <div>
-                      <p className="font-semibold text-[#0A2540]">
-                        {evento.titulo}
-                      </p>
-                      <p className="mt-0.5 text-xs text-gray-400">
-                        {evento.dataHora}
-                      </p>
-                      <p className="mt-2 text-sm text-gray-600">
-                        {evento.descricao}
-                      </p>
+                const borderClass = 
+                  evento.tone === "critical" ? "border-red-200 bg-red-50/30 hover:border-red-300" :
+                  evento.tone === "warning" ? "border-amber-200 bg-amber-50/30 hover:border-amber-300" :
+                  "border-gray-200 bg-white hover:border-[#BFD8F2] hover:bg-gray-50"; // Fundo branco clássico
+
+                return (
+                  <li
+                    key={evento.id}
+                    className={`flex flex-col gap-4 rounded-2xl border p-5 transition shadow-sm sm:flex-row sm:items-center sm:justify-between ${borderClass}`}
+                  >
+                    <div className="flex items-start gap-4">
+                      {evento.tipo === "sinal_vital" && (
+                        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${iconBgClass}`}>
+                          {evento.tone === "critical" ? <AlertTriangle size={24} /> : 
+                           evento.tone === "warning" ? <Info size={24} /> : <HeartPulse size={24} />}
+                        </div>
+                      )}
+                      {evento.tipo === "medicamento" && (
+                        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${iconBgClass}`}>
+                          <Pill size={24} />
+                        </div>
+                      )}
+                      {evento.tipo === "consulta" && (
+                        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${iconBgClass}`}>
+                          <CalendarDays size={24} />
+                        </div>
+                      )}
+
+                      <div>
+                        <p className={`font-semibold ${evento.tone === "critical" ? "text-red-800" : "text-[#0A2540]"}`}>
+                          {evento.titulo}
+                        </p>
+                        <p className="mt-0.5 text-xs text-gray-500">
+                          {evento.dataHora}
+                        </p>
+                        <p className={`mt-2 text-sm ${evento.tone === "critical" ? "text-red-700 font-medium" : "text-gray-600"}`}>
+                          {evento.descricao}
+                        </p>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-2 sm:text-right">
-                    <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-[#1565C0]">
-                      Responsável: <strong>{evento.autor}</strong>
-                    </span>
-                  </div>
-                </li>
-              ))}
+                    <div className="flex items-center gap-2 sm:text-right">
+                      <span className="rounded-full bg-white border border-gray-200 px-3 py-1 text-xs font-medium text-gray-600 shadow-sm">
+                        Origem: <strong>{evento.autor}</strong>
+                      </span>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           ) : (
             <div className="mt-8 rounded-xl border border-dashed border-gray-200 p-8 text-center text-sm text-gray-500">
               {idoso
-                ? `Nenhum registro encontrado para ${idoso.nome} nesta categoria.`
+                ? `Nenhum registro encontrado no banco para ${idoso.nome}.`
                 : "Selecione um paciente para exibir os registros."}
             </div>
           )}
