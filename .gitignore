@@ -39,3 +39,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Arquivos de contexto / exportação
+saspi-mobile.txt
+*.txt
