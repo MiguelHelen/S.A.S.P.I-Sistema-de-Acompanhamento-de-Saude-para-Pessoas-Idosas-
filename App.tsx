@@ -1,11 +1,13 @@
 import React from "react";
 import { View, ActivityIndicator } from "react-native";
+import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "./src/contexts/AuthContext";
-import LoginScreen from "./src/screens/LoginScreen";
-import HomeScreen from "./src/screens/HomeScreen";
 
-function MainNavigator() {
+import AuthNavigator from "./src/navigation/AuthNavigator";
+import AppNavigator from "./src/navigation/AppNavigator";
+
+function MainApp() {
   const { usuario, loading } = useAuth();
 
   if (loading) {
@@ -16,14 +18,17 @@ function MainNavigator() {
     );
   }
 
-  return usuario ? <HomeScreen /> : <LoginScreen />;
+  // Define a navegação baseada no estado de autenticação do usuário.
+  return usuario ? <AppNavigator /> : <AuthNavigator />;
 }
 
 export default function App() {
   return (
     <AuthProvider>
       <StatusBar style="dark" />
-      <MainNavigator />
+      <NavigationContainer>
+        <MainApp />
+      </NavigationContainer>
     </AuthProvider>
   );
 }
