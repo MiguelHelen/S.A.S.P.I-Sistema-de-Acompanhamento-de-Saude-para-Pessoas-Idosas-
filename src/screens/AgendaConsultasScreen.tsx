@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../contexts/AuthContext';
 import { API_URL } from '../api/client';
@@ -10,31 +11,37 @@ export default function AgendaConsultasScreen() {
   const [consultas, setConsultas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function fetchConsultas() {
-      try {
-        const storedElderly = await AsyncStorage.getItem('saspi_active_elderly');
-        if (storedElderly) {
-          const idosoId = JSON.parse(storedElderly).id;
-          const res = await fetch(`${API_URL}/consulta?idoso_id=${idosoId}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          
-          if (res.ok) {
-            const data = await res.json();
-            // Filtra para mostrar apenas agendadas (no mobile)
-            const ativas = Array.isArray(data) ? data.filter((c:any) => c.status === "Agendada") : [];
-            setConsultas(ativas);
+  useFocusEffect(
+    useCallback(() => {
+      let isMounted = true;
+      async function fetchConsultas() {
+        try {
+          const storedElderly = await AsyncStorage.getItem('saspi_active_elderly');
+          if (storedElderly) {
+            const idosoId = JSON.parse(storedElderly).id;
+            const res = await fetch(`${API_URL}/consulta?idoso_id=${idosoId}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            
+            if (res.ok) {
+              const data = await res.json();
+              const ativas = Array.isArray(data) ? data.filter((c:any) => c.status === "Agendada") : [];
+              if (isMounted) setConsultas(ativas);
+            }
           }
+        } catch (err) {
+          console.error("Erro ao buscar consultas:", err);
+        } finally {
+          if (isMounted) setLoading(false);
         }
-      } catch (err) {
-        console.error("Erro ao buscar consultas:", err);
-      } finally {
-        setLoading(false);
       }
-    }
-    fetchConsultas();
-  }, []);
+      fetchConsultas();
+      
+      return () => {
+        isMounted = false;
+      };
+    }, [token])
+  );
 
   if (loading) {
     return <View style={styles.center}><ActivityIndicator size="large" color="#1565C0" /></View>;

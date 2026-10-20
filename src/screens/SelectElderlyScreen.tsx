@@ -39,7 +39,9 @@ export default function SelectElderlyScreen({ navigation }: any) {
   }, [usuario, token, navigation]);
 
   const handleSelectElderly = async (idoso: any) => {
+    // Grava o paciente selecionado
     await AsyncStorage.setItem('saspi_active_elderly', JSON.stringify(idoso));
+    // Redireciona
     navigation.replace('MainTabs');
   };
 

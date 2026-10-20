@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useCallback } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
+import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "../contexts/AuthContext";
 import { API_URL } from "../api/client";
@@ -11,47 +12,55 @@ export default function FamiliarHomeScreen({ navigation }: any) {
   const [idoso, setIdoso] = useState<{ id: string; nome: string } | null>(null);
   const [resumo, setResumo] = useState({ fc: "--", spo2: "--", temp: "--", pa: "--/--" });
 
-  useEffect(() => {
-    async function carregarDashboard() {
-      try {
-        const storedElderly = await AsyncStorage.getItem('saspi_active_elderly');
-        if (storedElderly) {
-          const parsedIdoso = JSON.parse(storedElderly);
-          setIdoso(parsedIdoso);
+  // useFocusEffect garante a execução sempre que o ecrã ganha foco
+  useFocusEffect(
+    useCallback(() => {
+      let isMounted = true;
+      async function carregarDashboard() {
+        try {
+          const storedElderly = await AsyncStorage.getItem('saspi_active_elderly');
+          if (storedElderly) {
+            const parsedIdoso = JSON.parse(storedElderly);
+            if (isMounted) setIdoso(parsedIdoso);
 
-          const resVitals = await fetch(`${API_URL}/registro-saude/idoso/${parsedIdoso.id}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          
-          if (resVitals.ok) {
-            const vitalsData = await resVitals.json();
-            const list = Array.isArray(vitalsData) ? vitalsData : vitalsData.data || [];
-            
-            let fc = "--";
-            let spo2 = "--";
-            let temp = "--";
-            let pa = "--/--";
-
-            list.forEach((r: any) => {
-               const nome = String(r.indicador_saude?.nome || r.indicador_nome || "").toLowerCase();
-               const val = String(r.valor_numerico ?? r.valor_categorico ?? "--");
-               if (nome.includes("card") && fc === "--") fc = val;
-               if ((nome.includes("oxig") || nome.includes("spo")) && spo2 === "--") spo2 = val;
-               if (nome.includes("temp") && temp === "--") temp = val;
-               if ((nome.includes("press") || nome.includes("pa")) && pa === "--/--") pa = val;
+            const resVitals = await fetch(`${API_URL}/registro-saude/idoso/${parsedIdoso.id}`, {
+              headers: { Authorization: `Bearer ${token}` },
             });
+            
+            if (resVitals.ok) {
+              const vitalsData = await resVitals.json();
+              const list = Array.isArray(vitalsData) ? vitalsData : vitalsData.data || [];
+              
+              let fc = "--";
+              let spo2 = "--";
+              let temp = "--";
+              let pa = "--/--";
 
-            setResumo({ fc, spo2, temp, pa });
+              list.forEach((r: any) => {
+                 const nome = String(r.indicador_saude?.nome || r.indicador_nome || "").toLowerCase();
+                 const val = String(r.valor_numerico ?? r.valor_categorico ?? "--");
+                 if (nome.includes("card") && fc === "--") fc = val;
+                 if ((nome.includes("oxig") || nome.includes("spo")) && spo2 === "--") spo2 = val;
+                 if (nome.includes("temp") && temp === "--") temp = val;
+                 if ((nome.includes("press") || nome.includes("pa")) && pa === "--/--") pa = val;
+              });
+
+              if (isMounted) setResumo({ fc, spo2, temp, pa });
+            }
           }
+        } catch (err) {
+          console.error("Erro ao carregar dashboard:", err);
+        } finally {
+          if (isMounted) setLoading(false);
         }
-      } catch (err) {
-        console.error("Erro ao carregar dashboard:", err);
-      } finally {
-        setLoading(false);
       }
-    }
-    carregarDashboard();
-  }, [token]);
+      carregarDashboard();
+      
+      return () => {
+        isMounted = false;
+      };
+    }, [token])
+  );
 
   const isCuidador = usuario?.perfil === 'CUIDADOR';
 
@@ -78,6 +87,10 @@ export default function FamiliarHomeScreen({ navigation }: any) {
             {loading ? "Carregando..." : idoso?.nome || "Nenhum vínculo ativo"}
           </Text>
         </View>
+        {/* Adiciona opção para mudar de paciente se tiver permissão (volta à Seleção) */}
+        <TouchableOpacity onPress={() => navigation.replace('SelectElderly')} style={styles.switchButton}>
+            <Text style={styles.switchText}>Trocar</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.sectionHeader}>
@@ -164,6 +177,8 @@ const styles = StyleSheet.create({
   patientIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center", marginRight: 12 },
   patientSub: { fontSize: 12, color: "#1565C0", fontWeight: "600", textTransform: "uppercase" },
   patientName: { fontSize: 16, fontWeight: "bold", color: "#0A2540", marginTop: 2 },
+  switchButton: { backgroundColor: "#1565C0", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  switchText: { color: "#FFF", fontSize: 12, fontWeight: "bold" },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   sectionTitle: { fontSize: 17, fontWeight: "bold", color: "#0A2540", marginBottom: 12 },
   actionBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1565C0', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, gap: 4 },
