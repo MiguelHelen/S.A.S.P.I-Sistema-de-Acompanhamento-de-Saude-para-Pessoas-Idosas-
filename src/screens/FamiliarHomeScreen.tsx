@@ -1,63 +1,103 @@
 import React, { useState, useCallback } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from "react-native";
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "../contexts/AuthContext";
 import { API_URL } from "../api/client";
 import { HeartPulse, Activity, Pill, CalendarDays, UserCheck, Plus, Thermometer, Droplet, Bell } from "lucide-react-native";
+import io from 'socket.io-client';
 
 export default function FamiliarHomeScreen({ navigation }: any) {
-  const { usuario, token } = useAuth();
+  const { usuario, token, logout } = useAuth();
   const [loading, setLoading] = useState(true);
   const [idoso, setIdoso] = useState<{ id: string; nome: string } | null>(null);
   const [resumo, setResumo] = useState({ fc: "--", spo2: "--", temp: "--", pa: "--/--" });
 
-  // useFocusEffect garante a execução sempre que o ecrã ganha foco
   useFocusEffect(
     useCallback(() => {
       let isMounted = true;
+      let socket: any = null;
+
       async function carregarDashboard() {
         try {
           const storedElderly = await AsyncStorage.getItem('saspi_active_elderly');
-          if (storedElderly) {
-            const parsedIdoso = JSON.parse(storedElderly);
-            if (isMounted) setIdoso(parsedIdoso);
-
-            const resVitals = await fetch(`${API_URL}/registro-saude/idoso/${parsedIdoso.id}`, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            
-            if (resVitals.ok) {
-              const vitalsData = await resVitals.json();
-              const list = Array.isArray(vitalsData) ? vitalsData : vitalsData.data || [];
-              
-              let fc = "--";
-              let spo2 = "--";
-              let temp = "--";
-              let pa = "--/--";
-
-              list.forEach((r: any) => {
-                 const nome = String(r.indicador_saude?.nome || r.indicador_nome || "").toLowerCase();
-                 const val = String(r.valor_numerico ?? r.valor_categorico ?? "--");
-                 if (nome.includes("card") && fc === "--") fc = val;
-                 if ((nome.includes("oxig") || nome.includes("spo")) && spo2 === "--") spo2 = val;
-                 if (nome.includes("temp") && temp === "--") temp = val;
-                 if ((nome.includes("press") || nome.includes("pa")) && pa === "--/--") pa = val;
-              });
-
-              if (isMounted) setResumo({ fc, spo2, temp, pa });
-            }
+          if (!storedElderly) {
+            if (isMounted) setLoading(false);
+            return;
           }
+          
+          const parsedIdoso = JSON.parse(storedElderly);
+          if (isMounted) setIdoso(parsedIdoso);
+
+          // 1. Busca o histórico no banco de dados (REST API)
+          const resVitals = await fetch(`${API_URL}/registro-saude/idoso/${parsedIdoso.id}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          
+          if (resVitals.ok) {
+            const vitalsData = await resVitals.json();
+            const list = Array.isArray(vitalsData) ? vitalsData : vitalsData.data || [];
+            
+            let fc = "--", spo2 = "--", temp = "--", pa = "--/--";
+
+            list.forEach((r: any) => {
+               const nome = String(r.indicador_saude?.nome || r.indicador_nome || "").toLowerCase();
+               const val = String(r.valor_numerico ?? r.valor_categorico ?? "--");
+               if (nome.includes("card") && fc === "--") fc = val;
+               if ((nome.includes("oxig") || nome.includes("spo")) && spo2 === "--") spo2 = val;
+               if (nome.includes("temp") && temp === "--") temp = val;
+               if ((nome.includes("press") || nome.includes("pa")) && pa === "--/--") pa = val;
+            });
+
+            if (isMounted) setResumo({ fc, spo2, temp, pa });
+          }
+
+          // 2. Conecta ao WebSocket do Backend (Tempo Real)
+          socket = io(API_URL, {
+            auth: { token }
+          });
+
+          socket.on('connect', () => {
+            console.log("Conectado ao WebSocket! Entrando na sala do paciente...");
+            // Entra na sala exclusiva deste idoso
+            socket.emit('entrar-sala-idoso', parsedIdoso.id);
+          });
+
+          // Escuta novos registros e atualiza a tela na mesma hora
+          socket.on('novo-registro-saude', (registro: any) => {
+            const nome = String(registro?.indicador_saude?.nome || "").toLowerCase();
+            const val = String(registro?.valor_numerico ?? registro?.valor_categorico ?? "--");
+            
+            if (isMounted) {
+              setResumo(prev => {
+                const novo = { ...prev };
+                if (nome.includes("card")) novo.fc = val;
+                if (nome.includes("oxig") || nome.includes("spo")) novo.spo2 = val;
+                if (nome.includes("temp")) novo.temp = val;
+                if (nome.includes("press") || nome.includes("pa")) novo.pa = val;
+                return novo;
+              });
+            }
+          });
+
+          // Escuta Alertas Críticos do Sistema
+          socket.on('alerta-saude', (alerta: any) => {
+            Alert.alert("🚨 Alerta Clínico", alerta.mensagem);
+          });
+
         } catch (err) {
           console.error("Erro ao carregar dashboard:", err);
         } finally {
           if (isMounted) setLoading(false);
         }
       }
+
       carregarDashboard();
       
+      // Cleanup: Desconecta o socket ao sair da tela ou mudar de paciente
       return () => {
         isMounted = false;
+        if (socket) socket.disconnect();
       };
     }, [token])
   );
@@ -72,7 +112,7 @@ export default function FamiliarHomeScreen({ navigation }: any) {
           <Text style={styles.userName}>{usuario?.nome}</Text>
           <Text style={styles.badgeProfile}>{usuario?.perfil}</Text>
         </View>
-        <TouchableOpacity style={styles.bellButton} onPress={() => alert('Notificações em breve')} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.bellButton} onPress={() => Alert.alert('Notificações', 'Monitoramento ativo e conectado.')} activeOpacity={0.7}>
           <Bell size={24} color="#1565C0" />
         </TouchableOpacity>
       </View>
@@ -87,16 +127,15 @@ export default function FamiliarHomeScreen({ navigation }: any) {
             {loading ? "Carregando..." : idoso?.nome || "Nenhum vínculo ativo"}
           </Text>
         </View>
-        {/* Adiciona opção para mudar de paciente se tiver permissão (volta à Seleção) */}
         <TouchableOpacity onPress={() => navigation.replace('SelectElderly')} style={styles.switchButton}>
             <Text style={styles.switchText}>Trocar</Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Sinais Vitais Recentes</Text>
+        <Text style={styles.sectionTitle}>Sinais Vitais (Tempo Real)</Text>
         {isCuidador && (
-          <TouchableOpacity style={styles.actionBtn} onPress={() => alert('Miguel: Ligar ao teu ecrã de registo manual')}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => Alert.alert('Nova Aferição', 'Em breve: Miguel plugará a tela de registro aqui.')}>
             <Plus size={16} color="#FFF" />
             <Text style={styles.actionBtnText}>Aferir</Text>
           </TouchableOpacity>
@@ -147,7 +186,7 @@ export default function FamiliarHomeScreen({ navigation }: any) {
         </View>
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={styles.routineName}>Plano de Medicamentos</Text>
-          <Text style={styles.routineTime}>Mariana: Encaixar lista de medicamentos aqui</Text>
+          <Text style={styles.routineTime}>Visualizar rotina de remédios</Text>
         </View>
       </TouchableOpacity>
 
@@ -157,7 +196,7 @@ export default function FamiliarHomeScreen({ navigation }: any) {
         </View>
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={styles.routineName}>Consultas e Exames</Text>
-          <Text style={styles.routineTime}>Aceder à agenda de consultas</Text>
+          <Text style={styles.routineTime}>Acessar agenda clínica</Text>
         </View>
       </TouchableOpacity>
 
@@ -177,7 +216,7 @@ const styles = StyleSheet.create({
   patientIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center", marginRight: 12 },
   patientSub: { fontSize: 12, color: "#1565C0", fontWeight: "600", textTransform: "uppercase" },
   patientName: { fontSize: 16, fontWeight: "bold", color: "#0A2540", marginTop: 2 },
-  switchButton: { backgroundColor: "#1565C0", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  switchButton: { backgroundColor: "#1565C0", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
   switchText: { color: "#FFF", fontSize: 12, fontWeight: "bold" },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   sectionTitle: { fontSize: 17, fontWeight: "bold", color: "#0A2540", marginBottom: 12 },
