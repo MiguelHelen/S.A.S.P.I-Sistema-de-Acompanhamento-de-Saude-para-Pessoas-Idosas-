@@ -63,6 +63,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const accessToken = data.access_token || data.token;
       let userData = data.usuario || data.user;
 
+      // Buscar os dados completos caso a API devolva apenas o ID na autenticação inicial
       if (accessToken && (!userData?.nome || !userData?.perfil)) {
         try {
           const userRes = await fetch(`${API_URL}/usuario?email=${encodeURIComponent(emailLower)}`, {
@@ -76,11 +77,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch {}
       }
 
+      const perfil = (userData?.perfil || "FAMILIAR").toUpperCase();
+
+      // REGRA DE NEGÓCIO DA ARQUITETURA: Bloqueia perfis que são exclusivos do Dashboard Web
+      if (perfil === "MEDICO" || perfil === "ADMINISTRADOR" || perfil === "ADMIN" || perfil === "ENFERMEIRO") {
+        return { 
+          ok: false, 
+          message: `Acesso negado. O perfil ${perfil} deve utilizar a plataforma Web (Site) para gestão clínica.` 
+        };
+      }
+
       const usuarioFinal: Usuario = {
         id: userData?.id || "",
         nome: userData?.nome || emailLower.split("@")[0],
         email: emailLower,
-        perfil: (userData?.perfil || "FAMILIAR").toUpperCase(),
+        perfil: perfil,
         clinica_id: userData?.clinica_id,
       };
 
