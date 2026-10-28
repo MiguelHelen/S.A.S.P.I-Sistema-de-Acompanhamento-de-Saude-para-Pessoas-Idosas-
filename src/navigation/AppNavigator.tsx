@@ -8,6 +8,8 @@ import AgendaConsultasScreen from '../screens/AgendaConsultasScreen';
 import SelectElderlyScreen from '../screens/SelectElderlyScreen';
 import PerfilConfigScreen from '../screens/PerfilConfigScreen';
 import HomeScreen from '../screens/HomeScreen'; 
+import SinaisVitaisScreen from '../screens/SinaisVitaisScreen';
+import NovoRegistroSinalScreen from '../screens/NovoRegistroSinalScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -32,9 +34,10 @@ function TabNavigator() {
         component={HomeScreen} 
         options={{ tabBarIcon: ({ color }) => <Pill color={color} size={24} /> }} 
       />
+      {/* 2. Plugamos a tela de Sinais Vitais / Relógio na aba Saúde! */}
       <Tab.Screen 
         name="Saúde" 
-        component={HomeScreen} 
+        component={SinaisVitaisScreen} 
         options={{ tabBarIcon: ({ color }) => <HeartPulse color={color} size={24} /> }} 
       />
       <Tab.Screen 
@@ -42,7 +45,6 @@ function TabNavigator() {
         component={AgendaConsultasScreen}
         options={{ tabBarIcon: ({ color }) => <CalendarDays color={color} size={24} /> }} 
       />
-      {/* Nova Aba de Perfil! */}
       <Tab.Screen 
         name="Perfil" 
         component={PerfilConfigScreen}
@@ -57,6 +59,7 @@ export default function AppNavigator() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="SelectElderly" component={SelectElderlyScreen} />
       <Stack.Screen name="MainTabs" component={TabNavigator} />
+      <Stack.Screen name="NovoRegistroSinal" component={NovoRegistroSinalScreen} />
     </Stack.Navigator>
   );
 }
