@@ -13,6 +13,9 @@ export default function FamiliarHomeScreen({ navigation }: any) {
   const [idoso, setIdoso] = useState<{ id: string; nome: string } | null>(null);
   const [resumo, setResumo] = useState({ fc: "--", spo2: "--", temp: "--", pa: "--/--" });
 
+  // Só o Cuidador pode inserir dados. O Familiar apenas visualiza!
+  const isCuidador = usuario?.perfil === 'CUIDADOR';
+
   useFocusEffect(
     useCallback(() => {
       let isMounted = true;
@@ -29,7 +32,6 @@ export default function FamiliarHomeScreen({ navigation }: any) {
           const parsedIdoso = JSON.parse(storedElderly);
           if (isMounted) setIdoso(parsedIdoso);
 
-          // 1. Busca o histórico no banco de dados (REST API)
           const resVitals = await fetch(`${API_URL}/registro-saude/idoso/${parsedIdoso.id}`, {
             headers: { Authorization: `Bearer ${token}` },
           });
@@ -37,7 +39,6 @@ export default function FamiliarHomeScreen({ navigation }: any) {
           if (resVitals.ok) {
             const vitalsData = await resVitals.json();
             const list = Array.isArray(vitalsData) ? vitalsData : vitalsData.data || [];
-            
             let fc = "--", spo2 = "--", temp = "--", pa = "--/--";
 
             list.forEach((r: any) => {
@@ -52,22 +53,26 @@ export default function FamiliarHomeScreen({ navigation }: any) {
             if (isMounted) setResumo({ fc, spo2, temp, pa });
           }
 
-          // 2. Conecta ao WebSocket do Backend (Tempo Real)
-          socket = io(API_URL, {
-            auth: { token }
-          });
+          // Conecta ao WebSocket do Backend
+          socket = io(API_URL, { auth: { token } });
 
           socket.on('connect', () => {
-            console.log("Conectado ao WebSocket! Entrando na sala do paciente...");
-            // Entra na sala exclusiva deste idoso
+            console.log("Conectado ao WebSocket! Sala do paciente...");
             socket.emit('entrar-sala-idoso', parsedIdoso.id);
           });
 
-          // Escuta novos registros e atualiza a tela na mesma hora
+          // TRATAMENTO DO ERRO 401 QUE APARECEU NO SEU LOGCAT:
+          socket.on("connect_error", (err: any) => {
+            console.error("Erro no Socket:", err.message);
+            if (err.message.includes("Unauthorized") || err.message.includes("Token")) {
+              Alert.alert("Sessão Expirada", "Faça login novamente por segurança.");
+              if (isMounted) logout();
+            }
+          });
+
           socket.on('novo-registro-saude', (registro: any) => {
             const nome = String(registro?.indicador_saude?.nome || "").toLowerCase();
             const val = String(registro?.valor_numerico ?? registro?.valor_categorico ?? "--");
-            
             if (isMounted) {
               setResumo(prev => {
                 const novo = { ...prev };
@@ -80,7 +85,6 @@ export default function FamiliarHomeScreen({ navigation }: any) {
             }
           });
 
-          // Escuta Alertas Críticos do Sistema
           socket.on('alerta-saude', (alerta: any) => {
             Alert.alert("🚨 Alerta Clínico", alerta.mensagem);
           });
@@ -94,15 +98,12 @@ export default function FamiliarHomeScreen({ navigation }: any) {
 
       carregarDashboard();
       
-      // Cleanup: Desconecta o socket ao sair da tela ou mudar de paciente
       return () => {
         isMounted = false;
         if (socket) socket.disconnect();
       };
     }, [token])
   );
-
-  const isCuidador = usuario?.perfil === 'CUIDADOR';
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -135,7 +136,7 @@ export default function FamiliarHomeScreen({ navigation }: any) {
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Sinais Vitais (Tempo Real)</Text>
         {isCuidador && (
-          <TouchableOpacity style={styles.actionBtn} onPress={() => Alert.alert('Nova Aferição', 'Em breve: Miguel plugará a tela de registro aqui.')}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate("NovoRegistroSinal")}>
             <Plus size={16} color="#FFF" />
             <Text style={styles.actionBtnText}>Aferir</Text>
           </TouchableOpacity>
@@ -150,7 +151,6 @@ export default function FamiliarHomeScreen({ navigation }: any) {
           <Text style={styles.metricLabel}>Freq. Cardíaca</Text>
           <Text style={styles.metricValue}>{resumo.fc} <Text style={styles.unit}>bpm</Text></Text>
         </View>
-
         <View style={styles.cardMetric}>
           <View style={[styles.circleIcon, { backgroundColor: "#E0F2FE" }]}>
             <Activity size={22} color="#0284C7" />
@@ -159,7 +159,6 @@ export default function FamiliarHomeScreen({ navigation }: any) {
           <Text style={styles.metricValue}>{resumo.spo2} <Text style={styles.unit}>%</Text></Text>
         </View>
       </View>
-
       <View style={styles.grid}>
          <View style={styles.cardMetric}>
           <View style={[styles.circleIcon, { backgroundColor: "#FFF7ED" }]}>
@@ -168,7 +167,6 @@ export default function FamiliarHomeScreen({ navigation }: any) {
           <Text style={styles.metricLabel}>Temperatura</Text>
           <Text style={styles.metricValue}>{resumo.temp} <Text style={styles.unit}>°C</Text></Text>
         </View>
-
         <View style={styles.cardMetric}>
           <View style={[styles.circleIcon, { backgroundColor: "#F3E8FF" }]}>
             <Droplet size={22} color="#9333EA" />
