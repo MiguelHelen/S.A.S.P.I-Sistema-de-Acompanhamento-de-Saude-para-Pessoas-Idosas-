@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import DashboardNavbar from "@/components/DashboardNavbar";
 import {
   Mail,
@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   Loader2,
   AlertCircle,
+  Camera,
 } from "lucide-react";
 
 const API_URL =
@@ -21,8 +22,10 @@ const API_URL =
 export default function Perfil() {
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
+  const [enviandoFoto, setEnviandoFoto] = useState(false);
   const [salvo, setSalvo] = useState(false);
   const [erro, setErro] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
     id: "",
@@ -31,6 +34,7 @@ export default function Perfil() {
     telefone: "",
     cpf: "",
     perfil: "",
+    foto_url: "",
   });
 
   useEffect(() => {
@@ -61,6 +65,7 @@ export default function Perfil() {
           sessaoLocal.role ||
           "MEDICO"
         ).toUpperCase(),
+        foto_url: sessaoLocal.foto_url || "",
       });
 
       if (token && currentEmail) {
@@ -96,6 +101,7 @@ export default function Perfil() {
                 telefone: usuarioEncontrado.telefone || "",
                 cpf: usuarioEncontrado.cpf || "",
                 perfil: perfilAtualizado,
+                foto_url: usuarioEncontrado.foto_url || sessaoLocal.foto_url || "",
               };
 
               setFormData({
@@ -105,6 +111,7 @@ export default function Perfil() {
                 telefone: dadosMesclados.telefone,
                 cpf: dadosMesclados.cpf,
                 perfil: dadosMesclados.perfil,
+                foto_url: dadosMesclados.foto_url,
               });
 
               localStorage.setItem(
@@ -125,6 +132,68 @@ export default function Perfil() {
 
     sincronizarPerfil();
   }, []);
+
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setErro("Por favor, selecione um arquivo de imagem válido (PNG, JPG ou WEBP).");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setErro("A imagem selecionada excede o limite máximo de 5MB.");
+      return;
+    }
+
+    setEnviandoFoto(true);
+    setErro("");
+
+    const token = localStorage.getItem("saspi_token");
+    const dataUpload = new FormData();
+    dataUpload.append("file", file);
+
+    try {
+      const res = await fetch(`${API_URL}/storage/usuario/${formData.id}/foto-perfil`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: dataUpload,
+      });
+
+      const resData = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(resData?.message || "Erro ao realizar upload da imagem.");
+      }
+
+      const novaUrl = resData.url;
+
+      setFormData((prev) => ({ ...prev, foto_url: novaUrl }));
+
+      const userRaw = localStorage.getItem("saspi_user");
+      if (userRaw) {
+        const parsed = JSON.parse(userRaw);
+        parsed.foto_url = novaUrl;
+        if (parsed.user) parsed.user.foto_url = novaUrl;
+        if (parsed.usuario) parsed.usuario.foto_url = novaUrl;
+        localStorage.setItem("saspi_user", JSON.stringify(parsed));
+        document.cookie = `saspi_user=${encodeURIComponent(
+          JSON.stringify(parsed)
+        )}; path=/; max-age=86400; SameSite=Lax`;
+        window.dispatchEvent(new Event("saspi_user_updated"));
+      }
+
+      setSalvo(true);
+      setTimeout(() => setSalvo(false), 3000);
+    } catch (err: any) {
+      setErro(err.message || "Falha ao enviar foto para o servidor.");
+    } finally {
+      setEnviandoFoto(false);
+    }
+  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -233,6 +302,12 @@ export default function Perfil() {
     );
   }
 
+  const avatarUrl =
+    formData.foto_url ||
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(
+      formData.nome || "Usuario"
+    )}&background=1565C0&color=fff&size=128&bold=true`;
+
   return (
     <main className="min-h-screen bg-[#F2F7FB]">
       <DashboardNavbar />
@@ -268,19 +343,41 @@ export default function Perfil() {
 
         <div className="mt-8 grid gap-6 lg:grid-cols-[280px_1fr]">
           <aside className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-            <img
-              src={`https://ui-avatars.com/api/?name=${encodeURIComponent(
-                formData.nome || "Usuario"
-              )}&background=1565C0&color=fff&size=128&bold=true`}
-              alt={formData.nome}
-              className="h-20 w-20 rounded-2xl object-cover shadow-sm"
-            />
+            <div className="relative mx-auto h-24 w-24">
+              <img
+                src={avatarUrl}
+                alt={formData.nome}
+                className="h-24 w-24 rounded-2xl object-cover shadow-sm ring-2 ring-gray-100"
+              />
 
-            <h2 className="mt-5 text-xl font-semibold text-[#0A2540]">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={enviandoFoto}
+                title="Alterar foto de perfil"
+                className="absolute -bottom-2 -right-2 flex h-9 w-9 items-center justify-center rounded-xl bg-[#1565C0] text-white shadow-md transition hover:bg-[#0A2540] disabled:opacity-70"
+              >
+                {enviandoFoto ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Camera size={16} />
+                )}
+              </button>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png, image/jpeg, image/webp"
+                className="hidden"
+                onChange={handleFileSelect}
+              />
+            </div>
+
+            <h2 className="mt-5 text-center text-xl font-semibold text-[#0A2540]">
               {formData.nome}
             </h2>
 
-            <p className="mt-1 text-sm font-medium text-[#26A69A]">
+            <p className="mt-1 text-center text-sm font-medium text-[#26A69A]">
               {formData.perfil}
             </p>
 
