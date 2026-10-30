@@ -1,2 +1,0 @@
-"Teste de deploy com email antigo" 
-"Teste de deploy com email do Wallex" 
