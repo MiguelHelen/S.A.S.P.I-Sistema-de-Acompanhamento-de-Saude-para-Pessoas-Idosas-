@@ -534,6 +534,7 @@ model idoso {
   sexo                 String?                @db.VarChar(20)
   telefone             String?                @db.VarChar(20)
   endereco             String?
+  foto_url             String?                @db.VarChar(500)
   clinica_id           String                 @db.Uuid
   created_at           DateTime               @default(now()) @db.Timestamptz(6)
   consulta             consulta[]
@@ -542,6 +543,7 @@ model idoso {
   prescricao           prescricao[]
   registro_saude       registro_saude[]
   usuario_idoso        usuario_idoso[]
+  registro_dose        registro_dose[]
 
   @@index([clinica_id], map: "idx_idoso_clinica")
   @@schema("public")
@@ -582,9 +584,29 @@ model prescricao {
   idoso          idoso             @relation(fields: [idoso_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   medicamento    medicamento       @relation(fields: [medicamento_id], references: [id], onUpdate: NoAction)
   usuario        usuario           @relation(fields: [usuario_id], references: [id], onUpdate: NoAction)
+  registro_dose  registro_dose[]
 
   @@index([idoso_id], map: "idx_prescricao_idoso")
   @@index([status], map: "idx_prescricao_status")
+  @@schema("public")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model registro_dose {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  prescricao_id String      @db.Uuid
+  idoso_id      String      @db.Uuid
+  usuario_id    String?     @db.Uuid
+  data_hora     DateTime    @default(now()) @db.Timestamptz(6)
+  status        status_dose @default(CONFIRMADA)
+  observacao    String?     @db.VarChar(255)
+  
+  prescricao    prescricao  @relation(fields: [prescricao_id], references: [id], onDelete: Cascade)
+  idoso         idoso       @relation(fields: [idoso_id], references: [id], onDelete: Cascade)
+  usuario       usuario?    @relation(fields: [usuario_id], references: [id], onDelete: SetNull)
+
+  @@index([idoso_id, data_hora])
+  @@index([prescricao_id])
   @@schema("public")
 }
 
@@ -620,13 +642,18 @@ model usuario {
   telefone       String?          @db.VarChar(20)
   perfil         perfil_usuario
   clinica_id     String           @db.Uuid
+  status         status_conta     @default(PENDENTE)
+  provedor       provedor_auth    @default(EMAIL)
+  foto_url       String?          @db.VarChar(500)
   created_at     DateTime         @default(now()) @db.Timestamptz(6)
+  
   consulta       consulta[]
   prescricao     prescricao[]
   registro_saude registro_saude[]
   users          users?           @relation(fields: [auth_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   clinica        clinica          @relation(fields: [clinica_id], references: [id], onUpdate: NoAction)
   usuario_idoso  usuario_idoso[]
+  registro_dose  registro_dose[]
 
   @@index([clinica_id], map: "idx_usuario_clinica")
   @@schema("public")
@@ -693,6 +720,7 @@ enum factor_type {
   totp
   webauthn
   phone
+  recovery_code
 
   @@schema("auth")
 }
@@ -766,6 +794,30 @@ enum tipo_vinculo_enum {
   ENFERMEIRO
   CUIDADOR
   FAMILIAR
+
+  @@schema("public")
+}
+
+enum status_conta {
+  PENDENTE
+  ATIVO
+  BLOQUEADO
+
+  @@schema("public")
+}
+
+enum provedor_auth {
+  EMAIL
+  GOOGLE
+  MICROSOFT
+
+  @@schema("public")
+}
+
+enum status_dose {
+  CONFIRMADA
+  RECUSADA
+  ATRASADA
 
   @@schema("public")
 }

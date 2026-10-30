@@ -73,20 +73,9 @@ export default function Login() {
         } catch {}
       }
 
-      let nomeResolvido = usuarioCompleto?.nome || usuarioCompleto?.name;
-      let perfilResolvido = usuarioCompleto?.perfil || usuarioCompleto?.role;
-      let clinicaIdResolvido =
-        usuarioCompleto?.clinica_id || "e63b19f5-d8e4-4973-bac6-12aba9a0545d";
-
-      if (emailLower === "wallexandre2009@gmail.com") {
-        if (!nomeResolvido || nomeResolvido.includes("@")) {
-          nomeResolvido = "Wallex Administrador";
-        }
-        perfilResolvido = "ADMINISTRADOR";
-        clinicaIdResolvido = "e63b19f5-d8e4-4973-bac6-12aba9a0545d";
-      } else if (!nomeResolvido) {
-        nomeResolvido = emailLower.split("@")[0];
-      }
+      const nomeResolvido = usuarioCompleto?.nome || usuarioCompleto?.name || emailLower.split("@")[0];
+      const perfilResolvido = usuarioCompleto?.perfil || usuarioCompleto?.role || "MEDICO";
+      const clinicaIdResolvido = usuarioCompleto?.clinica_id || "e63b19f5-d8e4-4973-bac6-12aba9a0545d";
 
       const usuarioSalvar = {
         id:
@@ -96,7 +85,7 @@ export default function Login() {
         auth_id: data.id || data.sub || "f7bbe33d-93d4-4546-a59b-32decb20c37f",
         nome: nomeResolvido,
         email: emailLower,
-        perfil: (perfilResolvido || "MEDICO").toUpperCase(),
+        perfil: String(perfilResolvido).toUpperCase(),
         clinica_id: clinicaIdResolvido,
         clinica_nome: "Clínica - S.A.S.P.I.",
       };
