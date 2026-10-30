@@ -15,6 +15,7 @@ import { PrescricaoModule } from './prescricao/prescricao.module';
 import { ConsultaModule } from './consulta/consulta.module';
 import { AuthModule } from './auth/auth.module';
 import { TempoRealModule } from './tempo-real/tempo-real.module';
+import { StorageModule } from './storage/storage.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { TempoRealModule } from './tempo-real/tempo-real.module';
     ConsultaModule,
     AuthModule,
     TempoRealModule,
+    StorageModule,
   ],
   controllers: [AppController],
   providers: [AppService],
