@@ -17,6 +17,8 @@ import {
   Search,
   X,
   Save,
+  MailWarning,
+  UserCheck
 } from "lucide-react";
 
 interface UsuarioItem {
@@ -26,6 +28,7 @@ interface UsuarioItem {
   cpf?: string | null;
   telefone?: string | null;
   perfil: string;
+  status: string; // <-- Campo adicionado para a governança de acesso
   clinica_id: string;
 }
 
@@ -43,13 +46,10 @@ export default function GerenciarUsuariosPage() {
   const [mensagemSucesso, setMensagemSucesso] = useState("");
   const [erroAcao, setErroAcao] = useState("");
 
-  const [usuarioEditando, setUsuarioEditando] = useState<UsuarioItem | null>(
-    null
-  );
+  const [usuarioEditando, setUsuarioEditando] = useState<UsuarioItem | null>(null);
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
 
-  const [usuarioParaExcluir, setUsuarioParaExcluir] =
-    useState<UsuarioItem | null>(null);
+  const [usuarioParaExcluir, setUsuarioParaExcluir] = useState<UsuarioItem | null>(null);
   const [excluindo, setExcluindo] = useState(false);
 
   useEffect(() => {
@@ -235,6 +235,7 @@ export default function GerenciarUsuariosPage() {
       !termo ||
       u.nome.toLowerCase().includes(termo) ||
       u.email.toLowerCase().includes(termo) ||
+      String(u.status || "").toLowerCase().includes(termo) ||
       String(u.cpf || "").includes(termo);
     return batePerfil && bateBusca;
   });
@@ -344,7 +345,7 @@ export default function GerenciarUsuariosPage() {
               type="search"
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar por nome, e-mail ou CPF..."
+              placeholder="Buscar por nome, e-mail ou status (ex: Pendente)..."
               className="w-full rounded-xl border border-gray-200 py-2.5 pl-10 pr-4 text-sm text-gray-800 outline-none focus:border-[#1565C0]"
             />
           </div>
@@ -377,65 +378,81 @@ export default function GerenciarUsuariosPage() {
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50/50 text-xs font-semibold uppercase tracking-wider text-gray-500">
                     <th className="px-6 py-4">Nome / E-mail</th>
-                    <th className="px-6 py-4">Perfil</th>
-                    <th className="px-6 py-4">CPF</th>
-                    <th className="px-6 py-4">Telefone</th>
+                    <th className="px-6 py-4">Status & Perfil</th>
+                    <th className="px-6 py-4">CPF / Contato</th>
                     <th className="px-6 py-4 text-right">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-sm">
-                  {usuariosFiltrados.map((u) => (
-                    <tr key={u.id} className="transition hover:bg-gray-50/50">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={`https://ui-avatars.com/api/?name=${encodeURIComponent(
-                              u.nome
-                            )}&background=E8F1FB&color=1565C0&size=64&bold=true`}
-                            alt={u.nome}
-                            className="h-9 w-9 shrink-0 rounded-full object-cover"
-                          />
-                          <div>
-                            <p className="font-semibold text-[#0A2540]">
-                              {u.nome}
-                            </p>
-                            <p className="text-xs text-gray-500">{u.email}</p>
+                  {usuariosFiltrados.map((u) => {
+                    const isPendente = u.status === "PENDENTE";
+                    
+                    return (
+                      <tr key={u.id} className="transition hover:bg-gray-50/50">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={`https://ui-avatars.com/api/?name=${encodeURIComponent(
+                                u.nome
+                              )}&background=E8F1FB&color=1565C0&size=64&bold=true`}
+                              alt={u.nome}
+                              className="h-9 w-9 shrink-0 rounded-full object-cover"
+                            />
+                            <div>
+                              <p className="font-semibold text-[#0A2540]">
+                                {u.nome}
+                              </p>
+                              <p className="text-xs text-gray-500">{u.email}</p>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-[#1565C0]">
-                          {u.perfil}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-gray-600">
-                        {u.cpf || "Não informado"}
-                      </td>
-                      <td className="px-6 py-4 text-gray-600">
-                        {u.telefone || "Não informado"}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="inline-flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setUsuarioEditando({ ...u })}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-[#1565C0] transition hover:bg-blue-100"
-                          >
-                            <Pencil size={13} />
-                            Editar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setUsuarioParaExcluir(u)}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-100"
-                          >
-                            <Trash2 size={13} />
-                            Excluir
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col gap-1.5 items-start">
+                            {isPendente ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold tracking-wider text-amber-700">
+                                <MailWarning size={12} />
+                                PENDENTE
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold tracking-wider text-emerald-700">
+                                <UserCheck size={12} />
+                                ATIVO
+                              </span>
+                            )}
+                            <span className="inline-flex rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-[#1565C0]">
+                              {u.perfil}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-gray-600">
+                          <div className="text-xs">
+                            <p className="font-medium">CPF: {u.cpf || "Não informado"}</p>
+                            <p>Tel: {u.telefone || "Não informado"}</p>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="inline-flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setUsuarioEditando({ ...u })}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-[#1565C0] transition hover:bg-blue-100"
+                            >
+                              <Pencil size={13} />
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setUsuarioParaExcluir(u)}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-100"
+                            >
+                              <Trash2 size={13} />
+                              Excluir
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
