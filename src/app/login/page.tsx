@@ -5,12 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft, HeartPulse, KeyRound, Mail, Loader2, AlertCircle } from "lucide-react";
-import { createClient } from "@supabase/supabase-js";
-
-// Inicializa o cliente Supabase para o SSO (Substitua pelas suas chaves se necessário, ou injete via API)
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-const supabase = createClient(supabaseUrl, supabaseKey);
+import { supabase } from "@/lib/supabaseClient";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
