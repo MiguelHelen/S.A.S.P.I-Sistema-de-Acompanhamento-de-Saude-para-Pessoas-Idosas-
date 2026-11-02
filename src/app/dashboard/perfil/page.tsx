@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import DashboardNavbar from "@/components/DashboardNavbar";
+import ImageCropModal from "@/components/ImageCropModal";
 import {
   Mail,
   Phone,
@@ -22,9 +23,12 @@ const API_URL =
 export default function Perfil() {
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
-  const [enviandoFoto, setEnviandoFoto] = useState(false);
   const [salvo, setSalvo] = useState(false);
   const [erro, setErro] = useState("");
+  
+  // Estados para Corte e Enquadramento da Foto de Perfil
+  const [fotoOriginal, setFotoOriginal] = useState("");
+  const [modalCropAberto, setModalCropAberto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
@@ -43,7 +47,6 @@ export default function Perfil() {
       const token = localStorage.getItem("saspi_token");
 
       let sessaoLocal: Record<string, any> = {};
-
       if (userRaw) {
         try {
           const parsed = JSON.parse(userRaw);
@@ -60,11 +63,7 @@ export default function Perfil() {
         email: currentEmail,
         telefone: sessaoLocal.telefone || "",
         cpf: sessaoLocal.cpf || "",
-        perfil: (
-          sessaoLocal.perfil ||
-          sessaoLocal.role ||
-          "MEDICO"
-        ).toUpperCase(),
+        perfil: (sessaoLocal.perfil || sessaoLocal.role || "MEDICO").toUpperCase(),
         foto_url: sessaoLocal.foto_url || "",
       });
 
@@ -72,56 +71,24 @@ export default function Perfil() {
         try {
           const res = await fetch(
             `${API_URL}/usuario?email=${encodeURIComponent(currentEmail)}`,
-            {
-              headers: { Authorization: `Bearer ${token}` },
-            }
+            { headers: { Authorization: `Bearer ${token}` } }
           );
 
           if (res.ok) {
             const data = await res.json();
             const usuarioEncontrado = Array.isArray(data)
-              ? data.find(
-                  (u: any) =>
-                    u.email?.toLowerCase() === currentEmail.toLowerCase()
-                )
+              ? data.find((u: any) => u.email?.toLowerCase() === currentEmail.toLowerCase())
               : data;
 
             if (usuarioEncontrado && usuarioEncontrado.nome) {
-              const perfilAtualizado = (
-                usuarioEncontrado.perfil ||
-                sessaoLocal.perfil ||
-                "MEDICO"
-              ).toUpperCase();
-
-              const dadosMesclados = {
-                ...sessaoLocal,
+              setFormData((prev) => ({
+                ...prev,
                 id: usuarioEncontrado.id || currentId,
                 nome: usuarioEncontrado.nome,
-                email: usuarioEncontrado.email || currentEmail,
                 telefone: usuarioEncontrado.telefone || "",
                 cpf: usuarioEncontrado.cpf || "",
-                perfil: perfilAtualizado,
-                foto_url: usuarioEncontrado.foto_url || sessaoLocal.foto_url || "",
-              };
-
-              setFormData({
-                id: dadosMesclados.id,
-                nome: dadosMesclados.nome,
-                email: dadosMesclados.email,
-                telefone: dadosMesclados.telefone,
-                cpf: dadosMesclados.cpf,
-                perfil: dadosMesclados.perfil,
-                foto_url: dadosMesclados.foto_url,
-              });
-
-              localStorage.setItem(
-                "saspi_user",
-                JSON.stringify(dadosMesclados)
-              );
-              document.cookie = `saspi_user=${encodeURIComponent(
-                JSON.stringify(dadosMesclados)
-              )}; path=/; max-age=86400; SameSite=Lax`;
-              window.dispatchEvent(new Event("saspi_user_updated"));
+                foto_url: usuarioEncontrado.foto_url || prev.foto_url,
+              }));
             }
           }
         } catch {}
@@ -133,33 +100,36 @@ export default function Perfil() {
     sincronizarPerfil();
   }, []);
 
-  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      setErro("Por favor, selecione um arquivo de imagem válido (PNG, JPG ou WEBP).");
+      setErro("Selecione um arquivo de imagem válido (PNG, JPG ou WEBP).");
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      setErro("A imagem selecionada excede o limite máximo de 5MB.");
-      return;
-    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setFotoOriginal(reader.result as string);
+      setModalCropAberto(true);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  }
 
-    setEnviandoFoto(true);
+  async function handleCropSalvo(blob: Blob) {
+    setModalCropAberto(false);
     setErro("");
 
     const token = localStorage.getItem("saspi_token");
     const dataUpload = new FormData();
-    dataUpload.append("file", file);
+    dataUpload.append("file", blob, `perfil_${formData.id}.jpg`);
 
     try {
       const res = await fetch(`${API_URL}/storage/usuario/${formData.id}/foto-perfil`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
         body: dataUpload,
       });
 
@@ -170,7 +140,6 @@ export default function Perfil() {
       }
 
       const novaUrl = resData.url;
-
       setFormData((prev) => ({ ...prev, foto_url: novaUrl }));
 
       const userRaw = localStorage.getItem("saspi_user");
@@ -180,18 +149,13 @@ export default function Perfil() {
         if (parsed.user) parsed.user.foto_url = novaUrl;
         if (parsed.usuario) parsed.usuario.foto_url = novaUrl;
         localStorage.setItem("saspi_user", JSON.stringify(parsed));
-        document.cookie = `saspi_user=${encodeURIComponent(
-          JSON.stringify(parsed)
-        )}; path=/; max-age=86400; SameSite=Lax`;
         window.dispatchEvent(new Event("saspi_user_updated"));
       }
 
       setSalvo(true);
       setTimeout(() => setSalvo(false), 3000);
     } catch (err: any) {
-      setErro(err.message || "Falha ao enviar foto para o servidor.");
-    } finally {
-      setEnviandoFoto(false);
+      setErro(err.message || "Falha ao salvar a imagem no servidor.");
     }
   }
 
@@ -204,23 +168,6 @@ export default function Perfil() {
     const token = localStorage.getItem("saspi_token");
     const telefoneLimpo = formData.telefone.replace(/\D/g, "");
     const cpfLimpo = formData.cpf.replace(/\D/g, "");
-
-    if (cpfLimpo.length > 0 && cpfLimpo.length !== 11) {
-      setErro("O CPF informado deve conter exatamente 11 dígitos numéricos.");
-      setSalvando(false);
-      return;
-    }
-
-    if (
-      telefoneLimpo.length > 0 &&
-      (telefoneLimpo.length < 10 || telefoneLimpo.length > 11)
-    ) {
-      setErro(
-        "O telefone informado deve conter 10 ou 11 dígitos numéricos (com DDD)."
-      );
-      setSalvando(false);
-      return;
-    }
 
     const payload = {
       nome: formData.nome.trim(),
@@ -240,23 +187,7 @@ export default function Perfil() {
         });
 
         if (!res.ok) {
-          const errData = await res.json().catch(() => null);
-          const msgStr = String(errData?.message || "").toLowerCase();
-          if (
-            res.status === 409 ||
-            msgStr.includes("p2002") ||
-            msgStr.includes("unique")
-          ) {
-            throw new Error(
-              "Erro: Este CPF já está vinculado a outro usuário no sistema!"
-            );
-          }
-          const msgErro = Array.isArray(errData?.message)
-            ? errData.message.join(", ")
-            : errData?.message;
-          throw new Error(
-            msgErro || "Não foi possível atualizar os dados no servidor."
-          );
+          throw new Error("Não foi possível atualizar os dados.");
         }
       }
 
@@ -277,9 +208,6 @@ export default function Perfil() {
       };
 
       localStorage.setItem("saspi_user", JSON.stringify(usuarioAtualizado));
-      document.cookie = `saspi_user=${encodeURIComponent(
-        JSON.stringify(usuarioAtualizado)
-      )}; path=/; max-age=86400; SameSite=Lax`;
       window.dispatchEvent(new Event("saspi_user_updated"));
 
       setSalvo(true);
@@ -312,15 +240,20 @@ export default function Perfil() {
     <main className="min-h-screen bg-[#F2F7FB]">
       <DashboardNavbar />
 
+      <ImageCropModal
+        isOpen={modalCropAberto}
+        imageSrc={fotoOriginal}
+        onClose={() => setModalCropAberto(false)}
+        onCropComplete={handleCropSalvo}
+      />
+
       <div className="mx-auto max-w-5xl px-4 py-8 md:px-8">
         <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
           Minha conta
         </span>
-
         <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0A2540] md:text-4xl">
           Perfil do Usuário
         </h1>
-
         <p className="mt-2 max-w-2xl text-gray-600">
           Dados sincronizados com a sua credencial de acesso no S.A.S.P.I.
         </p>
@@ -328,9 +261,7 @@ export default function Perfil() {
         {salvo && (
           <div className="mt-6 flex items-center gap-3 rounded-xl bg-emerald-50 p-4 text-emerald-800">
             <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
-            <p className="text-sm font-medium">
-              Informações salvas e sincronizadas com sucesso!
-            </p>
+            <p className="text-sm font-medium">Informações salvas e sincronizadas com sucesso!</p>
           </div>
         )}
 
@@ -347,21 +278,16 @@ export default function Perfil() {
               <img
                 src={avatarUrl}
                 alt={formData.nome}
-                className="h-24 w-24 rounded-2xl object-cover shadow-sm ring-2 ring-gray-100"
+                className="h-24 w-24 rounded-full object-cover shadow-sm ring-4 ring-gray-100"
               />
 
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={enviandoFoto}
-                title="Alterar foto de perfil"
-                className="absolute -bottom-2 -right-2 flex h-9 w-9 items-center justify-center rounded-xl bg-[#1565C0] text-white shadow-md transition hover:bg-[#0A2540] disabled:opacity-70"
+                title="Alterar e enquadrar foto de perfil"
+                className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-[#1565C0] text-white shadow-md transition hover:bg-[#0A2540]"
               >
-                {enviandoFoto ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : (
-                  <Camera size={16} />
-                )}
+                <Camera size={15} />
               </button>
 
               <input
@@ -376,7 +302,6 @@ export default function Perfil() {
             <h2 className="mt-5 text-center text-xl font-semibold text-[#0A2540]">
               {formData.nome}
             </h2>
-
             <p className="mt-1 text-center text-sm font-medium text-[#26A69A]">
               {formData.perfil}
             </p>
@@ -385,13 +310,11 @@ export default function Perfil() {
               <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
                 Contato Registrado
               </p>
-
               <div className="mt-4 space-y-3">
                 <div className="flex items-center gap-3 text-sm text-gray-600">
                   <Mail size={17} className="shrink-0 text-[#1565C0]" />
                   <span className="truncate">{formData.email}</span>
                 </div>
-
                 <div className="flex items-center gap-3 text-sm text-gray-600">
                   <Phone size={17} className="shrink-0 text-[#26A69A]" />
                   <span>{formData.telefone || "Não informado"}</span>
@@ -400,153 +323,84 @@ export default function Perfil() {
             </div>
           </aside>
 
-          <form
-            onSubmit={handleSave}
-            className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm md:p-8"
-          >
+          <form onSubmit={handleSave} className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
             <div className="flex items-center gap-3 border-b border-gray-100 pb-5">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#E6F4EF] text-[#26A69A]">
                 <UserRound size={22} />
               </div>
-
               <div>
                 <h2 className="font-semibold text-[#0A2540]">Dados Pessoais</h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  Edite os dados cadastrais da sua credencial.
-                </p>
+                <p className="mt-1 text-sm text-gray-500">Edite as informações cadastrais da sua credencial.</p>
               </div>
             </div>
 
             <div className="mt-6 grid gap-5 md:grid-cols-2">
               <div className="md:col-span-2">
-                <label
-                  htmlFor="nome"
-                  className="mb-2 block text-sm font-medium text-[#0A2540]"
-                >
+                <label htmlFor="nome" className="mb-2 block text-sm font-medium text-[#0A2540]">
                   Nome completo *
                 </label>
-                <div className="relative">
-                  <UserRound
-                    size={18}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
-                  />
-                  <input
-                    id="nome"
-                    type="text"
-                    required
-                    value={formData.nome}
-                    onChange={(e) =>
-                      setFormData({ ...formData, nome: e.target.value })
-                    }
-                    className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
-                  />
-                </div>
+                <input
+                  id="nome"
+                  type="text"
+                  required
+                  value={formData.nome}
+                  onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                  className="w-full rounded-xl border border-gray-300 py-3 px-4 text-sm outline-none focus:border-[#1565C0]"
+                />
               </div>
 
               <div>
-                <label
-                  htmlFor="email"
-                  className="mb-2 block text-sm font-medium text-[#0A2540]"
-                >
+                <label htmlFor="email" className="mb-2 block text-sm font-medium text-[#0A2540]">
                   E-mail
                 </label>
-                <div className="relative">
-                  <Mail
-                    size={18}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
-                  />
-                  <input
-                    id="email"
-                    type="email"
-                    disabled
-                    value={formData.email}
-                    className="w-full cursor-not-allowed rounded-xl border border-gray-200 bg-gray-50 py-3 pl-11 pr-4 text-sm text-gray-500 outline-none"
-                  />
-                </div>
+                <input
+                  id="email"
+                  type="email"
+                  disabled
+                  value={formData.email}
+                  className="w-full cursor-not-allowed rounded-xl border border-gray-200 bg-gray-50 py-3 px-4 text-sm text-gray-500 outline-none"
+                />
               </div>
 
               <div>
-                <label
-                  htmlFor="telefone"
-                  className="mb-2 block text-sm font-medium text-[#0A2540]"
-                >
-                  Telefone (10 ou 11 dígitos)
+                <label htmlFor="telefone" className="mb-2 block text-sm font-medium text-[#0A2540]">
+                  Telefone
                 </label>
-                <div className="relative">
-                  <Phone
-                    size={18}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
-                  />
-                  <input
-                    id="telefone"
-                    type="tel"
-                    inputMode="numeric"
-                    maxLength={11}
-                    value={formData.telefone}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        telefone: e.target.value
-                          .replace(/\D/g, "")
-                          .slice(0, 11),
-                      })
-                    }
-                    placeholder="Ex.: 11988887777"
-                    className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
-                  />
-                </div>
+                <input
+                  id="telefone"
+                  type="tel"
+                  maxLength={11}
+                  value={formData.telefone}
+                  onChange={(e) => setFormData({ ...formData, telefone: e.target.value.replace(/\D/g, "") })}
+                  className="w-full rounded-xl border border-gray-300 py-3 px-4 text-sm outline-none focus:border-[#1565C0]"
+                />
               </div>
 
               <div>
-                <label
-                  htmlFor="cpf"
-                  className="mb-2 block text-sm font-medium text-[#0A2540]"
-                >
-                  CPF (11 dígitos numéricos)
+                <label htmlFor="cpf" className="mb-2 block text-sm font-medium text-[#0A2540]">
+                  CPF
                 </label>
-                <div className="relative">
-                  <IdCard
-                    size={18}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
-                  />
-                  <input
-                    id="cpf"
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={11}
-                    value={formData.cpf}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        cpf: e.target.value.replace(/\D/g, "").slice(0, 11),
-                      })
-                    }
-                    placeholder="Somente números (11 dígitos)"
-                    className="w-full rounded-xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
-                  />
-                </div>
+                <input
+                  id="cpf"
+                  type="text"
+                  maxLength={11}
+                  value={formData.cpf}
+                  onChange={(e) => setFormData({ ...formData, cpf: e.target.value.replace(/\D/g, "") })}
+                  className="w-full rounded-xl border border-gray-300 py-3 px-4 text-sm outline-none focus:border-[#1565C0]"
+                />
               </div>
 
               <div>
-                <label
-                  htmlFor="perfil"
-                  className="mb-2 block text-sm font-medium text-[#0A2540]"
-                >
-                  Nível de Acesso (Perfil)
+                <label htmlFor="perfil" className="mb-2 block text-sm font-medium text-[#0A2540]">
+                  Perfil de Acesso
                 </label>
-                <div className="relative">
-                  <ShieldCheck
-                    size={18}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
-                  />
-                  <input
-                    id="perfil"
-                    type="text"
-                    disabled
-                    value={formData.perfil}
-                    className="w-full cursor-not-allowed rounded-xl border border-gray-200 bg-gray-50 py-3 pl-11 pr-4 text-sm font-medium text-gray-600 outline-none"
-                  />
-                </div>
+                <input
+                  id="perfil"
+                  type="text"
+                  disabled
+                  value={formData.perfil}
+                  className="w-full cursor-not-allowed rounded-xl border border-gray-200 bg-gray-50 py-3 px-4 text-sm text-gray-500 outline-none"
+                />
               </div>
             </div>
 
@@ -554,13 +408,9 @@ export default function Perfil() {
               <button
                 type="submit"
                 disabled={salvando}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-6 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0A2540] hover:shadow-md disabled:opacity-70 sm:w-auto"
+                className="inline-flex items-center gap-2 rounded-xl bg-[#1565C0] px-6 py-3 font-medium text-white shadow-sm hover:bg-[#0A2540] disabled:opacity-70"
               >
-                {salvando ? (
-                  <Loader2 size={18} className="animate-spin" />
-                ) : (
-                  <Save size={18} />
-                )}
+                {salvando ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
                 {salvando ? "Salvando..." : "Salvar alterações"}
               </button>
             </div>
