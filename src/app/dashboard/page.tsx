@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { io, Socket } from "socket.io-client";
 import DashboardNavbar from "@/components/DashboardNavbar";
 import MetricCard, {
   avaliarIndicadorClinico,
@@ -34,10 +35,12 @@ const API_URL =
 export default function Dashboard() {
   const [carregandoSessao, setCarregandoSessao] = useState(true);
   const [user, setUser] = useState<{
+    id: string;
     nome: string;
     perfil: string;
     clinica_id: string;
   }>({
+    id: "",
     nome: "",
     perfil: "",
     clinica_id: "e63b19f5-d8e4-4973-bac6-12aba9a0545d",
@@ -51,6 +54,8 @@ export default function Dashboard() {
 
   const [idosoAtivo, setIdosoAtivo] = useState<Idoso | null>(null);
   const [pontosGrafico, setPontosGrafico] = useState<PontoGraficoSaude[]>([]);
+  const [alertasEmergencia, setAlertasEmergencia] = useState<{id: number, msg: string}[]>([]);
+  
   const [resumoClinico, setResumoClinico] = useState({
     fc: "--",
     spo2: "--",
@@ -70,6 +75,7 @@ export default function Dashboard() {
         const data = parsed.user || parsed.usuario || parsed;
 
         setUser({
+          id: data.id || "",
           nome:
             data.nome ||
             data.name ||
@@ -99,10 +105,13 @@ export default function Dashboard() {
       const savedElderly = localStorage.getItem("saspi_active_elderly");
       if (savedElderly) {
         try {
-          setIdosoAtivo(JSON.parse(savedElderly));
+          const parsed = JSON.parse(savedElderly);
+          setIdosoAtivo(parsed);
+          setAlertasEmergencia([]); // Limpa os alertas ao trocar de idoso
         } catch {}
       } else {
         setIdosoAtivo(null);
+        setAlertasEmergencia([]);
       }
     }
 
@@ -122,6 +131,7 @@ export default function Dashboard() {
   const isMedico = perfilUpper === "MEDICO";
   const isLeituraSomente = perfilUpper === "FAMILIAR";
 
+  // Busca contadores caso seja Administrador
   useEffect(() => {
     if (!isAdmin) return;
     const token = localStorage.getItem("saspi_token");
@@ -148,6 +158,7 @@ export default function Dashboard() {
       .catch(() => {});
   }, [isAdmin, user.clinica_id]);
 
+  // Carrega resumo clínico base
   useEffect(() => {
     async function carregarResumoPaciente(idosoId: string) {
       const token = localStorage.getItem("saspi_token");
@@ -262,6 +273,56 @@ export default function Dashboard() {
     if (idosoAtivo?.id && !isAdmin) {
       carregarResumoPaciente(idosoAtivo.id);
     }
+  }, [idosoAtivo?.id, isAdmin]);
+
+  // COLETOR WEB SOCKETS EM TEMPO REAL (FASE 5)
+  useEffect(() => {
+    if (!idosoAtivo?.id || isAdmin) return;
+    
+    const token = localStorage.getItem("saspi_token");
+    if (!token) return;
+
+    const socket: Socket = io(API_URL.replace('http', 'ws'), {
+      auth: { token },
+      transports: ['websocket'],
+    });
+
+    socket.on("connect", () => {
+      socket.emit("entrar-sala-idoso", idosoAtivo.id);
+    });
+
+    socket.on("novo-registro-saude", (registro: any) => {
+      const nomeInd = String(registro.indicador_saude?.nome || registro.indicador_nome || "").toLowerCase();
+      const valBruto = String(registro.valor_numerico ?? registro.valor_categorico ?? registro.valor ?? "--");
+
+      setResumoClinico((prev) => {
+        const novoResumo = { ...prev };
+        if (nomeInd.includes("card")) {
+          novoResumo.fc = valBruto;
+          const num = Number(registro.valor_numerico ?? registro.valor);
+          if (!Number.isNaN(num)) {
+            const hora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+            setPontosGrafico((graficoPrev) => [...graficoPrev, { horario: hora, valor: num }].slice(-20));
+          }
+        }
+        else if (nomeInd.includes("oxig") || nomeInd.includes("spo")) novoResumo.spo2 = valBruto;
+        else if (nomeInd.includes("temp")) novoResumo.temp = valBruto;
+        else if (nomeInd.includes("press")) novoResumo.pa = valBruto;
+        return novoResumo;
+      });
+
+      // Força a Navbar a checar notificações (se aplicável)
+      window.dispatchEvent(new Event("saspi_elderly_updated"));
+    });
+
+    socket.on("alerta-saude", (data: { mensagem: string }) => {
+      setAlertasEmergencia(prev => [...prev, { id: Date.now(), msg: data.mensagem }]);
+      window.dispatchEvent(new Event("saspi_elderly_updated"));
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, [idosoAtivo?.id, isAdmin]);
 
   function obterSaudacao() {
@@ -548,17 +609,16 @@ export default function Dashboard() {
 
             {idosoAtivo ? (
               <>
-                {/* BANNER DE ALERTAS CLÍNICOS ATIVOS */}
-                {alertasAtivos.length > 0 && (
-                  <div className="rounded-2xl border border-red-200 bg-red-50/90 p-5 shadow-sm">
+                {/* BANNER DE ALERTAS CLÍNICOS ATIVOS + EVENTOS EM TEMPO REAL */}
+                {(alertasAtivos.length > 0 || alertasEmergencia.length > 0) && (
+                  <div className="rounded-2xl border border-red-200 bg-red-50/90 p-5 shadow-sm animate-pulse">
                     <div className="flex items-start gap-3">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
                         <AlertTriangle size={22} />
                       </div>
                       <div className="flex-1">
                         <h2 className="text-sm font-bold uppercase tracking-wider text-red-800">
-                          Atenção Clínica — Indicadores fora do padrão seguro (
-                          {alertasAtivos.length})
+                          Atenção Clínica — Indicadores fora do padrão seguro
                         </h2>
                         <ul className="mt-2 space-y-1.5 text-sm text-red-700">
                           {alertasAtivos.map((al) => (
@@ -567,6 +627,15 @@ export default function Dashboard() {
                               <span>{al.mensagem}</span>
                               <span className="text-xs text-red-600/80">
                                 ({al.referencia})
+                              </span>
+                            </li>
+                          ))}
+                          {alertasEmergencia.map((al) => (
+                            <li key={al.id} className="flex flex-wrap gap-1.5">
+                              <strong>• EVENTO CRÍTICO:</strong>
+                              <span>{al.msg}</span>
+                              <span className="text-xs text-red-600/80">
+                                (Acabou de ocorrer)
                               </span>
                             </li>
                           ))}
@@ -675,6 +744,22 @@ export default function Dashboard() {
                           </div>
                           <p className="mt-1 text-xs text-red-600">
                             {al.mensagem}
+                          </p>
+                        </div>
+                      ))}
+
+                      {/* Notificações em Tempo Real no Sidecard */}
+                      {alertasEmergencia.map((al) => (
+                        <div
+                          key={al.id}
+                          className="rounded-xl border border-red-300 bg-red-100 p-4 animate-bounce"
+                        >
+                          <div className="flex items-center gap-2 text-xs font-bold uppercase text-red-800">
+                            <AlertTriangle size={15} />
+                            ALERTA CRÍTICO
+                          </div>
+                          <p className="mt-1 text-xs font-semibold text-red-700">
+                            {al.msg}
                           </p>
                         </div>
                       ))}
