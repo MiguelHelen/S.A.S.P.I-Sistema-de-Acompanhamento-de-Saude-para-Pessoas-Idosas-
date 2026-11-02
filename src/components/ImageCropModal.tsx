@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { X, ZoomIn, ZoomOut, Check, Crop } from "lucide-react";
+import { X, ZoomIn, ZoomOut, Check, Crop, RotateCcw } from "lucide-react";
 
 interface ImageCropModalProps {
   imageSrc: string;
@@ -9,6 +9,9 @@ interface ImageCropModalProps {
   onClose: () => void;
   onCropComplete: (croppedBlob: Blob) => void;
 }
+
+const CONTAINER_SIZE = 256; // Diâmetro do círculo de visualização (h-64 w-64)
+const EXPORT_SIZE = 400;    // Tamanho final exportado para o avatar
 
 export default function ImageCropModal({
   imageSrc,
@@ -20,6 +23,7 @@ export default function ImageCropModal({
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [baseDims, setBaseDims] = useState({ width: CONTAINER_SIZE, height: CONTAINER_SIZE });
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
 
@@ -29,6 +33,13 @@ export default function ImageCropModal({
     img.src = imageSrc;
     img.onload = () => {
       imageRef.current = img;
+      
+      // Ajusta a escala base para que a menor dimensão caiba perfeitamente no container
+      const scale = Math.max(CONTAINER_SIZE / img.width, CONTAINER_SIZE / img.height);
+      setBaseDims({
+        width: img.width * scale,
+        height: img.height * scale,
+      });
       setZoom(1);
       setOffset({ x: 0, y: 0 });
     };
@@ -53,6 +64,11 @@ export default function ImageCropModal({
     setIsDragging(false);
   }
 
+  function resetarAjustes() {
+    setZoom(1);
+    setOffset({ x: 0, y: 0 });
+  }
+
   function aplicarCorte() {
     const canvas = canvasRef.current;
     const img = imageRef.current;
@@ -61,30 +77,30 @@ export default function ImageCropModal({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const SIZE = 320;
-    canvas.width = SIZE;
-    canvas.height = SIZE;
+    canvas.width = EXPORT_SIZE;
+    canvas.height = EXPORT_SIZE;
+    ctx.clearRect(0, 0, EXPORT_SIZE, EXPORT_SIZE);
 
-    ctx.clearRect(0, 0, SIZE, SIZE);
+    // Converte a posição do preview (CONTAINER_SIZE) para o tamanho final exportado (EXPORT_SIZE)
+    const ratio = EXPORT_SIZE / CONTAINER_SIZE;
+    const renderedW = baseDims.width * zoom * ratio;
+    const renderedH = baseDims.height * zoom * ratio;
+    const drawX = EXPORT_SIZE / 2 - renderedW / 2 + offset.x * ratio;
+    const drawY = EXPORT_SIZE / 2 - renderedH / 2 + offset.y * ratio;
 
-    const baseScale = Math.max(SIZE / img.width, SIZE / img.height);
-    const scale = baseScale * zoom;
-
-    const drawW = img.width * scale;
-    const drawH = img.height * scale;
-    const drawX = SIZE / 2 - drawW / 2 + offset.x;
-    const drawY = SIZE / 2 - drawH / 2 + offset.y;
-
-    ctx.drawImage(img, drawX, drawY, drawW, drawH);
+    ctx.drawImage(img, drawX, drawY, renderedW, renderedH);
 
     canvas.toBlob(
       (blob) => {
         if (blob) onCropComplete(blob);
       },
       "image/jpeg",
-      0.9
+      0.92
     );
   }
+
+  const currentW = baseDims.width * zoom;
+  const currentH = baseDims.height * zoom;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
@@ -92,9 +108,12 @@ export default function ImageCropModal({
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
           <div className="flex items-center gap-2 text-[#0A2540]">
             <Crop size={18} className="text-[#1565C0]" />
-            <h2 className="font-bold">Ajustar e Enquadrar Foto</h2>
+            <h2 className="font-bold text-base">Ajustar e Enquadrar Foto</h2>
           </div>
-          <button onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          >
             <X size={20} />
           </button>
         </div>
@@ -113,15 +132,13 @@ export default function ImageCropModal({
                 alt="Prévia de enquadramento"
                 draggable={false}
                 style={{
-                  transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
-                  transformOrigin: "center center",
+                  width: `${currentW}px`, height: `${currentH}px`,
                   maxWidth: "none",
                   maxHeight: "none",
                   position: "absolute",
                   left: "50%",
                   top: "50%",
-                  marginLeft: imageRef.current ? -imageRef.current.width / 2 : 0,
-                  marginTop: imageRef.current ? -imageRef.current.height / 2 : 0,
+                  transform: `translate(calc(-50% + ${offset.x}px), calc(-50\% +${offset.y}px))`,
                 }}
                 className="select-none pointer-events-none"
               />
@@ -132,18 +149,26 @@ export default function ImageCropModal({
             Arraste a imagem para reposicionar dentro do círculo.
           </p>
 
-          <div className="mt-4 flex w-full max-w-xs items-center gap-3">
+          <div className="mt-5 flex w-full max-w-xs items-center gap-3">
             <ZoomOut size={16} className="text-gray-400" />
             <input
               type="range"
               min="1"
-              max="3"
+              max="2.5"
               step="0.05"
               value={zoom}
               onChange={(e) => setZoom(Number(e.target.value))}
               className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-gray-200 accent-[#1565C0]"
             />
             <ZoomIn size={16} className="text-gray-400" />
+            <button
+              type="button"
+              onClick={resetarAjustes}
+              title="Redefinir visualização"
+              className="ml-2 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            >
+              <RotateCcw size={15} />
+            </button>
           </div>
 
           <canvas ref={canvasRef} className="hidden" />
