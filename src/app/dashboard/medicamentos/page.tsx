@@ -13,6 +13,8 @@ import {
   AlertCircle,
   CalendarDays,
   UserCheck,
+  Check,
+  XCircle
 } from "lucide-react";
 
 interface Prescricao {
@@ -43,6 +45,7 @@ export default function MedicamentosPage() {
   const [carregando, setCarregando] = useState(false);
   const [perfilUsuario, setPerfilUsuario] = useState("");
   const [encerrandoId, setEncerrandoId] = useState<string | null>(null);
+  const [registrandoDoseId, setRegistrandoDoseId] = useState<string | null>(null);
   const [mensagem, setMensagem] = useState("");
   const [erro, setErro] = useState("");
 
@@ -143,8 +146,48 @@ export default function MedicamentosPage() {
     }
   }
 
-  // Alinhado ao PrescricaoService do backend: apenas MEDICO registra ou encerra prescrições
+  async function confirmarDose(idPrescricao: string, statusDose: 'CONFIRMADA' | 'RECUSADA') {
+    setRegistrandoDoseId(idPrescricao);
+    setErro("");
+    const token = localStorage.getItem("saspi_token");
+
+    try {
+      const res = await fetch(`${API_URL}/registro-dose`, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }) 
+        },
+        body: JSON.stringify({
+          prescricao_id: idPrescricao,
+          status: statusDose,
+          observacao: statusDose === 'RECUSADA' ? 'Dose pulada pelo cuidador/paciente.' : 'Dose administrada no horário.'
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(
+          data?.message || "Não foi possível registrar a dose no momento."
+        );
+      }
+
+      setMensagem(
+        statusDose === 'CONFIRMADA' 
+          ? "Dose confirmada com sucesso! O registro foi salvo no histórico." 
+          : "Dose marcada como recusada/pulada no histórico."
+      );
+      setTimeout(() => setMensagem(""), 4000);
+    } catch (err: any) {
+      setErro(err.message || "Falha de conexão ao registrar a dose.");
+    } finally {
+      setRegistrandoDoseId(null);
+    }
+  }
+
   const podePrescrever = perfilUsuario === "MEDICO";
+  const podeConfirmarDose = perfilUsuario !== "ADMINISTRADOR" && perfilUsuario !== "FAMILIAR";
 
   return (
     <main className="min-h-screen bg-[#F2F7FB]">
@@ -161,8 +204,8 @@ export default function MedicamentosPage() {
             </h1>
             <p className="mt-2 text-gray-600">
               {idosoAtivo
-                ? `Prescrições e horários de dosagem de ${idosoAtivo.nome}.`
-                : "Selecione um paciente para visualizar a medicação."}
+                ? `Prescrições e controle de doses de ${idosoAtivo.nome}.`
+                : "Selecione um paciente para visualizar e confirmar medicações."}
             </p>
           </div>
 
@@ -204,7 +247,7 @@ export default function MedicamentosPage() {
                   <Pill size={20} />
                 </div>
                 <h2 className="text-lg font-semibold text-[#0A2540]">
-                  Prescrições Médicas Registradas
+                  Prescrições e Controle de Doses
                 </h2>
               </div>
               <span className="rounded-lg bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
@@ -293,7 +336,7 @@ export default function MedicamentosPage() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-3">
                           <span
                             className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
                               isAtiva
@@ -304,19 +347,49 @@ export default function MedicamentosPage() {
                             {isAtiva ? "Ativa" : "Encerrada"}
                           </span>
 
+                          {isAtiva && podeConfirmarDose && (
+                            <div className="flex items-center gap-2 border-l border-gray-200 pl-3 ml-1">
+                              <button
+                                type="button"
+                                disabled={registrandoDoseId === p.id}
+                                onClick={() => confirmarDose(p.id, 'CONFIRMADA')}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800 transition hover:bg-emerald-100 disabled:opacity-50"
+                                title="Confirmar que o paciente tomou a dose"
+                              >
+                                {registrandoDoseId === p.id ? (
+                                  <Loader2 size={13} className="animate-spin" />
+                                ) : (
+                                  <Check size={13} />
+                                )}
+                                Confirmar Dose
+                              </button>
+
+                              <button
+                                type="button"
+                                disabled={registrandoDoseId === p.id}
+                                onClick={() => confirmarDose(p.id, 'RECUSADA')}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-100 disabled:opacity-50"
+                                title="Pular dose ou paciente recusou"
+                              >
+                                <XCircle size={13} />
+                                Pular
+                              </button>
+                            </div>
+                          )}
+
                           {podePrescrever && isAtiva && (
                             <button
                               type="button"
                               disabled={encerrandoId === p.id}
                               onClick={() => encerrarPrescricao(p.id)}
-                              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 transition hover:bg-amber-100 disabled:opacity-50 ml-2"
                             >
                               {encerrandoId === p.id ? (
                                 <Loader2 size={13} className="animate-spin" />
                               ) : (
                                 <Ban size={13} />
                               )}
-                              Encerrar
+                              Encerrar Prescrição
                             </button>
                           )}
                         </div>
