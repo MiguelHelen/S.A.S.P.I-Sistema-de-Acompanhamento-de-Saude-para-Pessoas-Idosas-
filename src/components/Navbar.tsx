@@ -3,15 +3,15 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Menu, X, User, ChevronDown, Activity, LogOut } from "lucide-react";
-import { useRouter } from "next/navigation";
 
 interface UsuarioLogado {
   id?: string;
   nome: string;
   email: string;
   perfil: string;
+  foto_url?: string | null;
 }
 
 export default function Navbar() {
@@ -19,26 +19,20 @@ export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [dropdownAberto, setDropdownAberto] = useState(false);
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
-  
+
   const pathname = usePathname();
   const router = useRouter();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Efeito para detectar o scroll e adicionar sombra na navbar
   useEffect(() => {
     const handleScroll = () => {
-      if (window.scrollY > 10) {
-        setIsScrolled(true);
-      } else {
-        setIsScrolled(false);
-      }
+      setIsScrolled(window.scrollY > 10);
     };
 
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Efeito para verificar sessão e fechar menu ao clicar fora
   useEffect(() => {
     function carregarUsuario() {
       if (typeof window === "undefined") return;
@@ -52,11 +46,17 @@ export default function Navbar() {
 
           setUsuario({
             id: userData.id || "",
-            nome: userData.nome || userData.name || (userData.email ? userData.email.split("@")[0] : "Usuário"),
+            nome:
+              userData.nome ||
+              userData.name ||
+              (userData.email ? userData.email.split("@")[0] : "Usuário"),
             email: userData.email || "",
             perfil: (userData.perfil || userData.role || "MEDICO").toUpperCase(),
+            foto_url: userData.foto_url || null,
           });
-        } catch {}
+        } catch {
+          setUsuario(null);
+        }
       } else {
         setUsuario(null);
       }
@@ -92,9 +92,8 @@ export default function Navbar() {
     document.cookie = "saspi_user=; path=/; max-age=0; SameSite=Lax";
     setUsuario(null);
     setDropdownAberto(false);
-    
+
     window.dispatchEvent(new Event("saspi_user_updated"));
-    
     router.push("/");
   }
 
@@ -105,6 +104,14 @@ export default function Navbar() {
     { name: "Ajuda / FAQ", href: "/ajuda" },
     { name: "Contato", href: "/contato" },
   ];
+
+  const avatarUrl =
+    usuario?.foto_url ||
+    (usuario?.nome
+      ? `https://ui-avatars.com/api/?name=${encodeURIComponent(
+          usuario.nome,
+        )}&background=1565C0&color=fff&size=64&bold=true`
+      : "");
 
   return (
     <header
@@ -126,7 +133,6 @@ export default function Navbar() {
           />
         </Link>
 
-        {/* Links Desktop */}
         <nav className="hidden items-center gap-8 md:flex">
           {navLinks.map((link) => (
             <Link
@@ -141,7 +147,6 @@ export default function Navbar() {
           ))}
         </nav>
 
-        {/* Botão de Entrar ou Perfil (Desktop) */}
         <div className="hidden md:block">
           {usuario ? (
             <div className="relative" ref={dropdownRef}>
@@ -151,9 +156,17 @@ export default function Navbar() {
                 className="flex items-center gap-3 rounded-full border border-[#1565C0]/20 bg-white p-1.5 pr-4 transition hover:bg-gray-50 shadow-sm"
                 aria-expanded={dropdownAberto}
               >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#1565C0] text-sm font-semibold text-white shadow-sm">
-                  {usuario.nome.trim().charAt(0).toUpperCase()}
-                </div>
+                {usuario.foto_url ? (
+                  <img
+                    src={usuario.foto_url}
+                    alt={usuario.nome}
+                    className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-gray-200"
+                  />
+                ) : (
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#1565C0] text-sm font-semibold text-white shadow-sm">
+                    {usuario.nome.trim().charAt(0).toUpperCase()}
+                  </div>
+                )}
                 <span className="text-sm font-semibold text-[#0A2540]">Painel</span>
                 <ChevronDown
                   size={16}
@@ -166,7 +179,9 @@ export default function Navbar() {
               {dropdownAberto && (
                 <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-gray-100 bg-white p-2 shadow-xl ring-1 ring-black/5 animate-in fade-in zoom-in-95">
                   <div className="border-b border-gray-100 px-3 py-3">
-                    <p className="text-sm font-semibold text-[#0A2540] truncate">{usuario.nome}</p>
+                    <p className="text-sm font-semibold text-[#0A2540] truncate">
+                      {usuario.nome}
+                    </p>
                     <p className="text-xs text-gray-500 truncate">{usuario.email}</p>
                   </div>
                   <div className="py-2">
@@ -202,7 +217,6 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* Botão Mobile */}
         <button
           className="rounded-lg p-2 text-gray-600 transition hover:bg-gray-100 md:hidden"
           onClick={() => setIsOpen(!isOpen)}
@@ -212,7 +226,6 @@ export default function Navbar() {
         </button>
       </div>
 
-      {/* Menu Mobile */}
       {isOpen && (
         <div className="border-t border-gray-100 bg-white md:hidden">
           <nav className="flex flex-col space-y-1 px-4 pb-6 pt-4 shadow-lg">
@@ -226,16 +239,26 @@ export default function Navbar() {
                 {link.name}
               </Link>
             ))}
-            
+
             <div className="mt-4 border-t border-gray-100 pt-4">
               {usuario ? (
                 <div className="space-y-3">
                   <div className="flex items-center gap-3 px-4 py-2">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1565C0] text-base font-semibold text-white">
-                      {usuario.nome.trim().charAt(0).toUpperCase()}
-                    </div>
+                    {usuario.foto_url ? (
+                      <img
+                        src={usuario.foto_url}
+                        alt={usuario.nome}
+                        className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-gray-200"
+                      />
+                    ) : (
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1565C0] text-base font-semibold text-white">
+                        {usuario.nome.trim().charAt(0).toUpperCase()}
+                      </div>
+                    )}
                     <div>
-                      <p className="text-sm font-semibold text-[#0A2540]">{usuario.nome}</p>
+                      <p className="text-sm font-semibold text-[#0A2540]">
+                        {usuario.nome}
+                      </p>
                       <p className="text-xs text-gray-500">{usuario.email}</p>
                     </div>
                   </div>
