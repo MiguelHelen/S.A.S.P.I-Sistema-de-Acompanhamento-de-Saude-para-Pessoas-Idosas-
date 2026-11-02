@@ -33,6 +33,7 @@ interface UsuarioLogado {
   nome: string;
   email: string;
   perfil: string;
+  foto_url?: string | null;
   clinica_id?: string;
   clinica_nome?: string;
 }
@@ -330,6 +331,7 @@ export default function DashboardNavbar() {
           (userData.email ? userData.email.split("@")[0] : "Usuário"),
         email: userData.email || "",
         perfil: (userData.perfil || userData.role || "MEDICO").toUpperCase(),
+        foto_url: userData.foto_url || null,
         clinica_id: cId,
         clinica_nome: cNomeInicial,
       });
@@ -383,7 +385,6 @@ export default function DashboardNavbar() {
     document.cookie = "saspi_user=; path=/; max-age=0; SameSite=Lax";
 
     window.dispatchEvent(new Event("saspi_user_updated"));
-
     router.push("/login");
   }
 
@@ -419,6 +420,14 @@ export default function DashboardNavbar() {
     (n) => !notificacoesLidas.includes(n.id),
   );
   const qtdCriticas = notificacoesNaoLidas.filter((n) => n.critico).length;
+
+  const avatarUrl =
+    usuario?.foto_url ||
+    (usuario?.nome
+      ? `https://ui-avatars.com/api/?name=${encodeURIComponent(
+          usuario.nome,
+        )}&background=1565C0&color=fff&size=64&bold=true`
+      : "");
 
   return (
     <header className="sticky top-0 z-40 border-b border-gray-100 bg-white/95 backdrop-blur-md">
@@ -478,7 +487,7 @@ export default function DashboardNavbar() {
         </nav>
 
         <div className="flex items-center gap-2">
-          {/* SINO DE NOTIFICAÇÕES E ALERTAS */}
+          {/* SINO DE NOTIFICAÇÕES */}
           <div className="relative" ref={notifRef}>
             <button
               type="button"
@@ -533,7 +542,7 @@ export default function DashboardNavbar() {
                         Tudo limpo!
                       </p>
                       <p className="text-xs text-gray-500 mt-1">
-                        Nenhuma notificação ou alerta pendente.
+                        Nenhuma notificação pendente.
                       </p>
                     </div>
                   ) : (
@@ -543,7 +552,6 @@ export default function DashboardNavbar() {
                           href={n.href}
                           onClick={() => {
                             setNotificacoesAbertas(false);
-                            // Marcar como lida automaticamente ao clicar no link
                             if (!notificacoesLidas.includes(n.id)) {
                               const novasLidas = [...notificacoesLidas, n.id];
                               setNotificacoesLidas(novasLidas);
@@ -588,7 +596,7 @@ export default function DashboardNavbar() {
                             </p>
                             {n.dataHora && (
                               <p className="mt-1 text-[11px] text-gray-400">
-                                Registrado em {n.dataHora}
+                                {n.dataHora}
                               </p>
                             )}
                           </div>
@@ -609,7 +617,7 @@ export default function DashboardNavbar() {
             )}
           </div>
 
-          {/* MENU DO USUÁRIO */}
+          {/* MENU DO USUÁRIO COM FOTO ATUALIZADA */}
           <div className="relative" ref={dropdownRef}>
             <button
               type="button"
@@ -619,11 +627,9 @@ export default function DashboardNavbar() {
             >
               {usuario ? (
                 <img
-                  src={`https://ui-avatars.com/api/?name=${encodeURIComponent(
-                    usuario.nome,
-                  )}&background=1565C0&color=fff&size=64&bold=true`}
+                  src={avatarUrl}
                   alt={usuario.nome}
-                  className="h-9 w-9 shrink-0 rounded-full object-cover shadow-sm"
+                  className="h-9 w-9 shrink-0 rounded-full object-cover shadow-sm ring-1 ring-gray-200"
                 />
               ) : (
                 <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-gray-200" />
@@ -662,11 +668,6 @@ export default function DashboardNavbar() {
                     {usuario.nome}
                   </p>
                   <p className="text-xs text-gray-500">{usuario.email}</p>
-                  {nomeClinica && (
-                    <p className="mt-1 text-xs font-medium text-[#1565C0]">
-                      {nomeClinica}
-                    </p>
-                  )}
                 </div>
 
                 <div className="py-1">
@@ -716,15 +717,6 @@ export default function DashboardNavbar() {
                         <Building2 size={16} className="text-[#1565C0]" />
                         Dados da Clínica
                       </Link>
-
-                      <Link
-                        href="/dashboard/usuarios/novo"
-                        onClick={() => setDropdownAberto(false)}
-                        className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-gray-700 transition hover:bg-[#F2F7FB] hover:text-[#1565C0]"
-                      >
-                        <UserPlus size={16} className="text-[#26A69A]" />
-                        Novo Usuário
-                      </Link>
                     </>
                   )}
                 </div>
@@ -743,16 +735,10 @@ export default function DashboardNavbar() {
             )}
           </div>
 
-          {/* BOTÃO HAMBÚRGUER PARA NAVEGAÇÃO MOBILE (RNF04) */}
           <button
             type="button"
             onClick={() => setMenuMobileAberto((prev) => !prev)}
-            aria-label={
-              menuMobileAberto
-                ? "Fechar menu de navegação"
-                : "Abrir menu de navegação"
-            }
-            aria-expanded={menuMobileAberto}
+            aria-label="Abrir menu"
             className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-100 bg-gray-50/70 text-[#0A2540] transition hover:bg-[#E8F1FB] hover:text-[#1565C0] md:hidden"
           >
             {menuMobileAberto ? <X size={20} /> : <Menu size={20} />}
@@ -760,7 +746,6 @@ export default function DashboardNavbar() {
         </div>
       </div>
 
-      {/* MENU DE NAVEGAÇÃO MOBILE RECOLHÍVEL */}
       {menuMobileAberto && (
         <div className="border-t border-gray-100 bg-white px-4 py-3 shadow-sm md:hidden">
           <nav className="flex flex-col gap-1">
