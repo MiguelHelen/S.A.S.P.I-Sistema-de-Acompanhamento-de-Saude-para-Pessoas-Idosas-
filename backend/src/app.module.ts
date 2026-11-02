@@ -16,6 +16,8 @@ import { ConsultaModule } from './consulta/consulta.module';
 import { AuthModule } from './auth/auth.module';
 import { TempoRealModule } from './tempo-real/tempo-real.module';
 import { StorageModule } from './storage/storage.module';
+import { RegistroDoseService } from './registro-dose/registro-dose.service';
+import { RegistroDoseController } from './registro-dose/registro-dose.controller';
 
 @Module({
   imports: [
@@ -35,7 +37,7 @@ import { StorageModule } from './storage/storage.module';
     TempoRealModule,
     StorageModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
+  controllers: [AppController, RegistroDoseController],
+  providers: [AppService, RegistroDoseService],
 })
 export class AppModule {}
