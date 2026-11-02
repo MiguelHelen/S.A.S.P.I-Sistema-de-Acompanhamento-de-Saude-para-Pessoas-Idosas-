@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="white">#FFFFFF</color>
+    <color name="saspi_teal">#0A9A96</color>
+    <color name="saspi_green">#6BBF59</color>
+    <color name="saspi_navy">#0B2A4A</color>
+    <color name="saspi_blue">#1565C0</color>
+    <color name="saspi_teal_light">#26A69A</color>
+    <color name="saspi_gray">#6B6B6B</color>
+</resources>
