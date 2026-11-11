@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { ArrowLeft, Mail, Loader2, CheckCircle2, AlertCircle, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -20,8 +19,11 @@ export default function RecuperarSenha() {
     const emailLower = email.trim().toLowerCase();
 
     try {
+      // Define explicitamente o link da Vercel para nao puxar localhost
+      const siteUrl = "https://s-a-s-p-i-sistema-de-acompanhamento.vercel.app";
+
       const { error } = await supabase.auth.resetPasswordForEmail(emailLower, {
-        redirectTo: `${window.location.origin}/redefinir-senha`,
+        redirectTo: `${siteUrl}/redefinir-senha`,
       });
 
       if (error) {
@@ -30,8 +32,6 @@ export default function RecuperarSenha() {
 
       setEnviado(true);
     } catch (err: any) {
-      // Como medida de segurança, o Supabase já omite o erro se o e-mail não existir (se configurado assim no Auth). 
-      // Mas garantimos aqui o feedback genérico caso algo falhe.
       setErro("Houve um problema ao processar a solicitação. Tente novamente mais tarde.");
     } finally {
       setLoading(false);
