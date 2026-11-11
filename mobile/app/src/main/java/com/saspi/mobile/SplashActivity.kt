@@ -1,5 +1,6 @@
 package com.saspi.mobile
 
+import com.saspi.mobile.R
 import android.animation.Animator
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator

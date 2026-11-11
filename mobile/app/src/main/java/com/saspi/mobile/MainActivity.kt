@@ -1,39 +1,23 @@
 ﻿package com.saspi.mobile
 
-import android.app.Activity
 import android.os.Bundle
-import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.TextView
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Modifier
 
-class MainActivity : Activity() {
+class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        val mensagem = TextView(this).apply {
-            text = "Acompanhamento de saúde para pessoas idosas"
-            textSize = 18f
+        setContent {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.background
+            ) {
+                LoginScreen()
+            }
         }
-
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(48, 64, 48, 48)
-
-            addView(TextView(this@MainActivity).apply {
-                text = "S.A.S.P.I."
-                textSize = 28f
-            })
-
-            addView(mensagem)
-
-            addView(Button(this@MainActivity).apply {
-                text = "Ver saúde"
-                setOnClickListener {
-                    mensagem.text = "Tela de saúde em construção"
-                }
-            })
-        }
-
-        setContentView(layout)
     }
 }
