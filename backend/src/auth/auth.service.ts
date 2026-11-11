@@ -78,7 +78,6 @@ export class AuthService {
    * 2. Login Social / SSO (Google e Microsoft) com barreira estrita 403
    */
   async ssoCallback(token: string, provedor: 'GOOGLE' | 'MICROSOFT') {
-    // 2.1 Valida o token gerado pelo fluxo OAuth do Supabase
     const { data, error } = await this.supabase.client.auth.getUser(token);
 
     if (error || !data.user || !data.user.email) {
@@ -87,12 +86,10 @@ export class AuthService {
 
     const emailSocial = data.user.email.trim().toLowerCase();
 
-    // 2.2 Consulta se a administração da clínica pré-cadastrou este e-mail
     const usuarioBanco = await this.prisma.usuario.findUnique({
       where: { email: emailSocial },
     });
 
-    // BARREIRA 403: Sem pré-cadastro = acesso negado de imediato
     if (!usuarioBanco) {
       throw new ForbiddenException(
         'Acesso negado. A sua conta Google/Microsoft não possui pré-cadastro ativo na instituição.',
@@ -103,7 +100,6 @@ export class AuthService {
       throw new ForbiddenException('Conta institucional suspensa ou bloqueada.');
     }
 
-    // 2.3 Ativa a conta corporativa e vincula o provedor SSO
     const usuarioAtualizado = await this.prisma.usuario.update({
       where: { id: usuarioBanco.id },
       data: {
@@ -149,10 +145,16 @@ export class AuthService {
       throw new ForbiddenException('Este e-mail já se encontra registado no sistema.');
     }
 
-    // 3.2 Dispara o convite seguro através do Supabase Auth Admin
+    // URL do Frontend (Vercel ou Local) para direcionar o usuário para a tela certa
+    const frontendUrl = process.env.FRONTEND_URL || 'https://s-a-s-p-i-sistema-de-acompanhamento.vercel.app';
+
+    // 3.2 Dispara o convite seguro através do Supabase Auth Admin (direcionando para redefinir-senha)
     const { data, error } = await this.supabase.client.auth.admin.inviteUserByEmail(
       emailLimpo,
-      { data: { nome, perfil } },
+      { 
+        data: { nome, perfil },
+        redirectTo: `${frontendUrl}/redefinir-senha`
+      },
     );
 
     if (error) {
