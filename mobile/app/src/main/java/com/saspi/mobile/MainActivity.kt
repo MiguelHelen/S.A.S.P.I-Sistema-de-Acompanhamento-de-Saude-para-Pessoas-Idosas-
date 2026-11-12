@@ -26,7 +26,10 @@ class MainActivity : ComponentActivity() {
                     "home" -> HomeScreen(
                         onNavigateToVitals = { currentScreen = "vitals" },
                         onNavigateToAlerts = { currentScreen = "alerts" },
-                        onNavigateToConsultas = { currentScreen = "consultas" }
+                        onNavigateToConsultas = { currentScreen = "consultas" },
+                        onNavigateToMedications = { currentScreen = "medications" }
+                        // Se quiser adicionar um botão de perfil na HomeScreen futuramente, 
+                        // basta adicionar aqui: onNavigateToProfile = { currentScreen = "profile" }
                     )
                     "vitals" -> VitalsScreen(
                         onBackClick = { currentScreen = "home" }
@@ -36,6 +39,13 @@ class MainActivity : ComponentActivity() {
                     )
                     "consultas" -> ConsultasExamesScreen(
                         onBackClick = { currentScreen = "home" }
+                    )
+                    "medications" -> MedicationsScreen(
+                        onBackClick = { currentScreen = "home" }
+                    )
+                    "profile" -> ProfileScreen(
+                        onBackClick = { currentScreen = "home" },
+                        onLogoutClick = { currentScreen = "login" }
                     )
                 }
             }
