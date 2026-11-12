@@ -8,45 +8,55 @@ A proposta do sistema é centralizar registros de saúde, medicamentos, consulta
 
 ## Estado atual do projeto
 
-O projeto está atualmente na etapa de desenvolvimento do **frontend web**.
+O projeto está na etapa de desenvolvimento dos frontends web e mobile.
 
-As principais telas do protótipo já foram desenvolvidas e, por enquanto, utilizam **dados demonstrativos** para representar o funcionamento do sistema.
+As principais telas do sistema já estão sendo desenvolvidas e, por enquanto, utilizam dados demonstrativos para representar o funcionamento da aplicação.
 
 A integração com backend, banco de dados e dispositivos vestíveis será realizada posteriormente.
 
 ## Funcionalidades desenvolvidas
 
-Atualmente o frontend possui:
+Atualmente, o projeto contempla telas e funcionalidades como:
 
-- Página inicial
-- Login
-- Cadastro
-- Dashboard
-- Minha Saúde
-- Histórico de saúde
-- Cadastro de novo registro de saúde
-- Medicamentos
-- Cadastro de novo medicamento
-- Consultas
-- Cadastro de nova consulta
-- Perfil do usuário
-- Navbar responsiva
-- Navegação interna com indicação da página atual
-- Layout responsivo para desktop, tablet e celular
+- Página inicial;
+- Login;
+- Cadastro;
+- Dashboard;
+- Minha Saúde;
+- Histórico de saúde;
+- Cadastro de registros de saúde;
+- Medicamentos;
+- Cadastro de medicamentos;
+- Consultas e exames;
+- Cadastro de consultas;
+- Perfil do usuário;
+- Acessibilidade;
+- Navegação entre telas;
+- Layout responsivo para o frontend web;
+- Telas de acompanhamento para o aplicativo mobile.
 
 ## Tecnologias utilizadas
 
-### Frontend
+### Frontend Web
 
-- Next.js
-- React
-- TypeScript
-- Tailwind CSS
-- Lucide React
+- Next.js;
+- React;
+- TypeScript;
+- Tailwind CSS;
+- Lucide React.
 
-## Executando o projeto
+### Aplicativo Mobile
+
+- Kotlin;
+- Jetpack Compose;
+- Android SDK;
+- Gradle.
+
+## Executando o projeto Web
 
 ### 1. Instale as dependências
+
+Abra o terminal na pasta do projeto web e execute:
 
 ```bash
 npm install
@@ -60,9 +70,71 @@ npm run dev
 
 ### 3. Acesse o projeto
 
+Abra o navegador e acesse:
+
 [http://localhost:3001](http://localhost:3001)
 
-## Rotas para testes
+## Executando o aplicativo Android pelo VS Code
+
+Para executar o aplicativo mobile, é necessário ter instalado:
+
+- Visual Studio Code;
+- JDK compatível com a versão do projeto;
+- Android SDK;
+- Gradle Wrapper, disponibilizado pelo projeto;
+- Um emulador Android configurado ou um celular Android com a depuração USB ativada.
+
+### 1. Abra o projeto
+
+Abra a pasta principal do projeto Android no VS Code.
+
+### 2. Verifique a conexão do dispositivo
+
+Caso utilize um celular, conecte-o ao computador por USB e verifique se a depuração USB está ativada.
+
+No terminal do VS Code, execute:
+
+```bash
+adb devices
+```
+
+O dispositivo deverá aparecer na lista.
+
+Caso utilize um emulador, inicie-o antes de executar os próximos comandos.
+
+### 3. Compile o aplicativo
+
+No terminal, na pasta onde está localizado o arquivo `gradlew`, execute:
+
+**Windows:**
+
+```powershell
+.\gradlew assembleDebug
+```
+
+Esse comando verifica a compilação do aplicativo e gera o arquivo APK.
+
+### 4. Instale e execute o aplicativo
+
+Com o celular ou emulador conectado, execute:
+
+```powershell
+.\gradlew installDebug
+```
+
+O Gradle instalará o aplicativo no dispositivo selecionado.
+
+### 5. Localização do APK
+
+Após a compilação, o arquivo APK estará disponível em:
+
+```text
+app/build/outputs/apk/debug/app-debug.apk
+```
+
+Esse arquivo pode ser utilizado para instalar a versão de desenvolvimento em um dispositivo Android compatível.
+
+## Rotas para testes do frontend web
 
 Com o servidor em execução, utilize os links abaixo para acessar diretamente cada tela.
 
@@ -81,7 +153,7 @@ Com o servidor em execução, utilize os links abaixo para acessar diretamente c
 | Novo registro | [Abrir](http://localhost:3001/dashboard/historico/novo) |
 | Perfil | [Abrir](http://localhost:3001/dashboard/perfil) |
 
-## Estrutura atual do frontend
+## Estrutura atual do frontend web
 
 ```text
 src/
@@ -112,13 +184,13 @@ Neste momento, os dados exibidos nas telas são utilizados apenas para desenvolv
 
 Exemplos:
 
-- frequência cardíaca;
-- oxigenação;
-- pressão arterial;
-- medicamentos;
-- consultas;
-- horários;
-- histórico de saúde.
+- Frequência cardíaca;
+- Oxigenação;
+- Pressão arterial;
+- Medicamentos;
+- Consultas;
+- Horários;
+- Histórico de saúde.
 
 Esses dados ainda não são obtidos de um banco de dados ou dispositivo real.
 
@@ -126,28 +198,28 @@ Esses dados ainda não são obtidos de um banco de dados ou dispositivo real.
 
 Entre as próximas etapas do projeto estão:
 
-- autenticação real de usuários;
-- integração com backend;
-- integração com banco de dados;
-- persistência dos registros;
-- edição e exclusão de informações;
-- cadastro e vínculo de pessoas idosas;
-- filtros funcionais;
-- gráficos alimentados por dados reais;
-- lembretes e alertas;
-- integração com dispositivos vestíveis.
+- Autenticação real de usuários;
+- Integração com backend;
+- Integração com banco de dados;
+- Persistência dos registros;
+- Edição e exclusão de informações;
+- Cadastro e vínculo de pessoas idosas;
+- Filtros funcionais;
+- Gráficos alimentados por dados reais;
+- Lembretes e alertas;
+- Integração com dispositivos vestíveis.
 
-## Próximas etapas do frontend
+## Próximas etapas
 
-Antes da integração com o backend, ainda serão realizados:
-
-- implementação de gráficos;
-- revisão da responsividade;
-- revisão das navegações internas;
-- revisão de acessibilidade e consistência visual;
-- execução do lint;
-- teste de build;
-- deploy da aplicação.
+- Finalização das telas do aplicativo mobile;
+- Implementação de gráficos;
+- Revisão da responsividade;
+- Revisão das navegações internas;
+- Revisão de acessibilidade e consistência visual;
+- Execução do lint;
+- Testes de compilação e funcionamento;
+- Integração entre frontend, backend e banco de dados;
+- Deploy da aplicação web.
 
 ## Objetivo do S.A.S.P.I.
 
