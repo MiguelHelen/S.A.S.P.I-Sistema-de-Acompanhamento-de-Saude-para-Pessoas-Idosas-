@@ -1,9 +1,11 @@
-import { Screen, Item, Section, Row, Metric, Badge, C } from '../../components/ui';
+import { Screen, Item, Section, Row, Metric, Badge, C, Button } from '../../components/ui';
 import { router } from 'expo-router';
 import { useApp } from '../../context/AppContext';
+import { View } from 'react-native';
 
 export default function SupportNetwork() {
   const { elderly } = useApp();
+  
   return (
     <Screen title="Acompanhamento">
       <Item icon="person" title={elderly} sub="78 anos · Vínculo ativo" onPress={() => router.push('/select-elderly')} />
@@ -22,7 +24,10 @@ export default function SupportNetwork() {
       <Section>Rede de apoio</Section>
       <Item icon="person-outline" title="Carlos Mendes" sub="Cuidador(a) cadastrado(a)" right={<Badge text="Cuidador" color={C.blue} bg={C.lightBlue} />} />
       <Item icon="person-outline" title="Fernanda Souza" sub="Contato autorizado" right={<Badge text="Familiar" color={C.teal} bg={C.mint} />} />
-      <Item icon="checkmark-circle" title="Nenhum alerta novo" sub="Última atualização às 09:15" tint={C.green} iconBg="#fff" bg={C.lightGreen} border={C.lightGreen} />
+      
+      <View style={{ marginTop: 16 }}>
+        <Button outline icon="add" text="Convidar novo membro" onPress={() => {}} />
+      </View>
     </Screen>
   );
 }
