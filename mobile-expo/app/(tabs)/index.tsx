@@ -1,12 +1,13 @@
 import { ReactNode } from 'react';
 import {
   View, Text, Pressable, ScrollView, TextInput, TextInputProps,
-  KeyboardAvoidingView, Platform, StyleProp, ViewStyle, TextStyle, Image
+  KeyboardAvoidingView, Platform, StyleProp, ViewStyle, TextStyle
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useApp } from '../../context/AppContext';
 
 export const C = {
   blue: '#0A6E9F', teal: '#14B8A6', dark: '#0F172A', gray: '#64748B',
@@ -67,10 +68,10 @@ export function Screen({ title, subtitle, back = true, scroll = true, blobs = tr
 export function Logo({ size = 1 }: { size?: number }) {
   return (
     <View style={{ alignItems: 'center' }}>
-      <Image 
-        source={require('../assets/logo.png') as any} 
-        style={{ width: 100 * size, height: 100 * size, resizeMode: 'contain' }} 
-      />
+      <View style={{ width: 80 * size, height: 80 * size, borderRadius: 40 * size, backgroundColor: C.mint, alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+        <Ionicons name="heart" size={40 * size} color={C.teal} />
+      </View>
+      <Text style={{ fontSize: 24 * size, fontWeight: '900', color: C.dark, letterSpacing: 2 }}>SASPI</Text>
       <Text style={{ fontSize: 13 * size, color: C.gray, textAlign: 'center', fontWeight: '500', marginTop: 8 }}>
         {'Sistema de Acompanhamento de\nSaúde para Pessoas Idosas'}
       </Text>
@@ -214,3 +215,41 @@ export function Bars({ data, color = C.blue }: { data: number[]; color?: string 
 export const Row = ({ children, gap = 12, style }: { children: ReactNode; gap?: number; style?: StyleProp<ViewStyle> }) => (
   <View style={[{ flexDirection: 'row', gap }, style]}>{children}</View>
 );
+
+export default function Home() {
+  const { elderly } = useApp();
+
+  return (
+    <Screen title="Início" back={false}>
+      <View style={{ marginBottom: 8 }}>
+        <H1 size={24}>Olá, {elderly}</H1>
+        <Muted>Acompanhe sua saúde e rotina de cuidados.</Muted>
+      </View>
+
+      <Section>Resumo de saúde</Section>
+      <Row>
+        <Metric label="Pressão arterial" value="—" note="Sem registros" icon="pulse" />
+        <Metric label="Frequência cardíaca" value="—" note="Sem registros" icon="heart" />
+      </Row>
+
+      <Section>Atalhos</Section>
+      <Item
+        icon="medkit-outline"
+        title="Medicamentos"
+        sub="Consulte os horários e registre as doses."
+        onPress={() => router.push('/medications')}
+      />
+      <Item
+        icon="calendar-outline"
+        title="Consultas"
+        sub="Acompanhe sua agenda de saúde."
+        onPress={() => router.push('/appointments')}
+      />
+      <Button
+        icon="add"
+        text="Registrar sinais vitais"
+        onPress={() => router.push('/new-record')}
+      />
+    </Screen>
+  );
+}

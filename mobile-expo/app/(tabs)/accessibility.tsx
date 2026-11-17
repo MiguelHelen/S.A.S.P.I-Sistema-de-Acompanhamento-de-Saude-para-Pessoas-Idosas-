@@ -4,6 +4,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Screen, H1, Muted, Card, IconBox, Item, Button, C, IconName } from '../../components/ui';
 
+function Step({ icon, onPress }: { icon: IconName; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 }}>
+      <Ionicons name={icon} size={22} color={C.blue} />
+    </Pressable>
+  );
+}
+
 export default function Accessibility() {
   const [size, setSize] = useState(16);
   const [opts, setOpts] = useState<Record<string, boolean>>({ contraste: true, simples: true, voz: false, anim: false });
@@ -14,12 +22,6 @@ export default function Accessibility() {
     ['voz', 'volume-high-outline', 'Leitura em voz alta', 'Ouça textos e instruções'],
     ['anim', 'sparkles-outline', 'Reduzir animações', 'Menos movimentos na interface'],
   ];
-  
-  const Step = ({ icon, onPress }: { icon: IconName; onPress: () => void }) => (
-    <Pressable onPress={onPress} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 }}>
-      <Ionicons name={icon} size={22} color={C.blue} />
-    </Pressable>
-  );
   
   return (
     <Screen title="Acessibilidade">

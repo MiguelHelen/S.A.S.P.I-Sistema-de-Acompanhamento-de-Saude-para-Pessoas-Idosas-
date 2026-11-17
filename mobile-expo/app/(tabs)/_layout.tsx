@@ -36,7 +36,7 @@ export default function TabsLayout() {
         name="index" 
         options={{ 
           title: 'Início', 
-          tabBarIcon: (props) => <Ionicons name="home" size={props.size} color={props.color} />
+          tabBarIcon: (props) => <Ionicons name="home" size={props.size} color={props.focused ? C.teal : C.gray} />
         }} 
       />
       <Tabs.Screen 
@@ -45,14 +45,14 @@ export default function TabsLayout() {
           title: 'Alertas', 
           tabBarBadge: 2, 
           tabBarBadgeStyle: { backgroundColor: C.red, color: '#fff', fontSize: 10 },
-          tabBarIcon: (props) => <Ionicons name="notifications" size={props.size} color={props.color} />
+          tabBarIcon: (props) => <Ionicons name="notifications" size={props.size} color={props.focused ? C.teal : C.gray} />
         }} 
       />
       <Tabs.Screen 
         name="profile" 
         options={{ 
           title: 'Perfil', 
-          tabBarIcon: (props) => <Ionicons name="person" size={props.size} color={props.color} />
+          tabBarIcon: (props) => <Ionicons name="person" size={props.size} color={props.focused ? C.teal : C.gray} />
         }} 
       />
       
