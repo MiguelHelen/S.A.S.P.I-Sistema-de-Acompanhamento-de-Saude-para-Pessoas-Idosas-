@@ -1,26 +1,19 @@
+
 package com.saspi.mobile
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -28,188 +21,264 @@ import androidx.compose.ui.unit.sp
 fun LoginScreen(
     onLoginClick: (String, String) -> Unit = { _, _ -> },
     onBiometricClick: () -> Unit = {},
-    onForgotPasswordClick: () -> Unit = {}
+    onForgotPasswordClick: () -> Unit = {},
+    onRegisterClick: () -> Unit = {}
 ) {
-    var emailOrCpf by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var rememberUser by remember { mutableStateOf(false) }
+    var email by remember { mutableStateOf("") }
+    var senha by remember { mutableStateOf("") }
+    var manterConectado by remember { mutableStateOf(false) }
+    var mostrarSenha by remember { mutableStateOf(false) }
 
-    val primaryTeal = Color(0xFF00897B)
-    val textDark = Color(0xFF0D3B44)
-    val graySub = Color(0xFF6C7A89)
-    val context = LocalContext.current
-    val logoResourceId = remember(context) {
-        context.resources.getIdentifier("logo_saspi", "drawable", context.packageName)
-    }
+    val blue = Color(0xFF247BA0)
+    val darkBlue = Color(0xFF185B7A)
+    val teal = Color(0xFF38B6A4)
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFFE7F5F8),
+                        Color.White
+                    )
+                )
+            )
+            .padding(horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        Column(
+
+        // Identidade visual do aplicativo
+        Box(
             modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .imePadding()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Top
+                .size(82.dp)
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = listOf(blue, teal)
+                    ),
+                    shape = CircleShape
+                ),
+            contentAlignment = Alignment.Center
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
-
-            if (logoResourceId != 0) {
-                Image(
-                    painter = painterResource(id = logoResourceId),
-                    contentDescription = "Logo SASPI",
-                    modifier = Modifier
-                        .height(110.dp)
-                        .fillMaxWidth(0.7f)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
             Text(
-                text = "Bem-vindo(a)!",
-                fontSize = 24.sp,
+                text = "S",
+                fontSize = 42.sp,
                 fontWeight = FontWeight.Bold,
-                color = textDark
+                color = Color.White
             )
-            Text(
-                text = "Faça login para continuar",
-                fontSize = 14.sp,
-                color = graySub,
-                modifier = Modifier.padding(top = 4.dp, bottom = 28.dp)
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            text = "S.A.S.P.I.",
+            fontSize = 30.sp,
+            fontWeight = FontWeight.Bold,
+            color = darkBlue
+        )
+
+        Text(
+            text = "Sistema de Acompanhamento de Saúde",
+            fontSize = 13.sp,
+            color = Color.Gray
+        )
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = Color.White
+            ),
+            elevation = CardDefaults.cardElevation(
+                defaultElevation = 4.dp
             )
-
-            OutlinedTextField(
-                value = emailOrCpf,
-                onValueChange = { emailOrCpf = it },
-                placeholder = { Text("E-mail ou CPF", color = graySub) },
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = primaryTeal,
-                    unfocusedBorderColor = Color.LightGray,
-                    unfocusedContainerColor = Color(0xFFFAFAFA),
-                    focusedContainerColor = Color.White
-                ),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                placeholder = { Text("Senha", color = graySub) },
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Password,
-                    imeAction = ImeAction.Done
-                ),
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = primaryTeal,
-                    unfocusedBorderColor = Color.LightGray,
-                    unfocusedContainerColor = Color(0xFFFAFAFA),
-                    focusedContainerColor = Color.White
-                ),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = rememberUser,
-                        onCheckedChange = { rememberUser = it },
-                        colors = CheckboxDefaults.colors(checkedColor = primaryTeal)
-                    )
-                    Text(text = "Manter conectado", fontSize = 13.sp, color = textDark)
-                }
-
-                TextButton(onClick = onForgotPasswordClick) {
-                    Text(
-                        text = "Esqueci a senha",
-                        fontSize = 13.sp,
-                        color = primaryTeal,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            val gradientButton = Brush.horizontalGradient(
-                colors = listOf(Color(0xFF0288D1), Color(0xFF00897B))
-            )
-            Button(
-                onClick = { onLoginClick(emailOrCpf, password) },
+        ) {
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(gradientButton),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent)
+                    .padding(22.dp)
             ) {
+
                 Text(
-                    text = "Entrar →",
-                    fontSize = 16.sp,
+                    text = "Bem-vindo!",
+                    fontSize = 25.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = darkBlue
                 )
-            }
 
-            Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                HorizontalDivider(modifier = Modifier.weight(1f), color = Color.LightGray)
                 Text(
-                    text = " ou ",
-                    fontSize = 12.sp,
-                    color = graySub,
-                    modifier = Modifier.padding(horizontal = 8.dp)
+                    text = "Entre com seus dados para continuar.",
+                    fontSize = 14.sp,
+                    color = Color.Gray
                 )
-                HorizontalDivider(modifier = Modifier.weight(1f), color = Color.LightGray)
-            }
 
-            Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(22.dp))
 
-            OutlinedButton(
-                onClick = onBiometricClick,
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp)
-            ) {
                 Text(
-                    text = "Entrar com biometria",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = primaryTeal
+                    text = "E-mail ou CPF",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = darkBlue
                 )
+
+                Spacer(modifier = Modifier.height(7.dp))
+
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = {
+                        Text("Digite seu e-mail ou CPF")
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "Senha",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = darkBlue
+                )
+
+                Spacer(modifier = Modifier.height(7.dp))
+
+                OutlinedTextField(
+                    value = senha,
+                    onValueChange = { senha = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = {
+                        Text("Digite sua senha")
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    visualTransformation = if (mostrarSenha) {
+                        VisualTransformation.None
+                    } else {
+                        PasswordVisualTransformation()
+                    },
+                    trailingIcon = {
+                        TextButton(
+                            onClick = {
+                                mostrarSenha = !mostrarSenha
+                            }
+                        ) {
+                            Text(
+                                text = if (mostrarSenha) "Ocultar" else "Mostrar",
+                                color = blue,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = manterConectado,
+                            onCheckedChange = {
+                                manterConectado = it
+                            },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = blue
+                            )
+                        )
+
+                        Text(
+                            text = "Manter conectado",
+                            fontSize = 12.sp,
+                            color = Color.DarkGray
+                        )
+                    }
+
+                    TextButton(
+                        onClick = onForgotPasswordClick
+                    ) {
+                        Text(
+                            text = "Esqueci a senha",
+                            fontSize = 12.sp,
+                            color = blue
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(
+                    onClick = {
+                        onLoginClick(email, senha)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = blue
+                    )
+                ) {
+                    Text(
+                        text = "Entrar",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedButton(
+                    onClick = onBiometricClick,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Text(
+                        text = "Entrar com biometria",
+                        fontSize = 15.sp,
+                        color = darkBlue
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Ainda não possui cadastro?",
+                        fontSize = 13.sp,
+                        color = Color.Gray
+                    )
+
+                    TextButton(
+                        onClick = onRegisterClick
+                    ) {
+                        Text(
+                            text = "Cadastrar",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = blue
+                        )
+                    }
+                }
             }
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            Text(
-                text = "Acesso seguro para cuidar melhor.\nEntre com os dados fornecidos pela clínica.\nCuidar hoje, para viver melhor amanhã.",
-                fontSize = 11.sp,
-                color = graySub,
-                textAlign = TextAlign.Center,
-                lineHeight = 16.sp
-            )
         }
     }
 }
