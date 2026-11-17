@@ -22,15 +22,12 @@ export default function Medications() {
   return (
     <Screen title="Medicamentos">
       <Item icon="calendar-outline" title="Hoje, quarta-feira" sub="Rotina de medicamentos" />
-      
       <Section right={`${pend} pendentes`}>Próximas doses</Section>
       
       {meds.map((m) => {
         const [c, bg] = look[m.status];
         const ok = m.status === 'confirmado';
-        // Permissões: Apenas o Cuidador pode editar
         const canEdit = role === 'cuidador';
-        // Permissões: Idoso e Cuidador podem confirmar. Família não.
         const canConfirm = role !== 'familia';
 
         return (
@@ -43,7 +40,6 @@ export default function Medications() {
               </View>
               <Badge text={m.status[0].toUpperCase() + m.status.slice(1)} color={c} bg={bg} />
               
-              {/* Botão de editar só aparece para o cuidador */}
               {canEdit && (
                 <Pressable 
                   hitSlop={12} 
@@ -54,18 +50,13 @@ export default function Medications() {
                 </Pressable>
               )}
             </View>
-            
             <Muted size={13} style={{ marginVertical: 12 }}>{m.time} · horário previsto{ok ? ' ✓ Dose registrada' : ''}</Muted>
-            
-            {/* Botão de confirmar só aparece se tiver permissão e não estiver confirmado */}
             {!ok && canConfirm && <Button text="Confirmar dose" onPress={() => confirmar(m.id)} />}
           </Card>
         );
       })}
       
       <Item icon="information-circle-outline" title="Informação importante" sub="Siga sempre a orientação profissional." />
-      
-      {/* Botão de adicionar só aparece para o cuidador */}
       {role === 'cuidador' && (
         <Button icon="add" text="Adicionar medicamento" onPress={() => router.push('/add-medication')} />
       )}

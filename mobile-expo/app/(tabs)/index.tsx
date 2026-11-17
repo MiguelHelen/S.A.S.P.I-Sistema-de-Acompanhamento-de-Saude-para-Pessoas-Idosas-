@@ -1,174 +1,216 @@
-import { useState } from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { ReactNode } from 'react';
+import {
+  View, Text, Pressable, ScrollView, TextInput, TextInputProps,
+  KeyboardAvoidingView, Platform, StyleProp, ViewStyle, TextStyle, Image
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { Screen, H1, Muted, Section, Card, Item, Badge, Button, Metric, Row, C, IconName } from '../../components/ui';
-import { useApp } from '../../context/AppContext';
 
-function TopBar() {
+export const C = {
+  blue: '#0A6E9F', teal: '#14B8A6', dark: '#0F172A', gray: '#64748B',
+  line: '#E2E8F0', mint: '#CCFBF1', lightBlue: '#F0F9FF', soft: '#F8FAFC',
+  red: '#EF4444', lightRed: '#FEF2F2', orange: '#F59E0B', lightOrange: '#FFFBEB',
+  green: '#10B981', lightGreen: '#ECFDF5', white: '#FFFFFF',
+};
+
+export type IconName = keyof typeof Ionicons.glyphMap;
+
+export function Blobs() {
   return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-      <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: C.mint, alignItems: 'center', justifyContent: 'center' }}>
-        <Ionicons name="heart" size={20} color={C.teal} />
-      </View>
-      <Pressable onPress={() => router.push('/notifications-modal')} hitSlop={12}>
-        <Ionicons name="notifications-outline" size={26} color={C.dark} />
-        <View style={{ position: 'absolute', top: 2, right: 2, width: 10, height: 10, borderRadius: 5, backgroundColor: C.red, borderWidth: 2, borderColor: C.white }} />
-      </Pressable>
+    <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' }}>
+      <View style={{ position: 'absolute', top: -80, right: -60, width: 220, height: 220, borderRadius: 110, backgroundColor: C.teal, opacity: 0.15 }} />
+      <View style={{ position: 'absolute', bottom: -80, left: -60, width: 200, height: 200, borderRadius: 100, backgroundColor: C.mint, opacity: 0.5 }} />
     </View>
   );
 }
 
-function Tile({ icon, title, sub, onPress }: { icon: IconName; title: string; sub: string; onPress: () => void }) {
+export function Screen({ title, subtitle, back = true, scroll = true, blobs = true, children }: {
+  title?: string; subtitle?: string; back?: boolean; scroll?: boolean; blobs?: boolean; children: ReactNode;
+}) {
+  const body = (
+    <>
+      {title ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
+          {back && (
+            <Pressable onPress={() => router.back()} hitSlop={12} style={{ marginRight: 12, width: 44, height: 44, borderRadius: 22, backgroundColor: C.soft, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="chevron-back" size={24} color={C.dark} />
+            </Pressable>
+          )}
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 22, fontWeight: '800', color: C.dark, flexShrink: 1 }}>{title}</Text>
+            {subtitle ? <Text style={{ fontSize: 14, color: C.gray, marginTop: 2, fontWeight: '500', flexShrink: 1 }}>{subtitle}</Text> : null}
+          </View>
+        </View>
+      ) : null}
+      {children}
+    </>
+  );
+  
   return (
-    <Card onPress={onPress} style={{ flex: 1, padding: 16 }}>
-      <Ionicons name={icon} size={22} color={C.teal} />
-      <Text style={{ fontWeight: '700', color: C.dark, marginTop: 12, fontSize: 14 }}>{title}</Text>
-      <Muted size={12} style={{ marginTop: 2 }}>{sub}</Muted>
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: '#fff' }}>
+      {blobs && <Blobs />}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {scroll ? (
+          <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 120 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            {body}
+          </ScrollView>
+        ) : (
+          <View style={{ flex: 1, padding: 24, paddingBottom: 120 }}>{body}</View>
+        )}
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+export function Logo({ size = 1 }: { size?: number }) {
+  return (
+    <View style={{ alignItems: 'center' }}>
+      <Image 
+        source={require('../assets/logo.png') as any} 
+        style={{ width: 100 * size, height: 100 * size, resizeMode: 'contain' }} 
+      />
+      <Text style={{ fontSize: 13 * size, color: C.gray, textAlign: 'center', fontWeight: '500', marginTop: 8 }}>
+        {'Sistema de Acompanhamento de\nSaúde para Pessoas Idosas'}
+      </Text>
+    </View>
+  );
+}
+
+export const H1 = ({ children, size = 26 }: { children: ReactNode; size?: number }) => (
+  <Text style={{ fontSize: size, fontWeight: '800', color: C.dark, letterSpacing: -0.5, flexShrink: 1 }}>{children}</Text>
+);
+
+export const Muted = ({ children, size = 15, style }: { children: ReactNode; size?: number; style?: StyleProp<TextStyle> }) => (
+  <Text style={[{ fontSize: size, color: C.gray, lineHeight: size * 1.4, flexShrink: 1 }, style]}>{children}</Text>
+);
+
+export const Section = ({ children, right }: { children: ReactNode; right?: string }) => (
+  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, marginBottom: 12 }}>
+    <Text style={{ fontSize: 18, fontWeight: '800', color: C.dark, flexShrink: 1 }}>{children}</Text>
+    {right ? <Text style={{ fontSize: 14, color: C.teal, fontWeight: '700' }}>{right}</Text> : null}
+  </View>
+);
+
+export function Card({ children, bg = '#fff', border = C.line, style, onPress }: {
+  children: ReactNode; bg?: string; border?: string; style?: StyleProp<ViewStyle>; onPress?: () => void;
+}) {
+  return (
+    <Pressable disabled={!onPress} onPress={onPress}
+      style={[{ backgroundColor: bg, borderWidth: 1, borderColor: border, borderRadius: 20, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }, style]}>
+      {children}
+    </Pressable>
+  );
+}
+
+export function IconBox({ name, color = C.blue, bg = C.lightBlue, size = 46 }: { name: IconName; color?: string; bg?: string; size?: number }) {
+  return (
+    <View style={{ width: size, height: size, borderRadius: 16, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}>
+      <Ionicons name={name} size={size * 0.5} color={color} />
+    </View>
+  );
+}
+
+export function Badge({ text, color = C.teal, bg = C.mint }: { text: string; color?: string; bg?: string }) {
+  return (
+    <View style={{ backgroundColor: bg, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5 }}>
+      <Text style={{ fontSize: 12, fontWeight: '800', color }}>{text}</Text>
+    </View>
+  );
+}
+
+export function Item({ icon, title, sub, onPress, bg = '#fff', border = C.line, tint = C.blue, iconBg = C.lightBlue, right, titleColor = C.dark }: {
+  icon: IconName; title: string; sub?: string; onPress?: () => void; bg?: string; border?: string;
+  tint?: string; iconBg?: string; right?: ReactNode; titleColor?: string;
+}) {
+  return (
+    <Card bg={bg} border={border} onPress={onPress} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+      <IconBox name={icon} color={tint} bg={iconBg} />
+      <View style={{ flex: 1, marginLeft: 16 }}>
+        <Text style={{ fontSize: 16, fontWeight: '700', color: titleColor, flexShrink: 1 }}>{title}</Text>
+        {sub ? <Text style={{ fontSize: 13, color: C.gray, marginTop: 3, lineHeight: 18, flexShrink: 1 }}>{sub}</Text> : null}
+      </View>
+      {right}
+      {onPress ? <Ionicons name="chevron-forward" size={20} color={C.line} style={{ marginLeft: 8 }} /> : null}
     </Card>
   );
 }
 
-// ================= VISÃO DO IDOSO =================
-function HomeIdoso() {
-  const [done, setDone] = useState(false);
-  return (
+export function Button({ text, onPress, outline = false, icon }: { text: string; onPress?: () => void; outline?: boolean; icon?: IconName }) {
+  const label = (color: string) => (
     <>
-      <H1>Bom dia, Dona Ana!</H1>
-      <Muted style={{ marginBottom: 20 }}>Como você está se sentindo hoje?</Muted>
-
-      <LinearGradient colors={[C.blue, C.teal]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ borderRadius: 20, padding: 20, flexDirection: 'row', alignItems: 'center', marginBottom: 24 }}>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 11, color: '#fff', fontWeight: '800', letterSpacing: 0.5 }}>SEU CUIDADO DE HOJE</Text>
-          <Text style={{ fontSize: 22, fontWeight: '800', color: '#fff', marginVertical: 6 }}>Um passo de cada vez.</Text>
-          <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.9)' }}>Você está indo muito bem!</Text>
-        </View>
-        <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' }}>
-          <Ionicons name="heart" size={24} color={C.teal} />
-        </View>
+      {icon ? <Ionicons name={icon} size={20} color={color} style={{ marginRight: 8 }} /> : null}
+      <Text style={{ fontSize: 16, fontWeight: '800', color }}>{text}</Text>
+    </>
+  );
+  const base = { height: 56, borderRadius: 16, alignItems: 'center' as const, justifyContent: 'center' as const, flexDirection: 'row' as const };
+  
+  if (outline) {
+    return (
+      <Pressable onPress={onPress} style={({ pressed }) => [base, { borderWidth: 2, borderColor: C.teal, backgroundColor: pressed ? C.soft : '#fff' }]}>
+        {label(C.teal)}
+      </Pressable>
+    );
+  }
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}>
+      <LinearGradient colors={[C.blue, C.teal]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[base, { shadowColor: C.teal, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 }]}>
+        {label('#fff')}
       </LinearGradient>
-
-      <Section>Para hoje</Section>
-      <Card style={{ padding: 16 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: C.mint, alignItems: 'center', justifyContent: 'center' }}>
-            <Ionicons name="medical" size={22} color={C.teal} />
-          </View>
-          <View style={{ flex: 1, marginLeft: 12 }}>
-            <Muted size={12}>Próximo medicamento</Muted>
-            <Text style={{ fontWeight: '800', color: C.dark, fontSize: 16, marginTop: 2 }}>Losartana • 50 mg</Text>
-            <Muted size={12} style={{ marginTop: 2 }}>08:00 · Hoje</Muted>
-          </View>
-          <Badge text={done ? 'Confirmado' : 'Pendente'} color={done ? C.green : C.orange} bg={done ? C.lightGreen : C.lightOrange} />
-        </View>
-        {!done && (
-          <View style={{ marginTop: 16 }}>
-            <Button text="Confirmar dose" onPress={() => setDone(true)} />
-          </View>
-        )}
-      </Card>
-
-      <Section>Acesso rápido</Section>
-      <Row gap={12} style={{ marginBottom: 12 }}>
-        <Tile icon="heart-outline" title="Minha saúde" sub="Ver medidas" onPress={() => router.push('/vitals')} />
-        <Tile icon="calendar-outline" title="Consultas" sub="Compromissos" onPress={() => router.push('/appointments')} />
-      </Row>
-      
-      <Card onPress={() => router.push('/emergency')} bg={C.lightRed} border={C.lightRed} style={{ flexDirection: 'row', alignItems: 'center', padding: 16 }}>
-        <Ionicons name="call" size={24} color={C.red} />
-        <View style={{ flex: 1, marginLeft: 12 }}>
-          <Text style={{ fontWeight: '800', color: C.red, fontSize: 16 }}>Emergência / SOS</Text>
-          <Muted size={12} style={{ color: C.red, opacity: 0.8 }}>Toque para ligar para um familiar</Muted>
-        </View>
-        <Ionicons name="chevron-forward" size={20} color={C.red} />
-      </Card>
-
-      <Section>Resumo de saúde</Section>
-      <Row gap={12}>
-        <Metric label="Batimentos" value="72 bpm" note="Habitual" />
-        <Metric label="Oxigenação" value="98%" note="Última medição" icon="water" />
-      </Row>
-    </>
+    </Pressable>
   );
 }
 
-// ================= VISÃO DO CUIDADOR =================
-function HomeCuidador() {
+export function Input({ icon, label, right, ...p }: TextInputProps & { icon?: IconName; label?: string; right?: ReactNode }) {
   return (
-    <>
-      <H1>Bom dia, Carlos!</H1>
-      <Muted style={{ marginBottom: 20 }}>Aqui está o resumo do seu cuidado.</Muted>
-      
-      <Item icon="person" title="Dona Ana Souza" sub="Idosa acompanhada" right={<Badge text="Vinculada" />} onPress={() => router.push('/select-elderly')} />
-
-      <Section>Tarefas de hoje</Section>
-      <Item icon="medical-outline" title="Medicamentos pendentes" sub="2 de 3 doses confirmadas" onPress={() => router.push('/medications')} />
-      <View style={{ height: 6, backgroundColor: C.line, borderRadius: 3, marginTop: -8, marginBottom: 16 }}>
-        <View style={{ width: '66%', height: 6, backgroundColor: C.teal, borderRadius: 3 }} />
+    <View style={{ marginBottom: 16 }}>
+      {label ? <Text style={{ fontSize: 15, fontWeight: '700', color: C.dark, marginBottom: 8 }}>{label}</Text> : null}
+      <View style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: C.line, backgroundColor: '#fff', borderRadius: 16, paddingHorizontal: 16, height: 56 }}>
+        {icon ? <Ionicons name={icon} size={22} color={C.gray} style={{ marginRight: 12 }} /> : null}
+        <TextInput placeholderTextColor="#94A3B8" {...p} style={{ flex: 1, fontSize: 16, color: C.dark, height: '100%' }} />
+        {right}
       </View>
-      
-      <Item icon="heart-outline" title="Registrar sinais vitais" sub="Último registro hoje às 08:45" onPress={() => router.push('/new-record')} />
-      <Item icon="calendar-outline" title="Próxima consulta" sub="Cardiologia • 15/11 às 10:00" onPress={() => router.push('/appointments')} />
-      <Item icon="alert" title="1 alerta precisa de atenção" sub="Toque para ver os detalhes" tint={C.red} iconBg={C.lightRed} bg={C.lightRed} border={C.lightRed} titleColor={C.red} onPress={() => router.push('/notifications')} />
-
-      <View style={{ marginTop: 12, marginBottom: 24 }}>
-        <Button icon="add" text="Novo registro de saúde" onPress={() => router.push('/new-record')} />
-      </View>
-
-      <Section>Atalhos</Section>
-      <Row gap={8}>
-        <Pressable onPress={() => router.push('/medications')} style={{ flex: 1, backgroundColor: C.mint, borderRadius: 12, paddingVertical: 12, alignItems: 'center' }}>
-          <Text style={{ fontSize: 12, fontWeight: '700', color: C.teal }}>Medicamentos</Text>
-        </Pressable>
-        <Pressable onPress={() => router.push('/devices')} style={{ flex: 1, backgroundColor: C.mint, borderRadius: 12, paddingVertical: 12, alignItems: 'center' }}>
-          <Text style={{ fontSize: 12, fontWeight: '700', color: C.teal }}>Dispositivos</Text>
-        </Pressable>
-        <Pressable onPress={() => router.push('/support-network')} style={{ flex: 1, backgroundColor: C.mint, borderRadius: 12, paddingVertical: 12, alignItems: 'center' }}>
-          <Text style={{ fontSize: 12, fontWeight: '700', color: C.teal }}>Rede de apoio</Text>
-        </Pressable>
-        <Pressable onPress={() => router.push('/emergency')} style={{ flex: 1, backgroundColor: C.lightRed, borderRadius: 12, paddingVertical: 12, alignItems: 'center' }}>
-          <Text style={{ fontSize: 12, fontWeight: '700', color: C.red }}>SOS</Text>
-        </Pressable>
-      </Row>
-    </>
+    </View>
   );
 }
 
-// ================= VISÃO DA FAMÍLIA =================
-function HomeFamilia() {
+export function Segment({ items, value, onChange }: { items: string[]; value: string; onChange: (v: string) => void }) {
   return (
-    <>
-      <H1>Olá, Fernanda!</H1>
-      <Muted style={{ marginBottom: 20 }}>Acompanhe quem você ama.</Muted>
-      
-      <Item icon="person" title="Dona Ana Souza" sub="Acompanhando" right={<Badge text="Vinculada" />} onPress={() => router.push('/select-elderly')} />
-
-      <Section right="Hoje · 08:45">Resumo da saúde</Section>
-      <Row gap={8}>
-        <Metric label="Batimentos" value="72 bpm" note="Normal" />
-        <Metric label="Oxigenação" value="98%" note="Normal" icon="water" />
-        <Metric label="Pressão" value="120/80" note="Habitual" icon="pulse" />
-      </Row>
-
-      <Section>Informações recentes</Section>
-      <Item icon="calendar-outline" title="Próxima consulta" sub="15 nov. • Cardiologia • 10:00" onPress={() => router.push('/appointments')} />
-      <Item icon="medical-outline" title="Medicamentos" sub="2 doses confirmadas hoje" onPress={() => router.push('/medications')} />
-      <Item icon="checkmark-circle" title="Sem novos alertas" sub="Última atualização há poucos minutos" tint={C.green} iconBg={C.lightGreen} bg={C.lightGreen} border={C.lightGreen} />
-      
-      <View style={{ marginTop: 12 }}>
-        <Button outline text="Ver acompanhamento completo" onPress={() => router.push('/support-network')} />
-      </View>
-    </>
+    <View style={{ flexDirection: 'row', backgroundColor: C.soft, borderRadius: 14, padding: 4, marginBottom: 20, borderWidth: 1, borderColor: C.line }}>
+      {items.map((i) => (
+        <Pressable key={i} onPress={() => onChange(i)} style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: value === i ? '#fff' : 'transparent', shadowColor: value === i ? '#000' : 'transparent', shadowOpacity: 0.05, shadowRadius: 4, elevation: value === i ? 2 : 0 }}>
+          <Text style={{ fontSize: 14, fontWeight: '700', color: value === i ? C.dark : C.gray }}>{i}</Text>
+        </Pressable>
+      ))}
+    </View>
   );
 }
 
-export default function Home() {
-  const { role } = useApp();
+export function Metric({ label, value, note, icon = 'heart' }: { label: string; value: string; note: string; icon?: IconName }) {
   return (
-    <Screen>
-      <TopBar />
-      {role === 'idoso' ? <HomeIdoso /> : role === 'cuidador' ? <HomeCuidador /> : <HomeFamilia />}
-    </Screen>
+    <Card style={{ flex: 1, marginBottom: 0, padding: 14 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <Ionicons name={icon} size={16} color={C.teal} />
+        <Text style={{ fontSize: 13, fontWeight: '600', color: C.gray, marginLeft: 6 }}>{label}</Text>
+      </View>
+      <Text style={{ fontSize: 24, fontWeight: '800', color: C.dark, marginVertical: 6 }}>{value}</Text>
+      <Text style={{ fontSize: 12, color: C.teal, fontWeight: '700' }}>{note}</Text>
+    </Card>
   );
 }
+
+export function Bars({ data, color = C.blue }: { data: number[]; color?: string }) {
+  const max = Math.max(...data);
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 100, gap: 8 }}>
+      {data.map((v, i) => (
+        <View key={i} style={{ flex: 1, height: `${(v / max) * 100}%`, backgroundColor: color, opacity: 0.4 + 0.6 * (v / max), borderRadius: 6 }} />
+      ))}
+    </View>
+  );
+}
+
+export const Row = ({ children, gap = 12, style }: { children: ReactNode; gap?: number; style?: StyleProp<ViewStyle> }) => (
+  <View style={[{ flexDirection: 'row', gap }, style]}>{children}</View>
+);

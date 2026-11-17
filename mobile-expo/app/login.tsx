@@ -58,9 +58,6 @@ export default function Login() {
           Ainda não possui cadastro? <Text style={{ color: C.teal, fontWeight: '700' }}>Cadastrar</Text>
         </Muted>
       </Pressable>
-      
-      <Text style={{ fontSize: 12, textAlign: 'center', color: C.gray, marginTop: 10 }}>Acesso seguro para cuidar melhor.</Text>
-      <Text style={{ fontSize: 13, textAlign: 'center', color: C.teal, fontWeight: '700', marginTop: 6 }}>Cuidar hoje, para viver melhor amanhã.</Text>
     </Screen>
   );
 }

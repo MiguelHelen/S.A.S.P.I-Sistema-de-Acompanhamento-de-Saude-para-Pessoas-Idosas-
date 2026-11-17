@@ -17,12 +17,6 @@ export default function Splash() {
           {'Mais cuidado hoje, mais\nindependência amanhã'}
         </Text>
       </View>
-      <View style={{ alignItems: 'center', marginBottom: 20 }}>
-        <View style={{ flexDirection: 'row', gap: 6 }}>
-          {[C.dark, C.blue, C.teal].map((c) => <View key={c} style={{ width: 22, height: 4, borderRadius: 2, backgroundColor: c }} />)}
-        </View>
-        <Text style={{ fontSize: 11, color: C.gray, marginTop: 6 }}>Carregando...</Text>
-      </View>
     </Screen>
   );
 }

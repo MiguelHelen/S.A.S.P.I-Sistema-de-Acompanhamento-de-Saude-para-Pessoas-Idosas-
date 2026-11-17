@@ -50,14 +50,16 @@ export default function Profile() {
         ))}
       </Row>
 
-      <Item icon="person-outline" title="Dados pessoais" sub="Nome, telefone e e-mail" onPress={() => {}} />
-      <Item icon="lock-closed-outline" title="Segurança da conta" sub="Senha e acesso" onPress={() => {}} />
+      <Item icon="person-outline" title="Dados pessoais" sub="Nome, telefone e e-mail" onPress={() => router.push('/personal-data')} />
       <Item icon="accessibility-outline" title="Acessibilidade" sub="Texto, contraste e leitura" onPress={() => router.push('/accessibility')} />
       <Item icon="watch-outline" title="Dispositivos" sub="Integrações e sensores" onPress={() => router.push('/devices')} />
       <Item icon="help-circle-outline" title="Ajuda e suporte" sub="Dúvidas sobre o SASPI" onPress={() => router.push('/help')} />
 
       <Muted size={12} style={{ textAlign: 'center', marginVertical: 24 }}>Versão 1.0.0</Muted>
-      <Button outline text="Sair da conta" onPress={() => router.replace('/login')} />
+      
+      <View style={{ marginBottom: 40 }}>
+        <Button outline text="Sair da conta" onPress={() => router.replace('/login')} />
+      </View>
     </Screen>
   );
 }

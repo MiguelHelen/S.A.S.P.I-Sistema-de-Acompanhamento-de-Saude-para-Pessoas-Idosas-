@@ -1,8 +1,7 @@
-import { Image } from 'react-native';
 import { ReactNode } from 'react';
 import {
   View, Text, Pressable, ScrollView, TextInput, TextInputProps,
-  KeyboardAvoidingView, Platform, StyleProp, ViewStyle,
+  KeyboardAvoidingView, Platform, StyleProp, ViewStyle, TextStyle
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -13,7 +12,7 @@ export const C = {
   blue: '#0A6E9F', teal: '#14B8A6', dark: '#0F172A', gray: '#64748B',
   line: '#E2E8F0', mint: '#CCFBF1', lightBlue: '#F0F9FF', soft: '#F8FAFC',
   red: '#EF4444', lightRed: '#FEF2F2', orange: '#F59E0B', lightOrange: '#FFFBEB',
-  green: '#10B981', lightGreen: '#ECFDF5',
+  green: '#10B981', lightGreen: '#ECFDF5', white: '#FFFFFF',
 };
 
 export type IconName = keyof typeof Ionicons.glyphMap;
@@ -22,9 +21,7 @@ export function Blobs() {
   return (
     <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' }}>
       <View style={{ position: 'absolute', top: -80, right: -60, width: 220, height: 220, borderRadius: 110, backgroundColor: C.teal, opacity: 0.15 }} />
-      <View style={{ position: 'absolute', top: -40, right: -80, width: 160, height: 160, borderRadius: 80, backgroundColor: C.mint, opacity: 0.6 }} />
       <View style={{ position: 'absolute', bottom: -80, left: -60, width: 200, height: 200, borderRadius: 100, backgroundColor: C.mint, opacity: 0.5 }} />
-      <View style={{ position: 'absolute', bottom: -40, left: -80, width: 150, height: 150, borderRadius: 75, backgroundColor: C.teal, opacity: 0.1 }} />
     </View>
   );
 }
@@ -42,38 +39,39 @@ export function Screen({ title, subtitle, back = true, scroll = true, blobs = tr
             </Pressable>
           )}
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 22, fontWeight: '800', color: C.dark }}>{title}</Text>
-            {subtitle ? <Text style={{ fontSize: 14, color: C.gray, marginTop: 2, fontWeight: '500' }}>{subtitle}</Text> : null}
+            <Text style={{ fontSize: 22, fontWeight: '800', color: C.dark, flexShrink: 1 }}>{title}</Text>
+            {subtitle ? <Text style={{ fontSize: 14, color: C.gray, marginTop: 2, fontWeight: '500', flexShrink: 1 }}>{subtitle}</Text> : null}
           </View>
         </View>
       ) : null}
       {children}
     </>
   );
+  
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: '#fff' }}>
       {blobs && <Blobs />}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {scroll ? (
-          <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 40 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 120 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             {body}
           </ScrollView>
         ) : (
-          <View style={{ flex: 1, padding: 24 }}>{body}</View>
+          <View style={{ flex: 1, padding: 24, paddingBottom: 120 }}>{body}</View>
         )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
+// LOGO COM FALLBACK (Sem a imagem para não quebrar o app)
 export function Logo({ size = 1 }: { size?: number }) {
   return (
     <View style={{ alignItems: 'center' }}>
-      {}
-      <Image 
-        source={require('../assets/logo.png')}  
-        style={{ width: 100 * size, height: 100 * size, resizeMode: 'contain' }} 
-      />
+      <View style={{ width: 80 * size, height: 80 * size, borderRadius: 40 * size, backgroundColor: C.mint, alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+        <Ionicons name="heart" size={40 * size} color={C.teal} />
+      </View>
+      <Text style={{ fontSize: 24 * size, fontWeight: '900', color: C.dark, letterSpacing: 2 }}>SASPI</Text>
       <Text style={{ fontSize: 13 * size, color: C.gray, textAlign: 'center', fontWeight: '500', marginTop: 8 }}>
         {'Sistema de Acompanhamento de\nSaúde para Pessoas Idosas'}
       </Text>
@@ -82,14 +80,16 @@ export function Logo({ size = 1 }: { size?: number }) {
 }
 
 export const H1 = ({ children, size = 26 }: { children: ReactNode; size?: number }) => (
-  <Text style={{ fontSize: size, fontWeight: '800', color: C.dark, letterSpacing: -0.5 }}>{children}</Text>
+  <Text style={{ fontSize: size, fontWeight: '800', color: C.dark, letterSpacing: -0.5, flexShrink: 1 }}>{children}</Text>
 );
-export const Muted = ({ children, size = 15, style }: { children: ReactNode; size?: number; style?: object }) => (
-  <Text style={[{ fontSize: size, color: C.gray, lineHeight: size * 1.4 }, style]}>{children}</Text>
+
+export const Muted = ({ children, size = 15, style }: { children: ReactNode; size?: number; style?: StyleProp<TextStyle> }) => (
+  <Text style={[{ fontSize: size, color: C.gray, lineHeight: size * 1.4, flexShrink: 1 }, style]}>{children}</Text>
 );
+
 export const Section = ({ children, right }: { children: ReactNode; right?: string }) => (
   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, marginBottom: 12 }}>
-    <Text style={{ fontSize: 18, fontWeight: '800', color: C.dark }}>{children}</Text>
+    <Text style={{ fontSize: 18, fontWeight: '800', color: C.dark, flexShrink: 1 }}>{children}</Text>
     {right ? <Text style={{ fontSize: 14, color: C.teal, fontWeight: '700' }}>{right}</Text> : null}
   </View>
 );
@@ -129,8 +129,8 @@ export function Item({ icon, title, sub, onPress, bg = '#fff', border = C.line, 
     <Card bg={bg} border={border} onPress={onPress} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
       <IconBox name={icon} color={tint} bg={iconBg} />
       <View style={{ flex: 1, marginLeft: 16 }}>
-        <Text style={{ fontSize: 16, fontWeight: '700', color: titleColor }}>{title}</Text>
-        {sub ? <Text style={{ fontSize: 13, color: C.gray, marginTop: 3, lineHeight: 18 }}>{sub}</Text> : null}
+        <Text style={{ fontSize: 16, fontWeight: '700', color: titleColor, flexShrink: 1 }}>{title}</Text>
+        {sub ? <Text style={{ fontSize: 13, color: C.gray, marginTop: 3, lineHeight: 18, flexShrink: 1 }}>{sub}</Text> : null}
       </View>
       {right}
       {onPress ? <Ionicons name="chevron-forward" size={20} color={C.line} style={{ marginLeft: 8 }} /> : null}
@@ -146,6 +146,7 @@ export function Button({ text, onPress, outline = false, icon }: { text: string;
     </>
   );
   const base = { height: 56, borderRadius: 16, alignItems: 'center' as const, justifyContent: 'center' as const, flexDirection: 'row' as const };
+  
   if (outline) {
     return (
       <Pressable onPress={onPress} style={({ pressed }) => [base, { borderWidth: 2, borderColor: C.teal, backgroundColor: pressed ? C.soft : '#fff' }]}>
@@ -211,6 +212,6 @@ export function Bars({ data, color = C.blue }: { data: number[]; color?: string 
   );
 }
 
-export const Row = ({ children, gap = 12, style }: { children: ReactNode; gap?: number; style?: object }) => (
+export const Row = ({ children, gap = 12, style }: { children: ReactNode; gap?: number; style?: StyleProp<ViewStyle> }) => (
   <View style={[{ flexDirection: 'row', gap }, style]}>{children}</View>
 );
