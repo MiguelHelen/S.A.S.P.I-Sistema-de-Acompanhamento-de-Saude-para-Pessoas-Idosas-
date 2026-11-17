@@ -1,13 +1,16 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Home, HeartPulse, Pill, CalendarDays, User } from 'lucide-react-native';
+import { Home, Bell, User } from 'lucide-react-native';
 
-import FamiliarHomeScreen from '../screens/FamiliarHomeScreen';
-import AgendaConsultasScreen from '../screens/AgendaConsultasScreen';
-import SelectElderlyScreen from '../screens/SelectElderlyScreen';
-import PerfilConfigScreen from '../screens/PerfilConfigScreen';
 import HomeScreen from '../screens/HomeScreen'; 
+import AlertasScreen from '../screens/AlertasScreen';
+import PerfilConfigScreen from '../screens/PerfilConfigScreen';
+import SelectElderlyScreen from '../screens/SelectElderlyScreen';
+
+// Telas internas
+import AgendaConsultasScreen from '../screens/AgendaConsultasScreen';
+import MedicamentosScreen from '../screens/MedicamentosScreen';
 import SinaisVitaisScreen from '../screens/SinaisVitaisScreen';
 import NovoRegistroSinalScreen from '../screens/NovoRegistroSinalScreen';
 
@@ -19,31 +22,21 @@ function TabNavigator() {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#1565C0',
+        tabBarActiveTintColor: '#00897B',
         tabBarInactiveTintColor: '#A0AEC0',
-        tabBarStyle: { backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingBottom: 5, paddingTop: 5, height: 60 },
+        tabBarStyle: { backgroundColor: '#FFFFFF', borderTopWidth: 0, elevation: 10, height: 65, paddingBottom: 10, paddingTop: 10 },
+        tabBarLabelStyle: { fontSize: 12, fontWeight: '600' }
       }}
     >
       <Tab.Screen 
         name="Início" 
-        component={FamiliarHomeScreen}
+        component={HomeScreen}
         options={{ tabBarIcon: ({ color }) => <Home color={color} size={24} /> }} 
       />
       <Tab.Screen 
-        name="Remédios" 
-        component={HomeScreen} 
-        options={{ tabBarIcon: ({ color }) => <Pill color={color} size={24} /> }} 
-      />
-      {/* 2. Plugamos a tela de Sinais Vitais / Relógio na aba Saúde! */}
-      <Tab.Screen 
-        name="Saúde" 
-        component={SinaisVitaisScreen} 
-        options={{ tabBarIcon: ({ color }) => <HeartPulse color={color} size={24} /> }} 
-      />
-      <Tab.Screen 
-        name="Agenda" 
-        component={AgendaConsultasScreen}
-        options={{ tabBarIcon: ({ color }) => <CalendarDays color={color} size={24} /> }} 
+        name="Notificações" 
+        component={AlertasScreen} 
+        options={{ tabBarIcon: ({ color }) => <Bell color={color} size={24} /> }} 
       />
       <Tab.Screen 
         name="Perfil" 
@@ -56,9 +49,14 @@ function TabNavigator() {
 
 export default function AppNavigator() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
       <Stack.Screen name="SelectElderly" component={SelectElderlyScreen} />
       <Stack.Screen name="MainTabs" component={TabNavigator} />
+      
+      {/* Telas que não ficam na TabBar inferior */}
+      <Stack.Screen name="Agenda" component={AgendaConsultasScreen} />
+      <Stack.Screen name="Remédios" component={MedicamentosScreen} />
+      <Stack.Screen name="Saúde" component={SinaisVitaisScreen} />
       <Stack.Screen name="NovoRegistroSinal" component={NovoRegistroSinalScreen} />
     </Stack.Navigator>
   );

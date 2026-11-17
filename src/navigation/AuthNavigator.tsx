@@ -6,9 +6,14 @@ const Stack = createNativeStackNavigator();
 
 export default function AuthNavigator() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator 
+      screenOptions={{ 
+        headerShown: false,
+        animation: 'fade', // Transição mais elegante ao abrir o login
+      }}
+    >
       <Stack.Screen name="Login" component={LoginScreen} />
-      {/* Mariana: Quando criares a tela de Recuperar Senha ou Splash, adiciona as rotas correspondentes aqui. */}
+      {/* Telas futuras como RecuperarSenha entrariam aqui */}
     </Stack.Navigator>
   );
 }
