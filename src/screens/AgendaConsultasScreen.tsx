@@ -1,15 +1,16 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../contexts/AuthContext';
 import { API_URL } from '../api/client';
-import { CalendarDays, MapPin, Stethoscope } from 'lucide-react-native';
+import { CalendarDays, MapPin, Stethoscope, ChevronRight, Plus } from 'lucide-react-native';
 
-export default function AgendaConsultasScreen() {
+export default function AgendaConsultasScreen({ navigation }: any) {
   const { token } = useAuth();
   const [consultas, setConsultas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [abaAtiva, setAbaAtiva] = useState('Próximas');
 
   useFocusEffect(
     useCallback(() => {
@@ -37,35 +38,56 @@ export default function AgendaConsultasScreen() {
       }
       fetchConsultas();
       
-      return () => {
-        isMounted = false;
-      };
+      return () => { isMounted = false; };
     }, [token])
   );
 
   if (loading) {
-    return <View style={styles.center}><ActivityIndicator size="large" color="#1565C0" /></View>;
+    return <View style={styles.center}><ActivityIndicator size="large" color="#00897B" /></View>;
   }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Agenda de Consultas</Text>
-      <Text style={styles.subtitle}>Próximos compromissos médicos agendados.</Text>
+      {/* Decoração de fundo idêntica ao Figma */}
+      <View style={styles.blobTop} />
+
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Text style={styles.backButton}>← Voltar</Text>
+        </TouchableOpacity>
+        <Text style={styles.title}>Consultas e exames</Text>
+      </View>
+
+      {/* Abas superiores estilo pílula */}
+      <View style={styles.tabsContainer}>
+        {['Próximas', 'Histórico', 'Exames'].map(aba => (
+          <TouchableOpacity 
+            key={aba} 
+            onPress={() => setAbaAtiva(aba)}
+            style={[styles.tabBtn, abaAtiva === aba && styles.tabBtnActive]}
+          >
+            <Text style={[styles.tabText, abaAtiva === aba && styles.tabTextActive]}>{aba}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
       <FlatList
         data={consultas}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingBottom: 20 }}
+        contentContainerStyle={styles.content}
         renderItem={({ item }) => {
           const dataBr = item.data ? new Date(item.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '';
           return (
-            <View style={styles.card}>
+            <TouchableOpacity style={styles.card}>
               <View style={styles.cardHeader}>
-                <View style={styles.iconCircle}><Stethoscope color="#1565C0" size={20} /></View>
+                <View style={styles.iconCircle}>
+                  <Stethoscope color="#00897B" size={24} />
+                </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.especialidade}>{item.especialidade}</Text>
                   <Text style={styles.medico}>Dr(a). {item.medico}</Text>
                 </View>
+                <ChevronRight color="#A0AEC0" size={20} />
               </View>
               
               <View style={styles.infoRow}>
@@ -83,34 +105,50 @@ export default function AgendaConsultasScreen() {
                   <Text style={styles.obsText}>{item.observacao}</Text>
                 </View>
               )}
-            </View>
+            </TouchableOpacity>
           );
         }}
         ListEmptyComponent={
           <View style={styles.emptyBox}>
             <CalendarDays color="#A0AEC0" size={40} />
-            <Text style={styles.emptyText}>Nenhuma consulta agendada para este paciente.</Text>
+            <Text style={styles.emptyText}>Nenhuma consulta agendada.</Text>
           </View>
         }
       />
+
+      {/* Botão flutuante na parte inferior */}
+      <TouchableOpacity style={styles.fabBtn} onPress={() => alert('Em breve: Agendamento pelo App')}>
+        <Plus color="#FFF" size={20} />
+        <Text style={styles.fabText}>Agendar consulta ou exame</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2F7FB', paddingHorizontal: 20, paddingTop: 50 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#0A2540' },
-  subtitle: { fontSize: 14, color: '#4A5568', marginBottom: 20, marginTop: 4 },
-  card: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0', elevation: 1 },
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' },
+  blobTop: { position: 'absolute', top: -50, right: -50, width: 200, height: 200, borderRadius: 100, backgroundColor: '#E0F2F1', opacity: 0.8 },
+  header: { paddingTop: 60, paddingHorizontal: 24, zIndex: 10 },
+  backButton: { color: '#00897B', fontSize: 16, fontWeight: '600' },
+  title: { fontSize: 26, fontWeight: 'bold', color: '#0A2540', marginTop: 10, marginBottom: 20 },
+  tabsContainer: { flexDirection: 'row', paddingHorizontal: 24, marginBottom: 16, gap: 10, zIndex: 10 },
+  tabBtn: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, backgroundColor: '#F1F5F9' },
+  tabBtnActive: { backgroundColor: '#00897B' },
+  tabText: { color: '#718096', fontWeight: '600', fontSize: 14 },
+  tabTextActive: { color: '#FFF' },
+  content: { paddingHorizontal: 24, paddingBottom: 100 },
+  card: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOpacity: 0.05, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9', paddingBottom: 12 },
-  iconCircle: { width: 40, height: 40, borderRadius: 10, backgroundColor: '#E8F1FB', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  iconCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#E2F5F0', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   especialidade: { fontSize: 16, fontWeight: 'bold', color: '#0A2540' },
-  medico: { fontSize: 13, color: '#4A5568', marginTop: 2 },
+  medico: { fontSize: 13, color: '#718096', marginTop: 2 },
   infoRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
   infoText: { fontSize: 14, color: '#4A5568', marginLeft: 8, flex: 1 },
-  obsBox: { backgroundColor: '#FEF3C7', padding: 10, borderRadius: 8, marginTop: 12 },
-  obsText: { fontSize: 12, color: '#92400E' },
+  obsBox: { backgroundColor: '#FFF8E1', padding: 10, borderRadius: 8, marginTop: 12 },
+  obsText: { fontSize: 12, color: '#D97706', fontWeight: '500' },
   emptyBox: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40 },
-  emptyText: { marginTop: 12, color: '#718096', fontSize: 14 }
+  emptyText: { marginTop: 12, color: '#718096', fontSize: 14 },
+  fabBtn: { position: 'absolute', bottom: 30, left: 24, right: 24, backgroundColor: '#00897B', borderRadius: 14, paddingVertical: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, elevation: 3 },
+  fabText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' }
 });
