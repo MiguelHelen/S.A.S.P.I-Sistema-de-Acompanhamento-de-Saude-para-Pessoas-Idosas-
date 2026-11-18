@@ -5,7 +5,6 @@ import { User, Lock, Accessibility, Shield, HelpCircle, LogOut, Settings, Pencil
 
 export default function PerfilConfigScreen() {
   const { usuario, logout } = useAuth();
-  const [visaoDemonstracao, setVisaoDemonstracao] = useState('Idoso'); // Apenas visual p/ a banca
 
   return (
     <View style={styles.container}>
@@ -43,20 +42,6 @@ export default function PerfilConfigScreen() {
           <MenuOption icon={<Accessibility size={22} color="#00897B"/>} title="Acessibilidade" subtitle="Texto, contraste e leitura" />
           <MenuOption icon={<Shield size={22} color="#00897B"/>} title="Privacidade" subtitle="Permissões e dados" />
           <MenuOption icon={<HelpCircle size={22} color="#00897B"/>} title="Ajuda e suporte" subtitle="Dúvidas sobre o SASPI" noBorder />
-        </View>
-
-        {/* Simulador de Visão (Como na imagem) */}
-        <Text style={styles.visionTitle}>Visão do app (demonstração)</Text>
-        <View style={styles.visionRow}>
-          {['Idoso', 'Cuidador', 'Família'].map(v => (
-            <TouchableOpacity 
-              key={v} 
-              onPress={() => setVisaoDemonstracao(v)}
-              style={[styles.visionChip, visaoDemonstracao === v && styles.visionChipActive]}
-            >
-              <Text style={[styles.visionChipText, visaoDemonstracao === v && { color: '#FFF' }]}>{v}</Text>
-            </TouchableOpacity>
-          ))}
         </View>
 
         <Text style={styles.versionText}>Versão 1.0.0</Text>
