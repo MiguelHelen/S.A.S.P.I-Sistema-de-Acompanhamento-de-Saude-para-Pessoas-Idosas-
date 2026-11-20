@@ -1,16 +1,24 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native';
+import React, { useState, useCallback, useMemo } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  ActivityIndicator,
+  TouchableOpacity,
+  Alert,
+} from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../contexts/AuthContext';
-import { API_URL } from '../api/client';
+import { apiFetch } from '../api/client';
 import { CalendarDays, MapPin, Stethoscope, ChevronRight, Plus } from 'lucide-react-native';
 
 export default function AgendaConsultasScreen({ navigation }: any) {
-  const { token } = useAuth();
-  const [consultas, setConsultas] = useState<any[]>([]);
+  const { usuario, token } = useAuth();
+  const [todasConsultas, setTodasConsultas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [abaAtiva, setAbaAtiva] = useState('Próximas');
+  const [abaAtiva, setAbaAtiva] = useState<'Próximas' | 'Histórico' | 'Exames'>('Próximas');
 
   useFocusEffect(
     useCallback(() => {
@@ -18,37 +26,49 @@ export default function AgendaConsultasScreen({ navigation }: any) {
       async function fetchConsultas() {
         try {
           const storedElderly = await AsyncStorage.getItem('saspi_active_elderly');
-          if (storedElderly) {
-            const idosoId = JSON.parse(storedElderly).id;
-            const res = await fetch(`${API_URL}/consulta?idoso_id=${idosoId}`, {
-              headers: { Authorization: `Bearer ${token}` }
-            });
-            
-            if (res.ok) {
-              const data = await res.json();
-              const ativas = Array.isArray(data) ? data.filter((c:any) => c.status === "Agendada") : [];
-              if (isMounted) setConsultas(ativas);
-            }
+          const idosoId = storedElderly ? JSON.parse(storedElderly).id : usuario?.id;
+          if (!idosoId) return;
+
+          const res = await apiFetch(`/consulta?idoso_id=${idosoId}`, {}, token);
+          if (res.ok) {
+            const data = await res.json();
+            if (isMounted) setTodasConsultas(Array.isArray(data) ? data : []);
           }
         } catch (err) {
-          console.error("Erro ao buscar consultas:", err);
+          console.error('Erro ao buscar consultas:', err);
         } finally {
           if (isMounted) setLoading(false);
         }
       }
       fetchConsultas();
-      
-      return () => { isMounted = false; };
-    }, [token])
+      return () => {
+        isMounted = false;
+      };
+    }, [token, usuario])
   );
 
+  const consultasFiltradas = useMemo(() => {
+    if (abaAtiva === 'Próximas') {
+      return todasConsultas.filter((c) => c.status === 'Agendada');
+    }
+    if (abaAtiva === 'Histórico') {
+      return todasConsultas.filter((c) => c.status !== 'Agendada');
+    }
+    return todasConsultas.filter((c) =>
+      `${c.especialidade || ''} ${c.observacao || ''}`.toLowerCase().includes('exame')
+    );
+  }, [todasConsultas, abaAtiva]);
+
   if (loading) {
-    return <View style={styles.center}><ActivityIndicator size="large" color="#00897B" /></View>;
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#00897B" />
+      </View>
+    );
   }
 
   return (
     <View style={styles.container}>
-      {/* Decoração de fundo idêntica ao Figma */}
       <View style={styles.blobTop} />
 
       <View style={styles.header}>
@@ -58,11 +78,10 @@ export default function AgendaConsultasScreen({ navigation }: any) {
         <Text style={styles.title}>Consultas e exames</Text>
       </View>
 
-      {/* Abas superiores estilo pílula */}
       <View style={styles.tabsContainer}>
-        {['Próximas', 'Histórico', 'Exames'].map(aba => (
-          <TouchableOpacity 
-            key={aba} 
+        {(['Próximas', 'Histórico', 'Exames'] as const).map((aba) => (
+          <TouchableOpacity
+            key={aba}
             onPress={() => setAbaAtiva(aba)}
             style={[styles.tabBtn, abaAtiva === aba && styles.tabBtnActive]}
           >
@@ -72,13 +91,25 @@ export default function AgendaConsultasScreen({ navigation }: any) {
       </View>
 
       <FlatList
-        data={consultas}
+        data={consultasFiltradas}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.content}
         renderItem={({ item }) => {
-          const dataBr = item.data ? new Date(item.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '';
+          const dataBr = item.data
+            ? new Date(item.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
+            : '';
           return (
-            <TouchableOpacity style={styles.card}>
+            <TouchableOpacity
+              style={styles.card}
+              onPress={() =>
+                Alert.alert(
+                  item.especialidade || 'Consulta',
+                  `Médico: Dr(a). ${item.medico}\nData: ${dataBr} às ${item.horario}\nLocal: ${item.localizacao}\nStatus: ${item.status}${
+                    item.observacao ? `\nObs: ${item.observacao}` : ''
+                  }`
+                )
+              }
+            >
               <View style={styles.cardHeader}>
                 <View style={styles.iconCircle}>
                   <Stethoscope color="#00897B" size={24} />
@@ -89,12 +120,14 @@ export default function AgendaConsultasScreen({ navigation }: any) {
                 </View>
                 <ChevronRight color="#A0AEC0" size={20} />
               </View>
-              
+
               <View style={styles.infoRow}>
                 <CalendarDays color="#718096" size={16} />
-                <Text style={styles.infoText}>{dataBr} às {item.horario}</Text>
+                <Text style={styles.infoText}>
+                  {dataBr} às {item.horario}
+                </Text>
               </View>
-              
+
               <View style={styles.infoRow}>
                 <MapPin color="#718096" size={16} />
                 <Text style={styles.infoText}>{item.localizacao}</Text>
@@ -111,15 +144,22 @@ export default function AgendaConsultasScreen({ navigation }: any) {
         ListEmptyComponent={
           <View style={styles.emptyBox}>
             <CalendarDays color="#A0AEC0" size={40} />
-            <Text style={styles.emptyText}>Nenhuma consulta agendada.</Text>
+            <Text style={styles.emptyText}>Nenhum registro em "{abaAtiva}".</Text>
           </View>
         }
       />
 
-      {/* Botão flutuante na parte inferior */}
-      <TouchableOpacity style={styles.fabBtn} onPress={() => alert('Em breve: Agendamento pelo App')}>
+      <TouchableOpacity
+        style={styles.fabBtn}
+        onPress={() =>
+          Alert.alert(
+            'Agendamento Clínico',
+            'Novas consultas e exames são agendados diretamente pela equipe da clínica no painel Web.'
+          )
+        }
+      >
         <Plus color="#FFF" size={20} />
-        <Text style={styles.fabText}>Agendar consulta ou exame</Text>
+        <Text style={styles.fabText}>Solicitar agendamento</Text>
       </TouchableOpacity>
     </View>
   );
@@ -150,5 +190,5 @@ const styles = StyleSheet.create({
   emptyBox: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40 },
   emptyText: { marginTop: 12, color: '#718096', fontSize: 14 },
   fabBtn: { position: 'absolute', bottom: 30, left: 24, right: 24, backgroundColor: '#00897B', borderRadius: 14, paddingVertical: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, elevation: 3 },
-  fabText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' }
+  fabText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
 });
