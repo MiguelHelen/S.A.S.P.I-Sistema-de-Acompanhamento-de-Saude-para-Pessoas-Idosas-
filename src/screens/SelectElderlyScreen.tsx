@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../contexts/AuthContext';
-import { API_URL } from '../api/client';
-import { UserCheck, ChevronRight } from 'lucide-react-native';
+import { apiFetch } from '../api/client';
+import { ChevronRight } from 'lucide-react-native';
 
 export default function SelectElderlyScreen({ navigation }: any) {
   const { usuario, token, logout } = useAuth();
@@ -11,57 +11,70 @@ export default function SelectElderlyScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [idAtivo, setIdAtivo] = useState<string | null>(null);
 
+  const podeVoltar = navigation.canGoBack();
+
   useEffect(() => {
     async function fetchVinculos() {
       try {
         const stored = await AsyncStorage.getItem('saspi_active_elderly');
         if (stored) setIdAtivo(JSON.parse(stored).id);
 
-        const response = await fetch(`${API_URL}/usuario-idoso/usuario/${usuario?.id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await apiFetch(`/usuario-idoso/usuario/${usuario?.id}`, {}, token);
         const data = await response.json();
-        
+
         if (Array.isArray(data) && data.length > 0) {
-          if (usuario?.perfil === 'IDOSO' || data.length === 1) {
+          if (!podeVoltar && (usuario?.perfil === 'IDOSO' || data.length === 1)) {
             await AsyncStorage.setItem('saspi_active_elderly', JSON.stringify(data[0].idoso));
             navigation.replace('MainTabs');
           } else {
             setVinculos(data);
           }
-        } else {
-           navigation.replace('MainTabs');
+        } else if (!podeVoltar) {
+          navigation.replace('MainTabs');
         }
       } catch (error) {
-        console.error("Erro ao procurar vínculos:", error);
-        navigation.replace('MainTabs');
+        console.error('Erro ao procurar vínculos:', error);
+        if (!podeVoltar) navigation.replace('MainTabs');
       } finally {
         setLoading(false);
       }
     }
     fetchVinculos();
-  }, [usuario, token, navigation]);
+  }, [usuario, token, navigation, podeVoltar]);
 
   const handleSelectElderly = async (idoso: any) => {
     setIdAtivo(idoso.id);
     await AsyncStorage.setItem('saspi_active_elderly', JSON.stringify(idoso));
-    navigation.replace('MainTabs');
+    if (podeVoltar) {
+      navigation.goBack();
+    } else {
+      navigation.replace('MainTabs');
+    }
   };
 
-  if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#00897B" /></View>;
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#00897B" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <View style={styles.blobTop} />
 
       <View style={styles.header}>
-        <TouchableOpacity onPress={logout} style={{alignSelf: 'flex-start'}}>
-          <Text style={styles.logoutText}>← Sair</Text>
+        <TouchableOpacity
+          onPress={podeVoltar ? () => navigation.goBack() : logout}
+          style={{ alignSelf: 'flex-start' }}
+        >
+          <Text style={styles.logoutText}>{podeVoltar ? '← Voltar' : '← Sair'}</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Selecionar idoso</Text>
         <Text style={styles.subtitle}>Escolha o idoso que deseja acompanhar.</Text>
       </View>
-      
+
       <FlatList
         data={vinculos}
         keyExtractor={(item) => item.id}
@@ -69,13 +82,13 @@ export default function SelectElderlyScreen({ navigation }: any) {
         renderItem={({ item }) => {
           const isSelected = item.idoso.id === idAtivo;
           return (
-            <TouchableOpacity 
-              style={[styles.card, isSelected && styles.cardSelected]} 
+            <TouchableOpacity
+              style={[styles.card, isSelected && styles.cardSelected]}
               onPress={() => handleSelectElderly(item.idoso)}
             >
               <View style={[styles.avatarBox, isSelected && styles.avatarBoxSelected]}>
                 <Text style={[styles.avatarText, isSelected && styles.avatarTextSelected]}>
-                  {item.idoso.nome.substring(0,2).toUpperCase()}
+                  {item.idoso.nome.substring(0, 2).toUpperCase()}
                 </Text>
               </View>
               <View style={styles.cardInfo}>
@@ -87,7 +100,7 @@ export default function SelectElderlyScreen({ navigation }: any) {
                   </View>
                 )}
               </View>
-              <ChevronRight color={isSelected ? "#00897B" : "#A0AEC0"} size={20} />
+              <ChevronRight color={isSelected ? '#00897B' : '#A0AEC0'} size={20} />
             </TouchableOpacity>
           );
         }}
@@ -121,5 +134,5 @@ const styles = StyleSheet.create({
   badgeSelected: { backgroundColor: '#E2F5F0', alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, marginTop: 6 },
   badgeTextSelected: { color: '#00897B', fontSize: 11, fontWeight: 'bold' },
   emptyContainer: { padding: 20, alignItems: 'center' },
-  emptyText: { color: '#718096', textAlign: 'center' }
+  emptyText: { color: '#718096', textAlign: 'center' },
 });
