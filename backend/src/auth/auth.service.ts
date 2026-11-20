@@ -2,7 +2,6 @@ import {
   Injectable,
   UnauthorizedException,
   ForbiddenException,
-  NotFoundException,
 } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -20,24 +19,21 @@ export class AuthService {
   async login(email: string, senha: string) {
     const emailLimpo = email.trim().toLowerCase();
 
-    // 1.1 Autentica na infraestrutura do Supabase Auth
     const { data, error } = await this.supabase.client.auth.signInWithPassword({
       email: emailLimpo,
       password: senha,
     });
 
-    if (error || !data.user) {
+    if (error || !data.user || !data.session) {
       throw new UnauthorizedException('E-mail ou senha inválidos.');
     }
 
-    // 1.2 Localiza a conta corporativa no PostgreSQL
     const usuarioBanco = await this.prisma.usuario.findFirst({
       where: {
         OR: [{ auth_id: data.user.id }, { email: emailLimpo }],
       },
     });
 
-    // 1.3 Barreira estrita: se não tiver registro prévio no Prisma, bloqueia
     if (!usuarioBanco) {
       throw new ForbiddenException(
         'Acesso negado. Este utilizador não possui pré-cadastro ativo na instituição.',
@@ -48,7 +44,6 @@ export class AuthService {
       throw new ForbiddenException('Conta institucional suspensa ou bloqueada.');
     }
 
-    // 1.4 Se estiver PENDENTE no primeiro login ou sem auth_id, ativa a conta
     if (usuarioBanco.status === 'PENDENTE' || !usuarioBanco.auth_id) {
       await this.prisma.usuario.update({
         where: { id: usuarioBanco.id },
@@ -124,7 +119,7 @@ export class AuthService {
   }
 
   /**
-   * 3. Convite Corporativo (Disparado pelo Administrador da Clínica)
+   * 3. Convite Corporativo (Exclusivo para Administrador da Clínica)
    */
   async convidarUtilizador(
     email: string,
@@ -133,10 +128,21 @@ export class AuthService {
     clinicaId: string,
     cpf?: string,
     telefone?: string,
+    authIdSolicitante?: string,
   ) {
+    if (authIdSolicitante) {
+      const solicitante = await this.prisma.usuario.findUnique({
+        where: { auth_id: authIdSolicitante },
+      });
+      if (!solicitante || solicitante.perfil !== 'ADMINISTRADOR') {
+        throw new ForbiddenException(
+          'Apenas Administradores podem enviar convites de acesso.',
+        );
+      }
+    }
+
     const emailLimpo = email.trim().toLowerCase();
 
-    // 3.1 Verifica se o e-mail já existe no banco
     const existente = await this.prisma.usuario.findUnique({
       where: { email: emailLimpo },
     });
@@ -145,15 +151,15 @@ export class AuthService {
       throw new ForbiddenException('Este e-mail já se encontra registado no sistema.');
     }
 
-    // URL do Frontend (Vercel ou Local) para direcionar o usuário para a tela certa
-    const frontendUrl = process.env.FRONTEND_URL || 'https://s-a-s-p-i-sistema-de-acompanhamento.vercel.app';
+    const frontendUrl =
+      process.env.FRONTEND_URL ||
+      'https://s-a-s-p-i-sistema-de-acompanhamento.vercel.app';
 
-    // 3.2 Dispara o convite seguro através do Supabase Auth Admin (direcionando para redefinir-senha)
     const { data, error } = await this.supabase.client.auth.admin.inviteUserByEmail(
       emailLimpo,
-      { 
+      {
         data: { nome, perfil },
-        redirectTo: `${frontendUrl}/redefinir-senha`
+        redirectTo: `${frontendUrl}/redefinir-senha`,
       },
     );
 
@@ -163,7 +169,6 @@ export class AuthService {
       );
     }
 
-    // 3.3 Regista o pré-cadastro com status PENDENTE no Prisma
     const novoUsuario = await this.prisma.usuario.create({
       data: {
         auth_id: data.user.id,

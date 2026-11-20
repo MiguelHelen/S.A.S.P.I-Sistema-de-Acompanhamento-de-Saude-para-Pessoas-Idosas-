@@ -30,6 +30,7 @@ export class AuthController {
       cpf?: string;
       telefone?: string;
     },
+    @Request() req: any,
   ) {
     return this.authService.convidarUtilizador(
       body.email,
@@ -38,6 +39,7 @@ export class AuthController {
       body.clinica_id,
       body.cpf,
       body.telefone,
+      req.user.id,
     );
   }
 }
