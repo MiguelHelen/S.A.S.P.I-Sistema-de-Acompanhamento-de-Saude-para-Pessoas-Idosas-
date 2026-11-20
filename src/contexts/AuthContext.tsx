@@ -1,7 +1,7 @@
-import React, { createContext, useState, useEffect, useContext } from "react";
+import React, { createContext, useState, useEffect, useContext, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as SecureStore from 'expo-secure-store';
-import { DeviceEventEmitter, Alert } from 'react-native';
+import * as SecureStore from "expo-secure-store";
+import { DeviceEventEmitter, Alert } from "react-native";
 import { API_URL } from "../api/client";
 
 interface Usuario {
@@ -17,7 +17,10 @@ interface AuthContextData {
   token: string | null;
   loading: boolean;
   login: (email: string, senha: string) => Promise<{ ok: boolean; message?: string }>;
-  loginSSO: (providerToken: string, provider: 'GOOGLE' | 'MICROSOFT') => Promise<{ ok: boolean; message?: string }>;
+  loginSSO: (
+    providerToken: string,
+    provider: "GOOGLE" | "MICROSOFT"
+  ) => Promise<{ ok: boolean; message?: string }>;
   logout: () => Promise<void>;
 }
 
@@ -27,11 +30,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const deslogandoRef = useRef(false);
 
   useEffect(() => {
     async function carregarSessao() {
       try {
-        // LGPD: Lendo token do cofre criptografado nativo
         const storedToken = await SecureStore.getItemAsync("saspi_secure_token");
         const storedUser = await AsyncStorage.getItem("saspi_user");
 
@@ -47,10 +50,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     carregarSessao();
 
-    // Listener para deslogar automaticamente caso a API rejeite o token (Sessão Expirada)
-    const sub = DeviceEventEmitter.addListener('saspi_unauthorized', () => {
+    const sub = DeviceEventEmitter.addListener("saspi_unauthorized", () => {
+      if (deslogandoRef.current) return;
+      deslogandoRef.current = true;
       Alert.alert("Sessão Expirada", "Por segurança, faça login novamente.");
-      logout();
+      logout().finally(() => {
+        deslogandoRef.current = false;
+      });
     });
 
     return () => sub.remove();
@@ -69,12 +75,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!res.ok) return { ok: false, message: data.message || "E-mail ou senha inválidos." };
 
       return await processarAutenticacao(data, emailLower);
-    } catch (err: any) {
+    } catch {
       return { ok: false, message: "Falha na rede. O servidor pode estar indisponível." };
     }
   }
 
-  async function loginSSO(providerToken: string, provider: 'GOOGLE' | 'MICROSOFT') {
+  async function loginSSO(providerToken: string, provider: "GOOGLE" | "MICROSOFT") {
     try {
       const res = await fetch(`${API_URL}/auth/sso-callback`, {
         method: "POST",
@@ -83,10 +89,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       const data = await res.json();
-      if (!res.ok) return { ok: false, message: data.message || "Falha na autenticação corporativa." };
+      if (!res.ok) {
+        return { ok: false, message: data.message || "Falha na autenticação corporativa." };
+      }
 
       return await processarAutenticacao(data, data.usuario?.email || data.user?.email);
-    } catch (err: any) {
+    } catch {
       return { ok: false, message: "Erro de conexão com o servidor SSO." };
     }
   }
@@ -97,12 +105,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (accessToken && (!userData?.nome || !userData?.perfil)) {
       try {
-        const userRes = await fetch(`${API_URL}/usuario?email=${encodeURIComponent(emailBuscado)}`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
+        const userRes = await fetch(
+          `${API_URL}/usuario?email=${encodeURIComponent(emailBuscado)}`,
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }
+        );
         if (userRes.ok) {
           const list = await userRes.json();
-          const encontrado = Array.isArray(list) ? list.find((u: any) => u.email?.toLowerCase() === emailBuscado) : list;
+          const encontrado = Array.isArray(list)
+            ? list.find((u: any) => u.email?.toLowerCase() === emailBuscado)
+            : list;
           if (encontrado) userData = encontrado;
         }
       } catch {}
@@ -110,8 +123,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const perfil = (userData?.perfil || "FAMILIAR").toUpperCase();
 
-    if (perfil === "MEDICO" || perfil === "ADMINISTRADOR" || perfil === "ENFERMEIRO" || perfil === "ADMIN") {
-      return { ok: false, message: `Acesso negado. O perfil ${perfil} deve utilizar a plataforma Web (Site).` };
+    if (
+      perfil === "MEDICO" ||
+      perfil === "ADMINISTRADOR" ||
+      perfil === "ENFERMEIRO" ||
+      perfil === "ADMIN"
+    ) {
+      return {
+        ok: false,
+        message: `Acesso negado. O perfil ${perfil} deve utilizar a plataforma Web (Site).`,
+      };
     }
 
     const usuarioFinal: Usuario = {
@@ -122,10 +143,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       clinica_id: userData?.clinica_id,
     };
 
-    // LGPD: Gravando o token em ambiente seguro (Keychain/Keystore)
     await SecureStore.setItemAsync("saspi_secure_token", accessToken);
     await AsyncStorage.setItem("saspi_user", JSON.stringify(usuarioFinal));
-    
+
     setToken(accessToken);
     setUsuario(usuarioFinal);
     return { ok: true };
