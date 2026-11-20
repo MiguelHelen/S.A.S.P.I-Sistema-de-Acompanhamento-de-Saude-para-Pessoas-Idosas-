@@ -77,8 +77,10 @@ export default function SinaisVitaisScreen({ navigation }: any) {
 
   const fcVal = ultimoFC?.valor_numerico ?? "--";
   const spo2Val = ultimoSpo2?.valor_numerico ?? "--";
-  const fcAlerta = typeof fcVal === "number" && (fcVal > 100 || fcVal < 50);
-  const spo2Alerta = typeof spo2Val === "number" && spo2Val < 95;
+  const fcNum = Number(fcVal);
+  const spo2Num = Number(spo2Val);
+  const fcAlerta = fcVal !== "--" && !Number.isNaN(fcNum) && (fcNum > 100 || fcNum < 60);
+  const spo2Alerta = spo2Val !== "--" && !Number.isNaN(spo2Num) && spo2Num < 95;
 
   const registrosFC = filtrados
     .filter((r) => String(r.indicador_saude?.nome || "").toLowerCase().includes("card"))

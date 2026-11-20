@@ -75,7 +75,7 @@ export default function AlertasScreen({ navigation }: any) {
                     descricao: `FC: ${valorNum} bpm às ${horario}. Verifique o estado da pessoa acompanhada.`,
                     destino: 'Saúde',
                   });
-                } else if (nomeInd.includes('card') && valorNum < 50) {
+               } else if (nomeInd.includes('card') && valorNum < 60) {
                   lista.push({
                     id: `fc_baixa_${reg.id}`,
                     categoria: 'Saúde',
@@ -95,7 +95,7 @@ export default function AlertasScreen({ navigation }: any) {
                     descricao: `SpO₂: ${valorNum}% às ${horario}. Atenção para possível quadro de hipóxia.`,
                     destino: 'Saúde',
                   });
-                } else if (nomeInd.includes('temp') && valorNum > 37.5) {
+                } else if (nomeInd.includes('temp') && valorNum >= 37.3) {
                   lista.push({
                     id: `temp_${reg.id}`,
                     categoria: 'Saúde',

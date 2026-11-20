@@ -89,7 +89,7 @@ export default function HomeScreen({ navigation }: any) {
               if ((nome.includes("press") || nome.includes("pa")) && pa === "--/--") pa = valStr;
 
               if (!isNaN(valNum)) {
-                if (nome.includes("card") && (valNum > 100 || valNum < 50)) countAlertas++;
+                if (nome.includes("card") && (valNum > 100 || valNum < 60)) countAlertas++;
                 if (nome.includes("oxig") && valNum < 95) countAlertas++;
               }
             });
