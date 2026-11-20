@@ -27,7 +27,21 @@ export class StorageController {
     if (!file) {
       throw new BadRequestException('Nenhum arquivo enviado na requisição (campo "file").');
     }
-    
+
     return this.storageService.uploadFotoPerfilUsuario(file, req.user.id, usuarioId);
+  }
+
+  @Post('idoso/:id/foto')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadFotoIdoso(
+    @UploadedFile() file: Express.Multer.File,
+    @Param('id') idosoId: string,
+    @Request() req: any,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Nenhum arquivo enviado na requisição (campo "file").');
+    }
+
+    return this.storageService.uploadFotoIdoso(file, req.user.id, idosoId);
   }
 }

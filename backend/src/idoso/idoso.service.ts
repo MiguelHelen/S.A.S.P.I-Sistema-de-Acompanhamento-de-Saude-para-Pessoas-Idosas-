@@ -44,6 +44,7 @@ export class IdosoService {
       sexo?: string;
       telefone?: string;
       endereco?: string;
+      foto_url?: string | null;
       clinica_id: string;
     },
     authId?: string,
@@ -76,6 +77,7 @@ export class IdosoService {
         sexo: data.sexo || null,
         telefone: data.telefone ? data.telefone.replace(/\D/g, '') : null,
         endereco: data.endereco ? data.endereco.trim() : null,
+        foto_url: data.foto_url || null,
         clinica_id: data.clinica_id,
       },
     });
@@ -109,6 +111,7 @@ export class IdosoService {
       sexo?: string;
       telefone?: string;
       endereco?: string;
+      foto_url?: string | null;
     },
     authId?: string,
   ) {
@@ -159,6 +162,7 @@ export class IdosoService {
         ...(data.endereco !== undefined && {
           endereco: data.endereco.trim().length > 0 ? data.endereco.trim() : null,
         }),
+        ...(data.foto_url !== undefined && { foto_url: data.foto_url }),
       },
     });
   }
@@ -171,7 +175,6 @@ export class IdosoService {
       throw new NotFoundException('Paciente nao encontrado.');
     }
 
-    // RN08: Impede exclusão física caso o paciente já possua prontuário clínico
     const [qtdRegistros, qtdPrescricoes, rowsConsultas] = await Promise.all([
       this.prisma.registro_saude.count({ where: { idoso_id: id } }),
       this.prisma.prescricao.count({ where: { idoso_id: id } }),

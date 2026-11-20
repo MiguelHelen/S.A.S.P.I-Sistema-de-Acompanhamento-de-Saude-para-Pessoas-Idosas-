@@ -24,6 +24,10 @@ export class CreateIdosoDto {
   @IsString()
   endereco?: string;
 
+  @IsOptional()
+  @IsString()
+  foto_url?: string | null;
+
   @IsUUID()
   clinica_id: string;
 }
