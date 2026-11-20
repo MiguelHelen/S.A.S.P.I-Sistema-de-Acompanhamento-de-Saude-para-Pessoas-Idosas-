@@ -10,8 +10,8 @@ interface ImageCropModalProps {
   onCropComplete: (croppedBlob: Blob) => void;
 }
 
-const CONTAINER_SIZE = 256; // Diâmetro do círculo de visualização (h-64 w-64)
-const EXPORT_SIZE = 400;    // Tamanho final exportado para o avatar
+const CONTAINER_SIZE = 256;
+const EXPORT_SIZE = 400;
 
 export default function ImageCropModal({
   imageSrc,
@@ -23,7 +23,10 @@ export default function ImageCropModal({
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [baseDims, setBaseDims] = useState({ width: CONTAINER_SIZE, height: CONTAINER_SIZE });
+  const [baseDims, setBaseDims] = useState({
+    width: CONTAINER_SIZE,
+    height: CONTAINER_SIZE,
+  });
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
 
@@ -33,9 +36,11 @@ export default function ImageCropModal({
     img.src = imageSrc;
     img.onload = () => {
       imageRef.current = img;
-      
-      // Ajusta a escala base para que a menor dimensão caiba perfeitamente no container
-      const scale = Math.max(CONTAINER_SIZE / img.width, CONTAINER_SIZE / img.height);
+
+      const scale = Math.max(
+        CONTAINER_SIZE / img.width,
+        CONTAINER_SIZE / img.height
+      );
       setBaseDims({
         width: img.width * scale,
         height: img.height * scale,
@@ -81,7 +86,6 @@ export default function ImageCropModal({
     canvas.height = EXPORT_SIZE;
     ctx.clearRect(0, 0, EXPORT_SIZE, EXPORT_SIZE);
 
-    // Converte a posição do preview (CONTAINER_SIZE) para o tamanho final exportado (EXPORT_SIZE)
     const ratio = EXPORT_SIZE / CONTAINER_SIZE;
     const renderedW = baseDims.width * zoom * ratio;
     const renderedH = baseDims.height * zoom * ratio;
@@ -108,9 +112,10 @@ export default function ImageCropModal({
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
           <div className="flex items-center gap-2 text-[#0A2540]">
             <Crop size={18} className="text-[#1565C0]" />
-            <h2 className="font-bold text-base">Ajustar e Enquadrar Foto</h2>
+            <h2 className="text-base font-bold">Ajustar e Enquadrar Foto</h2>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
           >
@@ -132,15 +137,16 @@ export default function ImageCropModal({
                 alt="Prévia de enquadramento"
                 draggable={false}
                 style={{
-                  width: `${currentW}px`, height: `${currentH}px`,
+                  width: `${currentW}px`,
+                  height: `${currentH}px`,
                   maxWidth: "none",
                   maxHeight: "none",
                   position: "absolute",
                   left: "50%",
                   top: "50%",
-                  transform: `translate(calc(-50% + ${offset.x}px), calc(-50\% +${offset.y}px))`,
+                  transform: `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px))`,
                 }}
-                className="select-none pointer-events-none"
+                className="pointer-events-none select-none"
               />
             )}
           </div>

@@ -270,7 +270,7 @@ export default function SobrePage() {
           </div>
         </section>
 
-        {/* Banner verde-água (Com o padding corrigido para encostar no Footer) */}
+        {/* Banner verde-água */}
         <section className="bg-[#F5FAFC] px-5 pb-16 md:px-8 md:pb-16">
           <div className="relative mx-auto flex max-w-7xl flex-col gap-5 overflow-hidden rounded-2xl border border-[#D7ECEB] bg-linear-to-r from-[#E2F5F0] via-[#E6F5F5] to-[#DDEFFA] px-6 py-6 md:flex-row md:items-center md:gap-6 md:px-9">
             <div className="absolute -right-5 top-0 h-36 w-36 rounded-full bg-white/25" />
@@ -295,7 +295,7 @@ export default function SobrePage() {
             </div>
 
             <Link
-              href="/cadastro"
+              href="/login"
               className="relative inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#087FC2] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#066AA5]"
             >
               Explorar o sistema

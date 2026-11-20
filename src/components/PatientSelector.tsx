@@ -11,6 +11,7 @@ export interface Idoso {
   sexo?: string;
   clinica_id?: string;
   data_nascimento?: string;
+  foto_url?: string | null;
 }
 
 interface PatientSelectorProps {
@@ -104,6 +105,7 @@ export default function PatientSelector({
               sexo: item.sexo,
               clinica_id: item.clinica_id,
               data_nascimento: item.data_nascimento,
+              foto_url: item.foto_url || null,
             });
           }
         });
@@ -191,15 +193,21 @@ export default function PatientSelector({
   const isFamiliarUnico =
     perfilUsuario === "FAMILIAR" && listaIdosos.length === 1;
 
+  const avatarAtivoUrl =
+    ativo?.foto_url ||
+    (ativo
+      ? `https://ui-avatars.com/api/?name=${encodeURIComponent(
+          ativo.nome
+        )}&background=1565C0&color=fff&size=96&bold=true`
+      : "");
+
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm md:p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           {ativo ? (
             <img
-              src={`https://ui-avatars.com/api/?name=${encodeURIComponent(
-                ativo.nome
-              )}&background=1565C0&color=fff&size=96&bold=true`}
+              src={avatarAtivoUrl}
               alt={`Foto de ${ativo.nome}`}
               className="h-12 w-12 shrink-0 rounded-full object-cover shadow-sm ring-2 ring-[#E8F1FB]"
             />
@@ -240,11 +248,14 @@ export default function PatientSelector({
         ) : isFamiliarUnico && ativo ? (
           <div className="inline-flex items-center gap-2.5 rounded-xl bg-[#1565C0] py-2 pl-2.5 pr-4 text-sm font-medium text-white shadow-sm">
             <img
-              src={`https://ui-avatars.com/api/?name=${encodeURIComponent(
-                ativo.nome
-              )}&background=ffffff&color=1565C0&size=64&bold=true`}
+              src={
+                ativo.foto_url ||
+                `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                  ativo.nome
+                )}&background=ffffff&color=1565C0&size=64&bold=true`
+              }
               alt={ativo.nome}
-              className="h-6 w-6 rounded-full"
+              className="h-6 w-6 rounded-full object-cover"
             />
             <span>{ativo.nome}</span>
             {ativo.idade > 0 && (
@@ -257,6 +268,14 @@ export default function PatientSelector({
           <div className="flex flex-wrap items-center gap-2.5">
             {listaIdosos.map((idoso) => {
               const isSelected = ativo?.id === idoso.id;
+              const thumbUrl =
+                idoso.foto_url ||
+                `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                  idoso.nome
+                )}&background=${
+                  isSelected ? "ffffff" : "E8F1FB"
+                }&color=1565C0&size=64&bold=true`;
+
               return (
                 <button
                   key={idoso.id}
@@ -269,13 +288,9 @@ export default function PatientSelector({
                   }`}
                 >
                   <img
-                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(
-                      idoso.nome
-                    )}&background=${
-                      isSelected ? "ffffff" : "E8F1FB"
-                    }&color=1565C0&size=64&bold=true`}
+                    src={thumbUrl}
                     alt={idoso.nome}
-                    className="h-6 w-6 rounded-full"
+                    className="h-6 w-6 rounded-full object-cover"
                   />
                   <span>{idoso.nome}</span>
                   {idoso.idade > 0 && (
