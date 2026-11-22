@@ -13,7 +13,21 @@
       ]
     },
     "plugins": [
-      "expo-secure-store"
-    ]
+      "expo-secure-store",
+      "react-native-health-connect",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "7c102c71-3084-4571-9940-fb1702eebce8"
+      }
+    }
   }
 }

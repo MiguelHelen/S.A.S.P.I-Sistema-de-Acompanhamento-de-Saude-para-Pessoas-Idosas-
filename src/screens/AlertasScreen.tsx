@@ -57,6 +57,7 @@ export default function AlertasScreen({ navigation }: any) {
             registros.forEach((reg: any) => {
               const nomeInd = String(reg.indicador_saude?.nome || '').toLowerCase();
               const valorNum = Number(reg.valor_numerico);
+              const valorCat = String(reg.valor_categorico || '');
               const horario = reg.data_hora
                 ? new Date(reg.data_hora).toLocaleTimeString('pt-BR', {
                     hour: '2-digit',
@@ -64,7 +65,34 @@ export default function AlertasScreen({ navigation }: any) {
                   })
                 : '';
 
-              if (!isNaN(valorNum)) {
+              if (nomeInd.includes('press') || nomeInd.includes('pa')) {
+                const matchPa = valorCat.match(/^(\d{2,3})\/(\d{2,3})$/);
+                if (matchPa) {
+                  const sist = Number(matchPa[1]);
+                  const diast = Number(matchPa[2]);
+                  if (sist >= 140 || diast >= 90) {
+                    lista.push({
+                      id: `pa_alta_${reg.id}`,
+                      categoria: 'Saúde',
+                      nivel: 'CRITICO',
+                      prioridade: 'ALTA',
+                      titulo: 'Pressão arterial elevada',
+                      descricao: `PA: ${valorCat} mmHg às ${horario}. Atenção para hipertensão.`,
+                      destino: 'Saúde',
+                    });
+                  } else if (sist < 90 || diast < 60) {
+                    lista.push({
+                      id: `pa_baixa_${reg.id}`,
+                      categoria: 'Saúde',
+                      nivel: 'AVISO',
+                      prioridade: 'ALTA',
+                      titulo: 'Pressão arterial baixa',
+                      descricao: `PA: ${valorCat} mmHg às ${horario}. Monitore sintomas de tontura.`,
+                      destino: 'Saúde',
+                    });
+                  }
+                }
+              } else if (!isNaN(valorNum)) {
                 if (nomeInd.includes('card') && valorNum > 100) {
                   lista.push({
                     id: `fc_alta_${reg.id}`,
@@ -75,7 +103,7 @@ export default function AlertasScreen({ navigation }: any) {
                     descricao: `FC: ${valorNum} bpm às ${horario}. Verifique o estado da pessoa acompanhada.`,
                     destino: 'Saúde',
                   });
-               } else if (nomeInd.includes('card') && valorNum < 60) {
+                } else if (nomeInd.includes('card') && valorNum < 60) {
                   lista.push({
                     id: `fc_baixa_${reg.id}`,
                     categoria: 'Saúde',

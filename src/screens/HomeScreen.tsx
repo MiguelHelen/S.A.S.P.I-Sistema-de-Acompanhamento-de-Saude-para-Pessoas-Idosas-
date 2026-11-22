@@ -40,6 +40,7 @@ export default function HomeScreen({ navigation }: any) {
   const [qtdMedsAtivas, setQtdMedsAtivas] = useState(0);
   const [proxConsultaTexto, setProxConsultaTexto] = useState("Nenhuma consulta agendada");
   const [alertasAtivos, setAlertasAtivos] = useState(0);
+  const [ultimoAlertaWs, setUltimoAlertaWs] = useState<string | null>(null);
 
   const perfil = usuario?.perfil || "FAMILIAR";
 
@@ -165,11 +166,27 @@ export default function HomeScreen({ navigation }: any) {
                 if (nome.includes("press")) novo.pa = val;
                 return novo;
               });
+              const agora = new Date();
+              setUltimoRegistroTexto(
+                `Último registro: ${agora.toLocaleDateString("pt-BR")} às ${agora.toLocaleTimeString(
+                  "pt-BR",
+                  { hour: "2-digit", minute: "2-digit" }
+                )}`
+              );
             }
           });
 
-          socket.on("alerta-saude", () => {
-            if (isMounted) setAlertasAtivos((prev) => prev + 1);
+          socket.on("alerta-saude", (payload: any) => {
+            const msg =
+              typeof payload === "string"
+                ? payload
+                : payload?.mensagem ||
+                  payload?.message ||
+                  "Novo alerta de saúde recebido em tempo real.";
+            if (isMounted) {
+              setAlertasAtivos((prev) => prev + 1);
+              setUltimoAlertaWs(msg);
+            }
           });
 
           socket.on("connect_error", (err: any) => {
@@ -208,7 +225,9 @@ export default function HomeScreen({ navigation }: any) {
       <View style={styles.greenCard}>
         <Text style={styles.greenCardSub}>SEU CUIDADO DE HOJE</Text>
         <Text style={styles.greenCardTitle}>Um passo de cada vez.</Text>
-        <Text style={styles.greenCardText}>Você está indo muito bem!</Text>
+        <Text style={styles.greenCardText}>
+          {ultimoAlertaWs || "Você está indo muito bem!"}
+        </Text>
         <View style={styles.badgeGreen}>
           <Text style={styles.badgeGreenText}>
             {alertasAtivos > 0 ? `${alertasAtivos} alerta(s) ativo(s)` : "Rotina em dia"}
@@ -342,9 +361,11 @@ export default function HomeScreen({ navigation }: any) {
           onPress={() => navigation.navigate("Notificações")}
         >
           <AlertTriangle size={20} color="#D32F2F" />
-          <View style={{ marginLeft: 12 }}>
+          <View style={{ marginLeft: 12, flex: 1 }}>
             <Text style={styles.alertBannerTitle}>Alertas</Text>
-            <Text style={styles.alertBannerSub}>{alertasAtivos} alerta(s) de saúde detectado(s)</Text>
+            <Text style={styles.alertBannerSub}>
+              {ultimoAlertaWs || `${alertasAtivos} alerta(s) de saúde detectado(s)`}
+            </Text>
           </View>
           <Text style={[styles.arrowIcon, { color: "#D32F2F", marginLeft: "auto" }]}>›</Text>
         </TouchableOpacity>
@@ -445,9 +466,11 @@ export default function HomeScreen({ navigation }: any) {
           onPress={() => navigation.navigate("Notificações")}
         >
           <AlertTriangle size={20} color="#D32F2F" />
-          <View style={{ marginLeft: 12 }}>
+          <View style={{ marginLeft: 12, flex: 1 }}>
             <Text style={styles.alertBannerTitle}>{alertasAtivos} alerta(s) detectado(s)</Text>
-            <Text style={styles.alertBannerSub}>Toque para ver detalhes</Text>
+            <Text style={styles.alertBannerSub}>
+              {ultimoAlertaWs || "Toque para ver detalhes"}
+            </Text>
           </View>
           <Text style={[styles.arrowIcon, { color: "#D32F2F", marginLeft: "auto" }]}>›</Text>
         </TouchableOpacity>

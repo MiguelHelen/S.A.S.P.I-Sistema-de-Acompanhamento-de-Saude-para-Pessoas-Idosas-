@@ -258,9 +258,7 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
         ? obsLimpa.length > 0
           ? obsLimpa
           : undefined
-        : obsLimpa.length > 0
-          ? `${valorLimpo} (${obsLimpa})`
-          : valorLimpo;
+        : valorLimpo;
 
       const payload = {
         idoso_id: idoso.id,
@@ -351,7 +349,13 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
               keyboardType={indicadorSelecionado.nome === "Pressão Arterial" ? "default" : "numeric"}
               value={valor}
               onChangeText={handleValorChange}
-              placeholder={indicadorSelecionado.nome === "Pressão Arterial" ? "120/80" : "0"}
+              placeholder={
+  indicadorSelecionado.nome === "Pressão Arterial"
+    ? "120/80"
+    : indicadorSelecionado.nome === "Temperatura"
+      ? "36.5"
+      : "0"
+}
               placeholderTextColor="#A0AEC0"
               maxLength={7}
             />

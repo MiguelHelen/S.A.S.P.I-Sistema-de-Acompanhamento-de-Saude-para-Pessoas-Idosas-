@@ -71,9 +71,10 @@ export default function SinaisVitaisScreen({ navigation }: any) {
   const ultimoFC = filtrados.find((r) =>
     String(r.indicador_saude?.nome || "").toLowerCase().includes("card")
   );
-  const ultimoSpo2 = filtrados.find((r) =>
-    String(r.indicador_saude?.nome || "").toLowerCase().includes("oxig")
-  );
+  const ultimoSpo2 = filtrados.find((r) => {
+    const nome = String(r.indicador_saude?.nome || "").toLowerCase();
+    return nome.includes("oxig") || nome.includes("spo");
+  });
 
   const fcVal = ultimoFC?.valor_numerico ?? "--";
   const spo2Val = ultimoSpo2?.valor_numerico ?? "--";
@@ -82,16 +83,44 @@ export default function SinaisVitaisScreen({ navigation }: any) {
   const fcAlerta = fcVal !== "--" && !Number.isNaN(fcNum) && (fcNum > 100 || fcNum < 60);
   const spo2Alerta = spo2Val !== "--" && !Number.isNaN(spo2Num) && spo2Num < 95;
 
-  const registrosFC = filtrados
+  const registrosFC = [...filtrados]
     .filter((r) => String(r.indicador_saude?.nome || "").toLowerCase().includes("card"))
-    .slice(0, 6)
-    .reverse();
+    .sort((a, b) => new Date(a.data_hora || 0).getTime() - new Date(b.data_hora || 0).getTime())
+    .slice(-6);
 
   const dadosFC =
-    registrosFC.length > 0 ? registrosFC.map((r) => Number(r.valor_numerico) || 0) : [0];
+    registrosFC.length > 0
+      ? registrosFC.map((r) => {
+          const n = Number(r.valor_numerico);
+          return Number.isNaN(n) ? 0 : n;
+        })
+      : [0];
   const labelsFC =
     registrosFC.length > 0
       ? registrosFC.map((r) => {
+          const d = new Date(r.data_hora);
+          return `${d.getHours()}h`;
+        })
+      : ["--"];
+
+  const registrosSpo2 = [...filtrados]
+    .filter((r) => {
+      const nome = String(r.indicador_saude?.nome || "").toLowerCase();
+      return nome.includes("oxig") || nome.includes("spo");
+    })
+    .sort((a, b) => new Date(a.data_hora || 0).getTime() - new Date(b.data_hora || 0).getTime())
+    .slice(-6);
+
+  const dadosSpo2 =
+    registrosSpo2.length > 0
+      ? registrosSpo2.map((r) => {
+          const n = Number(r.valor_numerico);
+          return Number.isNaN(n) ? 0 : n;
+        })
+      : [0];
+  const labelsSpo2 =
+    registrosSpo2.length > 0
+      ? registrosSpo2.map((r) => {
           const d = new Date(r.data_hora);
           return `${d.getHours()}h`;
         })
@@ -191,6 +220,39 @@ export default function SinaisVitaisScreen({ navigation }: any) {
             bezier
             style={{ borderRadius: 16 }}
           />
+          {registrosFC.length === 0 && (
+            <Text style={styles.emptyText}>Nenhuma medição de FC no período.</Text>
+          )}
+        </View>
+
+        <Text style={[styles.chartTitle, { marginTop: 16 }]}>Oxigenação — SpO₂ (%)</Text>
+
+        <View style={styles.chartContainer}>
+          <LineChart
+            data={{
+              labels: labelsSpo2,
+              datasets: [{ data: dadosSpo2 }],
+            }}
+            width={screenWidth - 48}
+            height={210}
+            chartConfig={{
+              backgroundColor: "#FFF",
+              backgroundGradientFrom: "#FFF",
+              backgroundGradientTo: "#FFF",
+              decimalPlaces: 0,
+              color: (opacity = 1) => `rgba(2, 132, 199, ${opacity})`,
+              labelColor: (opacity = 1) => `rgba(113, 128, 150, ${opacity})`,
+              style: { borderRadius: 16 },
+              propsForDots: { r: "4", strokeWidth: "2", stroke: "#0284C7" },
+            }}
+            bezier
+            style={{ borderRadius: 16 }}
+          />
+          {registrosSpo2.length === 0 && (
+            <Text style={styles.emptyText}>
+              Sem medições de SpO₂ no período (a Mi Band 4 não mede SpO₂ automaticamente).
+            </Text>
+          )}
         </View>
 
         <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Histórico recente</Text>
