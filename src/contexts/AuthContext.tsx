@@ -10,6 +10,7 @@ interface Usuario {
   email: string;
   perfil: string;
   clinica_id?: string;
+  nomeClinica?: string;
 }
 
 interface AuthContextData {
@@ -103,7 +104,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const accessToken = data.access_token || data.token;
     let userData = data.usuario || data.user;
 
-    if (accessToken && (!userData?.nome || !userData?.perfil)) {
+    if (accessToken && (!userData?.nome || !userData?.perfil || !userData?.clinica_id)) {
       try {
         const userRes = await fetch(
           `${API_URL}/usuario?email=${encodeURIComponent(emailBuscado)}`,
@@ -131,8 +132,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     ) {
       return {
         ok: false,
-        message: `Acesso negado. O perfil ${perfil} deve utilizar a plataforma Web (Site).`,
+        message: `Acesso negado. O perfil ${perfil} deve utilizar a plataforma Web.`,
       };
+    }
+
+    // Busca o nome real da clínica no banco de dados
+    let nomeClinicaBanco: string | undefined = userData?.clinica?.nome;
+    if (accessToken && userData?.clinica_id && !nomeClinicaBanco) {
+      try {
+        const clinicaRes = await fetch(`${API_URL}/clinica/${userData.clinica_id}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (clinicaRes.ok) {
+          const clinicaData = await clinicaRes.json();
+          nomeClinicaBanco = clinicaData?.nome;
+        }
+      } catch {}
     }
 
     const usuarioFinal: Usuario = {
@@ -141,6 +156,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       email: emailBuscado,
       perfil: perfil,
       clinica_id: userData?.clinica_id,
+      nomeClinica: nomeClinicaBanco,
     };
 
     await SecureStore.setItemAsync("saspi_secure_token", accessToken);

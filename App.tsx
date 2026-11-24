@@ -16,7 +16,7 @@ function MainApp() {
       <View style={styles.splashContainer}>
         <View style={styles.blobTop} />
         <View style={styles.blobBottom} />
-        <Image source={require('./assets/icon.png')} style={{ width: 100, height: 100 }} resizeMode="contain" />
+        <Image source={require('./assets/logosemtexto.png')} style={{ width: 100, height: 100 }} resizeMode="contain" />
         <Text style={styles.splashBrand}>SASPI</Text>
         <Text style={styles.splashSlogan}>Mais cuidado hoje, mais{'\n'}independência amanhã.</Text>
         <ActivityIndicator size="large" color="#00897B" style={{ marginTop: 40 }} />

@@ -492,7 +492,7 @@ export default function HomeScreen({ navigation }: any) {
       <View style={styles.blobBottom} />
 
       <View style={styles.topHeader}>
-        <Image source={require("../../assets/icon.png")} style={styles.logoMini} resizeMode="contain" />
+        <Image source={require("../../assets/logosemtexto.png")} style={styles.logoMini} resizeMode="contain" />
       </View>
 
       {perfil === "IDOSO"
