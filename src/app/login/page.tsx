@@ -13,10 +13,11 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://perfect-bravery-production-5ce7.up.railway.app";
+import {
+  API_URL,
+  limparSessao,
+  resolverESalvarSessao,
+} from "@/lib/clinica";
 
 export default function Login() {
   const router = useRouter();
@@ -27,7 +28,6 @@ export default function Login() {
   const [loadingSSO, setLoadingSSO] = useState<"GOOGLE" | null>(null);
   const [erro, setErro] = useState("");
 
-  // Captura erros de callback do OAuth na URL, se houver
   useEffect(() => {
     const hash = window.location.hash;
     if (hash && hash.includes("error_description")) {
@@ -53,12 +53,14 @@ export default function Login() {
         body: JSON.stringify({ email: emailLower, senha }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        // Exibe exatamente a mensagem do backend (ex: Barreira 403 ou e-mail inválido)
+        const msg = Array.isArray(data?.message)
+          ? data.message.join(", ")
+          : data?.message;
         throw new Error(
-          data.message || "E-mail ou senha inválidos. Tente novamente.",
+          msg || "E-mail ou senha inválidos. Tente novamente."
         );
       }
 
@@ -90,78 +92,27 @@ export default function Login() {
   }
 
   async function salvarSessaoERedirecionar(data: any, emailUsado: string) {
-    const token = data.access_token || data.token;
-    if (token) {
-      localStorage.setItem("saspi_token", token);
+    const token = data?.access_token || data?.token;
+    if (!token) {
+      throw new Error("Token de autenticação não recebido do servidor.");
     }
 
-    let usuarioCompleto: any = data.usuario || data.user || null;
+    const usuarioParcial =
+      data?.usuario ||
+      data?.user ||
+      (data?.id || data?.email || data?.perfil ? data : undefined);
 
-    if (token && !usuarioCompleto) {
-      try {
-        const resUser = await fetch(
-          `${API_URL}/usuario?email=${encodeURIComponent(emailUsado)}`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
+    const sessao = await resolverESalvarSessao({
+      token,
+      usuarioParcial,
+      emailFallback: emailUsado,
+    });
 
-        if (resUser.ok) {
-          const dataUser = await resUser.json();
-          usuarioCompleto = Array.isArray(dataUser)
-            ? dataUser.find(
-                (u: any) => u.email?.toLowerCase() === emailUsado,
-              ) || dataUser[0]
-            : dataUser;
-        }
-      } catch {}
-    }
-
-    const perfilResolvido = String(
-      usuarioCompleto?.perfil || usuarioCompleto?.role || "MEDICO",
-    ).toUpperCase();
-
-    if (perfilResolvido === "IDOSO") {
-      localStorage.removeItem("saspi_token");
-      localStorage.removeItem("saspi_user");
-      document.cookie = "saspi_token=; path=/; max-age=0";
-      document.cookie = "saspi_user=; path=/; max-age=0";
+    if (sessao.perfil === "IDOSO") {
+      limparSessao();
       throw new Error(
-        "Esta conta é exclusiva para o Aplicativo Mobile S.A.S.P.I.",
+        "Esta conta é exclusiva para o Aplicativo Mobile S.A.S.P.I."
       );
-    }
-
-    const nomeResolvido =
-      usuarioCompleto?.nome ||
-      usuarioCompleto?.name ||
-      emailUsado.split("@")[0];
-    const clinicaIdResolvido =
-      usuarioCompleto?.clinica_id || "e63b19f5-d8e4-4973-bac6-12aba9a0545d";
-
-    const usuarioSalvar = {
-      id:
-        usuarioCompleto?.id ||
-        data.id ||
-        "375f5df4-57f0-4b02-a725-d01bf774b72e",
-      auth_id:
-        usuarioCompleto?.auth_id ||
-        data.id ||
-        data.sub ||
-        "f7bbe33d-93d4-4546-a59b-32decb20c37f",
-      nome: nomeResolvido,
-      email: emailUsado,
-      perfil: perfilResolvido,
-      clinica_id: clinicaIdResolvido,
-      clinica_nome: "Clínica - S.A.S.P.I.",
-    };
-
-    localStorage.removeItem("saspi_active_elderly");
-    localStorage.removeItem("saspi_elderly_list");
-
-    localStorage.setItem("saspi_user", JSON.stringify(usuarioSalvar));
-    window.dispatchEvent(new Event("saspi_user_updated"));
-
-    if (token) {
-      document.cookie = `saspi_token=${token}; path=/; max-age=86400; SameSite=Lax`;
-      document.cookie = `saspi_user=${encodeURIComponent(JSON.stringify(usuarioSalvar))}; path=/; max-age=86400; SameSite=Lax`;
     }
 
     router.push("/dashboard");
@@ -237,7 +188,7 @@ export default function Login() {
                 <div className="mt-6 flex items-start gap-3 rounded-xl bg-red-50 p-4 text-red-700">
                   <AlertCircle
                     size={20}
-                    className="shrink-0 text-red-600 mt-0.5"
+                    className="mt-0.5 shrink-0 text-red-600"
                   />
                   <p className="text-sm font-medium leading-relaxed">{erro}</p>
                 </div>
@@ -263,7 +214,7 @@ export default function Login() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="seuemail@exemplo.com"
-                      className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-12 pr-4 text-sm text-gray-800 placeholder:text-gray-400 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                      className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-12 pr-4 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                     />
                   </div>
                 </div>
@@ -295,7 +246,7 @@ export default function Login() {
                       value={senha}
                       onChange={(e) => setSenha(e.target.value)}
                       placeholder="Digite sua senha"
-                      className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-12 pr-4 text-sm text-gray-800 placeholder:text-gray-400 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                      className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-12 pr-4 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                     />
                   </div>
                 </div>

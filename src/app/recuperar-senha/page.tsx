@@ -2,108 +2,149 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Mail, Loader2, CheckCircle2, AlertCircle, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  HeartPulse,
+  Mail,
+  ArrowLeft,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+} from "lucide-react";
 
-export default function RecuperarSenha() {
+export default function RecuperarSenhaPage() {
   const [email, setEmail] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [enviado, setEnviado] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const [sucesso, setSucesso] = useState(false);
   const [erro, setErro] = useState("");
 
-  async function handleRecover(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setEnviando(true);
     setErro("");
-    setLoading(true);
+    setSucesso(false);
 
-    const emailLower = email.trim().toLowerCase();
+    const emailLimpo = email.trim().toLowerCase();
+    if (!emailLimpo) {
+      setErro("Informe o e-mail institucional cadastrado.");
+      setEnviando(false);
+      return;
+    }
 
     try {
-      // Define explicitamente o link da Vercel para nao puxar localhost
-      const siteUrl = "https://s-a-s-p-i-sistema-de-acompanhamento.vercel.app";
+      const origin =
+        typeof window !== "undefined"
+          ? window.location.origin
+          : process.env.NEXT_PUBLIC_SITE_URL || "";
 
-      const { error } = await supabase.auth.resetPasswordForEmail(emailLower, {
-        redirectTo: `${siteUrl}/redefinir-senha`,
+      const redirectTo = origin ? `${origin}/redefinir-senha` : undefined;
+
+      const { error } = await supabase.auth.resetPasswordForEmail(emailLimpo, {
+        ...(redirectTo ? { redirectTo } : {}),
       });
 
       if (error) {
         throw new Error(error.message);
       }
 
-      setEnviado(true);
+      setSucesso(true);
     } catch (err: any) {
-      setErro("Houve um problema ao processar a solicitação. Tente novamente mais tarde.");
+      setErro(
+        err.message ||
+          "Não foi possível enviar o link de redefinição de senha no momento."
+      );
     } finally {
-      setLoading(false);
+      setEnviando(false);
     }
   }
 
   return (
-    <main className="min-h-screen bg-[#F2F7FB] px-4 py-8 md:px-8">
-      <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-lg items-center justify-center">
-        <div className="w-full rounded-3xl border border-gray-100 bg-white p-8 shadow-xl shadow-blue-950/5 sm:p-12">
-          
-          <Link href="/login" className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-[#1565C0]">
-            <ArrowLeft size={17} />
-            Voltar para Login
-          </Link>
+    <main className="flex min-h-screen items-center justify-center bg-[#F2F7FB] px-4 py-12">
+      <div className="w-full max-w-md rounded-3xl border border-gray-100 bg-white p-8 shadow-sm">
+        <Link
+          href="/login"
+          className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-[#1565C0]"
+        >
+          <ArrowLeft size={16} />
+          Voltar para o login
+        </Link>
 
-          <div className="mt-8 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#E8F1FB] text-[#1565C0]">
-              <ShieldCheck size={28} />
-            </div>
-            <h1 className="mt-5 text-2xl font-bold tracking-tight text-[#0A2540]">
-              Recuperação de Acesso
+        <div className="mt-6 flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#1565C0] text-white">
+            <HeartPulse size={22} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-[#0A2540]">
+              Recuperar Senha
             </h1>
-            <p className="mt-2 text-sm leading-relaxed text-gray-600">
-              Informe o e-mail cadastrado na clínica. Se ele constar em nossa base, enviaremos as instruções de redefinição de senha.
+            <p className="text-xs text-gray-500">
+              Redefinição segura de acesso ao S.A.S.P.I.
             </p>
           </div>
-
-          {enviado ? (
-            <div className="mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center">
-              <CheckCircle2 size={32} className="mx-auto text-emerald-600" />
-              <h2 className="mt-4 font-semibold text-emerald-800">E-mail de recuperação enviado!</h2>
-              <p className="mt-2 text-sm leading-relaxed text-emerald-700">
-                Verifique sua caixa de entrada (e a pasta de spam) de <strong>{email}</strong> para criar uma nova senha. O link expira em 24 horas.
-              </p>
-            </div>
-          ) : (
-            <form onSubmit={handleRecover} className="mt-8 space-y-5">
-              {erro && (
-                <div className="flex items-center gap-3 rounded-xl bg-red-50 p-4 text-red-700">
-                  <AlertCircle size={20} className="shrink-0 text-red-600" />
-                  <p className="text-sm font-medium">{erro}</p>
-                </div>
-              )}
-
-              <div>
-                <label htmlFor="email" className="mb-2 block text-sm font-medium text-[#0A2540]">E-mail Corporativo ou Pessoal</label>
-                <div className="relative">
-                  <Mail size={19} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    id="email"
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="seuemail@exemplo.com"
-                    className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-12 pr-4 text-sm text-gray-800 placeholder:text-gray-400 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3.5 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0A2540] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0"
-              >
-                {loading ? <Loader2 size={20} className="animate-spin" /> : "Enviar link de recuperação"}
-              </button>
-            </form>
-          )}
-
         </div>
+
+        <p className="mt-4 text-sm leading-relaxed text-gray-600">
+          Digite o e-mail vinculado à sua conta institucional. Enviaremos um
+          link seguro para cadastrar uma nova senha.
+        </p>
+
+        {erro && (
+          <div className="mt-5 flex items-start gap-2.5 rounded-xl bg-red-50 p-3.5 text-sm text-red-700">
+            <AlertCircle size={18} className="mt-0.5 shrink-0 text-red-600" />
+            <span>{erro}</span>
+          </div>
+        )}
+
+        {sucesso ? (
+          <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900">
+            <div className="flex items-center gap-2.5 font-semibold">
+              <CheckCircle2 size={20} className="text-emerald-600" />
+              <span>E-mail de recuperação enviado!</span>
+            </div>
+            <p className="mt-2 text-sm leading-relaxed text-emerald-800">
+              Verifique a caixa de entrada (e a pasta de spam) de{" "}
+              <strong>{email}</strong> e siga as instruções para criar sua nova
+              senha.
+            </p>
+            <Link
+              href="/login"
+              className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-[#1565C0] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0A2540]"
+            >
+              Retornar ao Login
+            </Link>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-[#0A2540]">
+                E-mail cadastrado
+              </label>
+              <div className="relative">
+                <Mail
+                  size={18}
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+                />
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="seu.email@clinica.com.br"
+                  className="w-full rounded-xl border border-gray-300 py-3 pl-10 pr-4 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={enviando}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0A2540] disabled:opacity-70"
+            >
+              {enviando && <Loader2 size={18} className="animate-spin" />}
+              {enviando ? "Enviando instruções..." : "Enviar Link de Redefinição"}
+            </button>
+          </form>
+        )}
       </div>
     </main>
   );

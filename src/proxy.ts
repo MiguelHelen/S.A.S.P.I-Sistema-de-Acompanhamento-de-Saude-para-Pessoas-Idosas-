@@ -15,53 +15,65 @@ const CLINICAL_ROUTES = [
   "/dashboard/historico",
 ];
 
-export function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+function extrairPerfilCookie(rawCookie?: string): string {
+  if (!rawCookie) return "";
+  try {
+    const parsed = JSON.parse(decodeURIComponent(rawCookie));
+    const user = parsed?.user || parsed?.usuario || parsed;
+    const role = String(user?.perfil || user?.role || "")
+      .trim()
+      .toUpperCase();
+    return role === "ADMIN" ? "ADMINISTRADOR" : role;
+  } catch {
+    return "";
+  }
+}
 
-  const token = request.cookies.get("saspi_token")?.value;
-  const userCookie = request.cookies.get("saspi_user")?.value;
+export function proxy(req: NextRequest) {
+  const { pathname } = req.nextUrl;
 
-  if (pathname.startsWith("/dashboard")) {
-    if (!token) {
-      const loginUrl = new URL("/login", request.url);
-      loginUrl.searchParams.set("redirect", pathname);
-      return NextResponse.redirect(loginUrl);
+  if (!pathname.startsWith("/dashboard")) {
+    return NextResponse.next();
+  }
+
+  const token = req.cookies.get("saspi_token")?.value;
+  const userCookie = req.cookies.get("saspi_user")?.value;
+  const role = extrairPerfilCookie(userCookie);
+
+  // Exige token, cookie de usuário e perfil válido; bloqueia perfil IDOSO no painel web
+  if (!token || !userCookie || !role || role === "IDOSO") {
+    const loginUrl = new URL("/login", req.url);
+    const res = NextResponse.redirect(loginUrl);
+    if (role === "IDOSO" || !role) {
+      res.cookies.delete("saspi_token");
+      res.cookies.delete("saspi_user");
     }
+    return res;
+  }
 
-    let role = "";
-    if (userCookie) {
-      try {
-        const parsed = JSON.parse(decodeURIComponent(userCookie));
-        const user = parsed.user || parsed.usuario || parsed;
-        role = String(user.perfil || user.role || "").toUpperCase();
-      } catch {
-        return NextResponse.redirect(new URL("/login", request.url));
-      }
-    }
+  const isAdmin = role === "ADMINISTRADOR";
 
-    const isAdmin = role === "ADMINISTRADOR" || role === "ADMIN";
-    const isRotaAdmin = ADMIN_ONLY_ROUTES.some((rota) =>
-      pathname.startsWith(rota)
-    );
-    const isRotaClinica = CLINICAL_ROUTES.some((rota) =>
-      pathname.startsWith(rota)
-    );
+  const isAdminRoute = ADMIN_ONLY_ROUTES.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`)
+  );
+  if (isAdminRoute && !isAdmin) {
+    return NextResponse.redirect(new URL("/dashboard", req.url));
+  }
 
-    if (isRotaAdmin && !isAdmin) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
-    }
+  const isClinicalRoute = CLINICAL_ROUTES.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`)
+  );
+  if (isClinicalRoute && isAdmin) {
+    return NextResponse.redirect(new URL("/dashboard", req.url));
+  }
 
-    // O Administrador gerencia a instituicao, nao executa operacoes clinicas
-    if (isRotaClinica && isAdmin) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
-    }
-
-    // Familiar possui acesso somente leitura nos modulos clinicos
-    if (
-      role === "FAMILIAR" &&
-      (pathname.endsWith("/novo") || pathname.endsWith("/nova"))
-    ) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
+  if (role === "FAMILIAR") {
+    const isCreateOrAccessRoute =
+      pathname.endsWith("/novo") ||
+      pathname.endsWith("/nova") ||
+      pathname.includes("/acesso-app");
+    if (isCreateOrAccessRoute) {
+      return NextResponse.redirect(new URL("/dashboard", req.url));
     }
   }
 
