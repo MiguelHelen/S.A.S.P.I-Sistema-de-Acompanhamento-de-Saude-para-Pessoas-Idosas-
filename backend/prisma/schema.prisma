@@ -778,6 +778,7 @@ enum perfil_usuario {
   ENFERMEIRO
   CUIDADOR
   FAMILIAR
+  IDOSO
 
   @@schema("public")
 }
@@ -794,6 +795,7 @@ enum tipo_vinculo_enum {
   ENFERMEIRO
   CUIDADOR
   FAMILIAR
+  PROPRIO_IDOSO
 
   @@schema("public")
 }
