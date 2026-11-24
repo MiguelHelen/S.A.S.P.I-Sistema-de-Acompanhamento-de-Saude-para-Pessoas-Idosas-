@@ -51,7 +51,7 @@ export default function NovoVinculo() {
     async function carregarDados() {
       const token = localStorage.getItem("saspi_token");
       const userRaw = localStorage.getItem("saspi_user");
-      let clinicaId = "e63b19f5-d8e4-4973-bac6-12aba9a0545d";
+      let clinicaId = "";
 
       if (userRaw) {
         try {
@@ -66,7 +66,7 @@ export default function NovoVinculo() {
           }
 
           setAutorizado(true);
-          clinicaId = userData.clinica_id || userData.clinicaId || clinicaId;
+          clinicaId = userData.clinica_id || userData.clinicaId || "";
         } catch {
           setAutorizado(false);
           setCarregando(false);
@@ -83,7 +83,7 @@ export default function NovoVinculo() {
           `${API_URL}/idoso?clinica_id=${clinicaId}`,
           {
             headers: { ...(token && { Authorization: `Bearer ${token}` }) },
-          }
+          },
         );
         if (resIdosos.ok) {
           const data = await resIdosos.json();
@@ -93,7 +93,7 @@ export default function NovoVinculo() {
                 id: i.id,
                 nome: i.nome,
                 idade: i.idade || 75,
-              }))
+              })),
             );
             setFormData((prev) => ({ ...prev, idoso_id: data[0].id }));
           }
@@ -101,18 +101,21 @@ export default function NovoVinculo() {
       } catch {}
 
       try {
-        const resUsers = await fetch(
-          `${API_URL}/usuario?clinica_id=${clinicaId}`,
-          {
-            headers: { ...(token && { Authorization: `Bearer ${token}` }) },
-          }
-        );
+        const resUsers = await fetch(`${API_URL}/usuario`, {
+          headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+        });
         if (resUsers.ok) {
           const data = await resUsers.json();
           if (Array.isArray(data)) {
             const usuariosElegiveis = data.filter((u: any) => {
               const p = String(u.perfil || "").toUpperCase();
-              return p !== "ADMINISTRADOR" && p !== "ADMIN";
+              const userClinicaId = u.clinica_id || u.clinicaId;
+              return (
+                p !== "ADMINISTRADOR" &&
+                p !== "ADMIN" &&
+                Boolean(clinicaId) &&
+                userClinicaId === clinicaId
+              );
             });
 
             setUsuarios(usuariosElegiveis);
@@ -124,7 +127,8 @@ export default function NovoVinculo() {
             }
           }
         }
-      } catch {} finally {
+      } catch {
+      } finally {
         setCarregando(false);
       }
     }
@@ -141,7 +145,7 @@ export default function NovoVinculo() {
     const token = localStorage.getItem("saspi_token");
 
     const usuarioSelecionado = usuarios.find(
-      (u) => u.id === formData.usuario_id
+      (u) => u.id === formData.usuario_id,
     );
     const perfilUsuario = (
       usuarioSelecionado?.perfil || "CUIDADOR"
@@ -168,7 +172,7 @@ export default function NovoVinculo() {
         `${API_URL}/usuario-idoso/usuario/${formData.usuario_id}`,
         {
           headers: { ...(token && { Authorization: `Bearer ${token}` }) },
-        }
+        },
       ).catch(() => null);
 
       if (resCheck?.ok) {
@@ -176,11 +180,11 @@ export default function NovoVinculo() {
         if (Array.isArray(vinculosAtuais)) {
           const jaVinculado = vinculosAtuais.some(
             (v: any) =>
-              (v.idoso_id || v.idosoId || v.idoso?.id) === formData.idoso_id
+              (v.idoso_id || v.idosoId || v.idoso?.id) === formData.idoso_id,
           );
           if (jaVinculado) {
             throw new Error(
-              "Erro: Este usuário já está vinculado a este paciente!"
+              "Erro: Este usuário já está vinculado a este paciente!",
             );
           }
         }
@@ -208,14 +212,14 @@ export default function NovoVinculo() {
           msgStr.includes("internal server error")
         ) {
           throw new Error(
-            "Erro: Este usuário já está vinculado a este paciente!"
+            "Erro: Este usuário já está vinculado a este paciente!",
           );
         }
 
         let msgExtracao = errData?.message;
         if (Array.isArray(msgExtracao)) msgExtracao = msgExtracao.join(", ");
         throw new Error(
-          msgExtracao || "Ocorreu um erro ao atribuir o vínculo."
+          msgExtracao || "Ocorreu um erro ao atribuir o vínculo.",
         );
       }
 
