@@ -1,58 +1,76 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import Link from "next/link";
+import { useState, useEffect, useCallback } from "react";
 import DashboardNavbar from "@/components/DashboardNavbar";
 import PatientSelector, { Idoso } from "@/components/PatientSelector";
 import {
-  CalendarDays,
-  MapPin,
-  Stethoscope,
+  API_URL,
+  getAuthHeaders,
+  getIdosoAtivoSessao,
+  getUsuarioSessao,
+  isAdminPerfil,
+} from "@/lib/clinica";
+import {
+  Calendar,
   Plus,
-  Loader2,
+  MapPin,
+  Clock,
   CheckCircle2,
-  Ban,
-  FileText,
-  AlertCircle,
+  XCircle,
+  Loader2,
+  Stethoscope,
+  ShieldAlert,
 } from "lucide-react";
 
 interface Consulta {
   id: string;
-  idoso_id?: string;
   especialidade: string;
-  medico?: string;
-  data?: string;
-  horario?: string;
-  localizacao?: string;
-  observacao?: string | null;
+  data: string;
+  local?: string;
   status: string;
+  observacoes?: string;
+  medico?: {
+    nome: string;
+  };
 }
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://perfect-bravery-production-5ce7.up.railway.app";
-
 export default function ConsultasPage() {
-  const [activeElderly, setActiveElderly] = useState<Idoso | null>(null);
+  const [autorizado, setAutorizado] = useState<boolean | null>(null);
+  const [idosoAtivo, setIdosoAtivo] = useState<Idoso | null>(null);
   const [consultas, setConsultas] = useState<Consulta[]>([]);
-  const [carregando, setCarregando] = useState(false);
-  const [perfilUsuario, setPerfilUsuario] = useState("");
+  const [carregando, setCarregando] = useState(true);
   const [atualizandoId, setAtualizandoId] = useState<string | null>(null);
-  const [mensagem, setMensagem] = useState("");
-  const [erro, setErro] = useState("");
+  const [userPerfil, setUserPerfil] = useState<string>("");
 
-  const carregarConsultas = useCallback(async (idosoId: string) => {
+  useEffect(() => {
+    const sessao = getUsuarioSessao();
+    if (!sessao || isAdminPerfil(sessao.perfil)) {
+      setAutorizado(false);
+      setCarregando(false);
+      return;
+    }
+
+    setAutorizado(true);
+    setUserPerfil(sessao.perfil);
+
+    const ativo = getIdosoAtivoSessao<Idoso>();
+    if (ativo?.id) {
+      setIdosoAtivo(ativo);
+    } else {
+      setCarregando(false);
+    }
+  }, []);
+
+  const carregarConsultas = useCallback(async (pacienteId: string) => {
     setCarregando(true);
-    const token = localStorage.getItem("saspi_token");
-
     try {
-      const res = await fetch(`${API_URL}/consulta?idoso_id=${idosoId}`, {
-        headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+      const res = await fetch(`${API_URL}/consulta/idoso/${pacienteId}`, {
+        headers: getAuthHeaders(false),
       });
 
       if (res.ok) {
-        const data = await res.json();
-        const lista = Array.isArray(data) ? data : data.data || [];
+        const raw = await res.json();
+        const lista = Array.isArray(raw) ? raw : raw?.data || [];
         setConsultas(lista);
       } else {
         setConsultas([]);
@@ -65,82 +83,62 @@ export default function ConsultasPage() {
   }, []);
 
   useEffect(() => {
-    const userRaw = localStorage.getItem("saspi_user");
-    if (userRaw) {
-      try {
-        const parsed = JSON.parse(userRaw);
-        const userData = parsed.user || parsed.usuario || parsed;
-        setPerfilUsuario(
-          String(userData.perfil || userData.role || "").toUpperCase()
-        );
-      } catch {}
+    if (idosoAtivo?.id && autorizado === true) {
+      carregarConsultas(idosoAtivo.id);
     }
+  }, [idosoAtivo, autorizado, carregarConsultas]);
 
-    const storedElderly = localStorage.getItem("saspi_active_elderly");
-    if (storedElderly) {
-      try {
-        const parsed = JSON.parse(storedElderly);
-        setActiveElderly(parsed);
-        if (parsed?.id) {
-          carregarConsultas(parsed.id);
-        }
-      } catch {}
-    }
-  }, [carregarConsultas]);
-
-  function handleSelectElderly(novo: Idoso) {
-    setActiveElderly(novo);
-    if (novo?.id) {
-      carregarConsultas(novo.id);
-    }
-  }
-
-  async function alterarStatusConsulta(id: string, novoStatus: string) {
-    setAtualizandoId(id);
-    setErro("");
-    setMensagem("");
-    const token = localStorage.getItem("saspi_token");
-
+  async function alterarStatus(consultaId: string, novoStatus: string) {
+    setAtualizandoId(consultaId);
     try {
-      const res = await fetch(`${API_URL}/consulta/${id}/status`, {
+      const res = await fetch(`${API_URL}/consulta/${consultaId}`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token && { Authorization: `Bearer ${token}` }),
-        },
+        headers: getAuthHeaders(true),
         body: JSON.stringify({ status: novoStatus }),
       });
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(
-          errData?.message || "Não foi possível atualizar o status da consulta."
+      if (res.ok) {
+        setConsultas((prev) =>
+          prev.map((c) =>
+            c.id === consultaId ? { ...c, status: novoStatus } : c
+          )
         );
       }
-
-      setConsultas((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, status: novoStatus } : c))
-      );
-      window.dispatchEvent(new Event("saspi_elderly_updated"));
-      setMensagem(
-        `Status da consulta atualizado para "${novoStatus}" com sucesso!`
-      );
-      setTimeout(() => setMensagem(""), 4000);
-    } catch (err: any) {
-      setErro(err.message || "Falha ao atualizar consulta.");
+    } catch {
+      // Falha silenciosa
     } finally {
       setAtualizandoId(null);
     }
   }
 
-  const podeGerenciar = perfilUsuario !== "FAMILIAR";
+  function badgeStatus(status: string) {
+    const s = (status || "").toUpperCase();
+    if (s === "REALIZADA") return "bg-emerald-50 text-emerald-700";
+    if (s === "CANCELADA") return "bg-red-50 text-red-700";
+    return "bg-blue-50 text-[#1565C0]";
+  }
 
-  function obterCorStatus(status?: string) {
-    const s = String(status || "Agendada");
-    if (s === "Cancelada") return "bg-red-50 text-red-700";
-    if (s === "Realizada") return "bg-emerald-50 text-emerald-700";
-    if (s === "Confirmada") return "bg-teal-50 text-teal-700";
-    return "bg-[#E8F1FB] text-[#1565C0]";
+  const podeGerenciarConsultas =
+    userPerfil !== "FAMILIAR" && userPerfil !== "ADMINISTRADOR";
+
+  if (autorizado === false) {
+    return (
+      <main className="min-h-screen bg-[#F2F7FB]">
+        <DashboardNavbar />
+        <div className="mx-auto max-w-xl px-4 py-16 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
+            <ShieldAlert size={32} />
+          </div>
+          <h1 className="mt-4 text-2xl font-bold text-[#0A2540]">
+            Acesso Restrito
+          </h1>
+          <p className="mt-2 text-sm text-gray-600">
+            A agenda clínica de consultas é destinada aos profissionais de
+            saúde e familiares vinculados.
+          </p>
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -148,203 +146,151 @@ export default function ConsultasPage() {
       <DashboardNavbar />
 
       <div className="mx-auto max-w-7xl px-4 py-8 md:px-8">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
-              Agenda de saúde
+              Agenda Médica
             </span>
-            <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0A2540]">
-              Consultas
+            <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0A2540] md:text-4xl">
+              Consultas & Acompanhamentos
             </h1>
             <p className="mt-2 text-gray-600">
-              {activeElderly
-                ? `Acompanhe agendamentos de ${activeElderly.nome}.`
-                : "Selecione um paciente para visualizar os agendamentos clínicos."}
+              Agendamentos clínicos, retornos médicos e histórico de
+              atendimentos.
             </p>
           </div>
 
-          {podeGerenciar && (
-            <Link
+          {podeGerenciarConsultas && (
+            <a
               href="/dashboard/consultas/nova"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3 font-medium text-white shadow-sm hover:bg-[#0A2540]"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3 font-medium text-white shadow-sm transition hover:bg-[#0A2540]"
             >
-              <Plus size={19} />
-              Nova consulta
-            </Link>
+              <Plus size={18} />
+              Agendar Consulta
+            </a>
           )}
         </div>
 
-        {mensagem && (
-          <div className="mt-6 flex items-center gap-3 rounded-xl bg-emerald-50 p-4 text-emerald-800">
-            <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
-            <p className="text-sm font-medium">{mensagem}</p>
-          </div>
-        )}
-
-        {erro && (
-          <div className="mt-6 flex items-center gap-3 rounded-xl bg-red-50 p-4 text-red-700">
-            <AlertCircle size={20} className="shrink-0 text-red-600" />
-            <p className="text-sm font-medium">{erro}</p>
-          </div>
-        )}
-
         <div className="mt-6">
           <PatientSelector
-            onSelect={handleSelectElderly}
-            selectedId={activeElderly?.id}
+            selectedId={idosoAtivo?.id}
+            onSelect={(p) => setIdosoAtivo(p)}
           />
         </div>
 
-        <div className="mt-8">
-          {carregando ? (
-            <div className="flex items-center justify-center py-12 text-gray-500">
-              <Loader2 size={24} className="animate-spin text-[#1565C0]" />
-              <span className="ml-2">Buscando consultas na base...</span>
-            </div>
-          ) : consultas.length > 0 ? (
-            <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-semibold text-[#0A2540]">
-                Consultas registradas ({consultas.length})
-              </h2>
+        <div className="mt-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+          <div className="flex items-center gap-2.5 border-b border-gray-100 pb-4">
+            <Calendar size={20} className="text-[#1565C0]" />
+            <h2 className="text-lg font-semibold text-[#0A2540]">
+              Compromissos de {idosoAtivo?.nome || "Paciente"} (
+              {consultas.length})
+            </h2>
+          </div>
 
-              <div className="mt-6 grid gap-5 lg:grid-cols-2">
+          <div className="mt-6">
+            {carregando ? (
+              <div className="flex items-center justify-center py-10 text-sm text-gray-500">
+                <Loader2 size={22} className="animate-spin text-[#1565C0]" />
+                <span className="ml-2">Carregando agenda...</span>
+              </div>
+            ) : consultas.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-gray-200 p-10 text-center">
+                <Stethoscope size={32} className="mx-auto text-gray-300" />
+                <p className="mt-3 font-medium text-[#0A2540]">
+                  Nenhuma consulta agendada
+                </p>
+                <p className="mt-1 text-sm text-gray-500">
+                  {podeGerenciarConsultas
+                    ? "Clique em 'Agendar Consulta' para marcar um novo atendimento."
+                    : "Nenhuma consulta cadastrada no momento."}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
                 {consultas.map((c) => {
-                  const dataBr = c.data
-                    ? new Date(c.data).toLocaleDateString("pt-BR", {
-                        timeZone: "UTC",
-                      })
-                    : "--";
-                  const statusAtual = c.status || "Agendada";
-                  const encerrada =
-                    statusAtual === "Cancelada" || statusAtual === "Realizada";
+                  const dt = new Date(c.data);
+                  const dataFmt = dt.toLocaleDateString("pt-BR", {
+                    day: "2-digit",
+                    month: "long",
+                    year: "numeric",
+                  });
+                  const horaFmt = dt.toLocaleTimeString("pt-BR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  });
+                  const statusUpper = (c.status || "AGENDADA").toUpperCase();
 
                   return (
-                    <article
+                    <div
                       key={c.id}
-                      className="group flex flex-col justify-between rounded-2xl border border-gray-100 bg-[#FAFCFE] p-6 shadow-sm"
+                      className="flex flex-col justify-between gap-4 rounded-xl border border-gray-100 bg-[#FAFCFE] p-5 sm:flex-row sm:items-center"
                     >
-                      <div>
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#E8F1FB] text-[#1565C0]">
-                            <Stethoscope size={24} />
-                          </div>
+                      <div className="space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2.5">
+                          <h3 className="text-base font-bold text-[#0A2540]">
+                            {c.especialidade}
+                          </h3>
                           <span
-                            className={`rounded-full px-3 py-1 text-xs font-semibold ${obterCorStatus(
-                              statusAtual
+                            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${badgeStatus(
+                              statusUpper
                             )}`}
                           >
-                            {statusAtual}
+                            {statusUpper}
                           </span>
                         </div>
 
-                        <div className="mt-5">
-                          <h3 className="text-xl font-semibold text-[#0A2540]">
-                            {c.especialidade}
-                          </h3>
-                          <p className="mt-1 text-sm font-medium text-gray-500">
-                            Profissional: {c.medico}
-                          </p>
-                        </div>
-
-                        <div className="mt-5 space-y-3">
-                          <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-3.5">
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#E8F1FB] text-[#1565C0]">
-                              <CalendarDays size={18} />
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500">Data e Horário</p>
-                              <p className="text-sm font-semibold text-[#0A2540]">
-                                {dataBr} às {c.horario}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-start gap-3 rounded-xl border border-gray-100 bg-white p-3.5">
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#E6F4EF] text-[#26A69A]">
-                              <MapPin size={18} />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs text-gray-500">
-                                Local da Consulta
-                              </p>
-                              <p className="mt-0.5 wrap-break-word text-sm font-semibold leading-snug text-[#0A2540]">
-                                {c.localizacao}
-                              </p>
-                            </div>
-                          </div>
-
-                          {c.observacao && (
-                            <div className="flex items-start gap-3 rounded-xl border border-gray-100 bg-white p-3.5">
-                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
-                                <FileText size={18} />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-xs text-gray-500">
-                                  Observações e Preparo
-                                </p>
-                                <p className="mt-0.5 wrap-break-word text-sm text-gray-700">
-                                  {c.observacao}
-                                </p>
-                              </div>
-                            </div>
+                        <div className="flex flex-wrap items-center gap-4 text-xs text-gray-600">
+                          <span className="flex items-center gap-1">
+                            <Calendar size={14} className="text-[#1565C0]" />
+                            {dataFmt}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Clock size={14} className="text-[#26A69A]" />
+                            {horaFmt}
+                          </span>
+                          {c.local && (
+                            <span className="flex items-center gap-1">
+                              <MapPin size={14} className="text-gray-400" />
+                              {c.local}
+                            </span>
                           )}
                         </div>
+
+                        {c.observacoes && (
+                          <p className="text-xs text-gray-500">
+                            Obs.: {c.observacoes}
+                          </p>
+                        )}
                       </div>
 
-                      {podeGerenciar && !encerrada && (
-                        <div className="mt-5 flex flex-wrap items-center justify-end gap-2 border-t border-gray-200/70 pt-4">
-                          {statusAtual === "Agendada" && (
-                            <button
-                              type="button"
-                              disabled={atualizandoId === c.id}
-                              onClick={() =>
-                                alterarStatusConsulta(c.id, "Confirmada")
-                              }
-                              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-[#1565C0] transition hover:bg-blue-100 disabled:opacity-50"
-                            >
-                              <CheckCircle2 size={14} />
-                              Confirmar
-                            </button>
-                          )}
-
+                      {podeGerenciarConsultas && statusUpper === "AGENDADA" && (
+                        <div className="flex items-center gap-2">
                           <button
                             type="button"
                             disabled={atualizandoId === c.id}
-                            onClick={() =>
-                              alterarStatusConsulta(c.id, "Realizada")
-                            }
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"
+                            onClick={() => alterarStatus(c.id, "REALIZADA")}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
                           >
                             <CheckCircle2 size={14} />
-                            Concluir (Realizada)
+                            Realizada
                           </button>
-
                           <button
                             type="button"
                             disabled={atualizandoId === c.id}
-                            onClick={() =>
-                              alterarStatusConsulta(c.id, "Cancelada")
-                            }
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-100 disabled:opacity-50"
+                            onClick={() => alterarStatus(c.id, "CANCELADA")}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
                           >
-                            <Ban size={14} />
+                            <XCircle size={14} />
                             Cancelar
                           </button>
                         </div>
                       )}
-                    </article>
+                    </div>
                   );
                 })}
               </div>
-            </section>
-          ) : (
-            <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-12 text-center">
-              <Stethoscope size={36} className="mx-auto text-gray-300" />
-              <p className="mt-3 font-semibold text-[#0A2540]">
-                Nenhuma consulta agendada
-              </p>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </main>
