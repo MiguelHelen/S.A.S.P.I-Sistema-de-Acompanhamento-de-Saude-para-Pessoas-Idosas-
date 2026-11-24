@@ -32,23 +32,51 @@ import {
 } from "react-native-health-connect";
 
 const INDICADORES = [
-  { nome: "Frequência Cardíaca", unidade: "bpm", icon: HeartPulse, color: "#DC2626", bg: "#FEE2E2" },
-  { nome: "Oxigenação", unidade: "%", icon: Activity, color: "#0284C7", bg: "#E0F2FE" },
-  { nome: "Pressão Arterial", unidade: "mmHg", icon: Droplet, color: "#9333EA", bg: "#F3E8FF" },
-  { nome: "Temperatura", unidade: "°C", icon: Thermometer, color: "#EA580C", bg: "#FFF7ED" },
+  {
+    nome: "Frequência Cardíaca",
+    unidade: "bpm",
+    icon: HeartPulse,
+    color: "#DC2626",
+    bg: "#FEE2E2",
+  },
+  {
+    nome: "Oxigenação",
+    unidade: "%",
+    icon: Activity,
+    color: "#0284C7",
+    bg: "#E0F2FE",
+  },
+  {
+    nome: "Pressão Arterial",
+    unidade: "mmHg",
+    icon: Droplet,
+    color: "#9333EA",
+    bg: "#F3E8FF",
+  },
+  {
+    nome: "Temperatura",
+    unidade: "°C",
+    icon: Thermometer,
+    color: "#EA580C",
+    bg: "#FFF7ED",
+  },
 ];
 
 export default function NovoRegistroSinalScreen({ navigation }: any) {
   const { usuario, token } = useAuth();
   const [idoso, setIdoso] = useState<{ id: string; nome: string } | null>(null);
 
-  const [indicadorSelecionado, setIndicadorSelecionado] = useState(INDICADORES[0]);
+  const [indicadorSelecionado, setIndicadorSelecionado] = useState(
+    INDICADORES[0],
+  );
   const [valor, setValor] = useState("");
   const [observacao, setObservacao] = useState("");
 
   const [salvando, setSalvando] = useState(false);
   const [lendoRelogio, setLendoRelogio] = useState(false);
-  const [origemDado, setOrigemDado] = useState<"MANUAL" | "AUTOMATICO">("MANUAL");
+  const [origemDado, setOrigemDado] = useState<"MANUAL" | "AUTOMATICO">(
+    "MANUAL",
+  );
 
   useEffect(() => {
     async function carregarIdoso() {
@@ -98,24 +126,31 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
     try {
       const isInitialized = await initialize();
       if (!isInitialized) {
-        Alert.alert("Erro", "Conexão Saúde (Health Connect) não está disponível neste dispositivo.");
+        Alert.alert(
+          "Erro",
+          "Conexão Saúde (Health Connect) não está disponível neste dispositivo.",
+        );
         return;
       }
 
       const mapHC: Record<string, string> = {
         "Frequência Cardíaca": "HeartRate",
-        "Oxigenação": "OxygenSaturation",
+        Oxigenação: "OxygenSaturation",
         "Pressão Arterial": "BloodPressure",
-        "Temperatura": "BodyTemperature",
+        Temperatura: "BodyTemperature",
       };
 
       const recordTypeHC = mapHC[indicadorSelecionado.nome];
 
-      await requestPermission([{ accessType: "read", recordType: recordTypeHC as any }]);
+      await requestPermission([
+        { accessType: "read", recordType: recordTypeHC as any },
+      ]);
 
       const permissoes = await getGrantedPermissions();
       const temPermissao = permissoes.some(
-        (p: any) => p.recordType === recordTypeHC && (p.accessType === "read" || p.accessType === "write")
+        (p: any) =>
+          p.recordType === recordTypeHC &&
+          (p.accessType === "read" || p.accessType === "write"),
       );
 
       if (!temPermissao) {
@@ -124,8 +159,11 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
           "Abra as configurações do Conexão Saúde e marque 'Permitir tudo' para o SASPI.",
           [
             { text: "Cancelar", style: "cancel" },
-            { text: "Abrir Configurações", onPress: () => openHealthConnectSettings() },
-          ]
+            {
+              text: "Abrir Configurações",
+              onPress: () => openHealthConnectSettings(),
+            },
+          ],
         );
         return;
       }
@@ -147,14 +185,15 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
       if (!registros || registros.length === 0) {
         Alert.alert(
           "Aviso",
-          `Nenhum dado recente de ${indicadorSelecionado.nome} encontrado no Conexão Saúde nas últimas 24h.`
+          `Nenhum dado recente de ${indicadorSelecionado.nome} encontrado no Conexão Saúde nas últimas 24h.`,
         );
         return;
       }
 
       const maisRecente: any = registros.sort(
         (a: any, b: any) =>
-          new Date(b.time || b.startTime).getTime() - new Date(a.time || a.startTime).getTime()
+          new Date(b.time || b.startTime).getTime() -
+          new Date(a.time || a.startTime).getTime(),
       )[0];
 
       let valorExtraido = "";
@@ -163,7 +202,8 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
       if (recordTypeHC === "HeartRate") {
         if (maisRecente.samples && maisRecente.samples.length > 0) {
           const lastSample = maisRecente.samples.sort(
-            (a: any, b: any) => new Date(b.time).getTime() - new Date(a.time).getTime()
+            (a: any, b: any) =>
+              new Date(b.time).getTime() - new Date(a.time).getTime(),
           )[0];
           valorExtraido = String(lastSample.beatsPerMinute);
           dataAmostra = new Date(lastSample.time);
@@ -171,11 +211,15 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
       } else if (recordTypeHC === "OxygenSaturation") {
         valorExtraido = String(maisRecente.percentage);
       } else if (recordTypeHC === "BodyTemperature") {
-        const tempVal = maisRecente.temperature?.inCelsius ?? maisRecente.temperature;
+        const tempVal =
+          maisRecente.temperature?.inCelsius ?? maisRecente.temperature;
         valorExtraido = String(tempVal);
       } else if (recordTypeHC === "BloodPressure") {
-        const sist = maisRecente.systolic?.inMillimetersOfMercury ?? maisRecente.systolic;
-        const diast = maisRecente.diastolic?.inMillimetersOfMercury ?? maisRecente.diastolic;
+        const sist =
+          maisRecente.systolic?.inMillimetersOfMercury ?? maisRecente.systolic;
+        const diast =
+          maisRecente.diastolic?.inMillimetersOfMercury ??
+          maisRecente.diastolic;
         valorExtraido = `${sist}/${diast}`;
       }
 
@@ -188,26 +232,34 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
         setObservacao(`Aferido via Smartband IoT às ${horaTexto}`);
         setOrigemDado("AUTOMATICO");
       } else {
-        Alert.alert("Aviso", "A pulseira retornou um formato de dado incompatível.");
+        Alert.alert(
+          "Aviso",
+          "A pulseira retornou um formato de dado incompatível.",
+        );
       }
     } catch (error: any) {
       console.error(error);
       Alert.alert(
         "Erro",
-        "Falha ao puxar os dados do relógio. Sincronize o Mi Fitness/Zepp Life com o Conexão Saúde primeiro."
+        "Falha ao puxar os dados do relógio. Sincronize o Mi Fitness/Zepp Life com o Conexão Saúde primeiro.",
       );
     } finally {
       setLendoRelogio(false);
     }
   };
 
-  const obterOuCriarIndicadorId = async (nomeIndicador: string, unidadePadrao: string) => {
+  const obterOuCriarIndicadorId = async (
+    nomeIndicador: string,
+    unidadePadrao: string,
+  ) => {
     try {
       const resLista = await apiFetch("/indicador-saude", {}, token);
       if (resLista.ok) {
         const lista = await resLista.json();
         const existente = lista.find(
-          (ind: any) => String(ind.nome || "").toLowerCase() === nomeIndicador.toLowerCase()
+          (ind: any) =>
+            String(ind.nome || "").toLowerCase() ===
+            nomeIndicador.toLowerCase(),
         );
         if (existente?.id) return existente.id;
       }
@@ -216,9 +268,12 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
         "/indicador-saude",
         {
           method: "POST",
-          body: JSON.stringify({ nome: nomeIndicador, unidade_padrao: unidadePadrao }),
+          body: JSON.stringify({
+            nome: nomeIndicador,
+            unidade_padrao: unidadePadrao,
+          }),
         },
-        token
+        token,
       );
       if (resCriar.ok) {
         const criado = await resCriar.json();
@@ -236,23 +291,36 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
     const valorLimpo = valor.trim().replace(",", ".");
     const obsLimpa = observacao.trim();
 
-    if (!valorLimpo) return Alert.alert("Atenção", "Insira ou puxe o valor da aferição.");
+    if (!valorLimpo)
+      return Alert.alert("Atenção", "Insira ou puxe o valor da aferição.");
 
     if (indicadorSelecionado.nome === "Pressão Arterial") {
       const matchPa = valorLimpo.match(/^(\d{2,3})\/(\d{2,3})$/);
-      if (!matchPa) return Alert.alert("Formato Inválido", "Exemplo correto: 120/80");
+      if (!matchPa)
+        return Alert.alert("Formato Inválido", "Exemplo correto: 120/80");
     }
 
-    const numeroConvertido = Number(valorLimpo);
+    const numeroBruto = Number(valorLimpo);
     const isNumerico = indicadorSelecionado.nome !== "Pressão Arterial";
+
+    let numeroFinal = numeroBruto;
+    if (indicadorSelecionado.nome === "Oxigenação" && numeroFinal > 0 && numeroFinal <= 1) {
+      numeroFinal = Math.round(numeroFinal * 100);
+    } else if (
+      indicadorSelecionado.nome === "Frequência Cardíaca" ||
+      indicadorSelecionado.nome === "Oxigenação"
+    ) {
+      numeroFinal = Math.round(numeroFinal);
+    }
 
     setSalvando(true);
     try {
       const indicadorId = await obterOuCriarIndicadorId(
         indicadorSelecionado.nome,
-        indicadorSelecionado.unidade
+        indicadorSelecionado.unidade,
       );
-      if (!indicadorId) throw new Error("Falha ao localizar indicador no banco.");
+      if (!indicadorId)
+        throw new Error("Falha ao localizar indicador no banco.");
 
       const valorCategoricoFinal = isNumerico
         ? obsLimpa.length > 0
@@ -263,7 +331,7 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
       const payload = {
         idoso_id: idoso.id,
         indicador_id: indicadorId,
-        ...(isNumerico && { valor_numerico: numeroConvertido }),
+        ...(isNumerico && { valor_numerico: numeroFinal }),
         ...(valorCategoricoFinal && { valor_categorico: valorCategoricoFinal }),
         origem: origemDado,
       };
@@ -274,17 +342,20 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
           method: "POST",
           body: JSON.stringify(payload),
         },
-        token
+        token,
       );
 
       if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(errData?.message || "Erro ao registrar o sinal vital.");
+        const errText = await res.text();
+        console.log("ERRO API /registro-saude:", res.status, errText, "PAYLOAD:", payload);
+        throw new Error(`Erro ${res.status}: ${errText}`);
       }
 
-      Alert.alert("Aferição Salva!", "Registro enviado para o prontuário S.A.S.P.I. com sucesso.", [
-        { text: "OK", onPress: () => navigation.goBack() },
-      ]);
+      Alert.alert(
+        "Aferição Salva!",
+        "Registro enviado para o prontuário com sucesso.",
+        [{ text: "OK", onPress: () => navigation.goBack() }],
+      );
     } catch (err: any) {
       Alert.alert("Erro ao Salvar", err.message || "Problema de conexão.");
     } finally {
@@ -311,9 +382,16 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.label}>Indicador de saúde</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.chipsContainer}
+        >
           {INDICADORES.map((item) => {
             const isActive = indicadorSelecionado.nome === item.nome;
             const IconComponent = item.icon;
@@ -328,34 +406,46 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
                   color={isActive ? "#FFF" : item.color}
                   style={{ marginRight: 6 }}
                 />
-                <Text style={[styles.chipText, isActive && { color: "#FFF" }]}>{item.nome}</Text>
+                <Text style={[styles.chipText, isActive && { color: "#FFF" }]}>
+                  {item.nome}
+                </Text>
               </TouchableOpacity>
             );
           })}
         </ScrollView>
 
         <View style={styles.formCard}>
-          <View style={[styles.iconCircle, { backgroundColor: indicadorSelecionado.bg }]}>
+          <View
+            style={[
+              styles.iconCircle,
+              { backgroundColor: indicadorSelecionado.bg },
+            ]}
+          >
             <IconeAtivo size={30} color={indicadorSelecionado.color} />
           </View>
           <Text style={styles.formTitle}>{indicadorSelecionado.nome}</Text>
           <Text style={styles.formSub}>
-            Origem atual: {origemDado === "AUTOMATICO" ? "Smartband (IoT)" : "Manual"}
+            Origem atual:{" "}
+            {origemDado === "AUTOMATICO" ? "Smartband (IoT)" : "Manual"}
           </Text>
 
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.mainInput}
-              keyboardType={indicadorSelecionado.nome === "Pressão Arterial" ? "default" : "numeric"}
+              keyboardType={
+                indicadorSelecionado.nome === "Pressão Arterial"
+                  ? "default"
+                  : "numeric"
+              }
               value={valor}
               onChangeText={handleValorChange}
               placeholder={
-  indicadorSelecionado.nome === "Pressão Arterial"
-    ? "120/80"
-    : indicadorSelecionado.nome === "Temperatura"
-      ? "36.5"
-      : "0"
-}
+                indicadorSelecionado.nome === "Pressão Arterial"
+                  ? "120/80"
+                  : indicadorSelecionado.nome === "Temperatura"
+                    ? "36.5"
+                    : "0"
+              }
               placeholderTextColor="#A0AEC0"
               maxLength={7}
             />
@@ -373,7 +463,9 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
               <Watch size={18} color="#00897B" />
             )}
             <Text style={styles.btnWatchText}>
-              {lendoRelogio ? "Lendo Conexão Saúde..." : "Puxar da Pulseira Inteligente"}
+              {lendoRelogio
+                ? "Lendo Conexão Saúde..."
+                : "Puxar da Pulseira Inteligente"}
             </Text>
           </TouchableOpacity>
 
@@ -395,7 +487,11 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
           onPress={salvarRegistro}
           disabled={salvando}
         >
-          {salvando ? <ActivityIndicator color="#FFF" /> : <Save size={20} color="#FFF" />}
+          {salvando ? (
+            <ActivityIndicator color="#FFF" />
+          ) : (
+            <Save size={20} color="#FFF" />
+          )}
           <Text style={styles.saveBtnText}>
             {salvando ? "Enviando para o Prontuário..." : "Salvar registro"}
           </Text>
@@ -422,7 +518,12 @@ const styles = StyleSheet.create({
   title: { fontSize: 26, fontWeight: "bold", color: "#0A2540", marginTop: 10 },
   subtitle: { fontSize: 14, color: "#718096", marginTop: 4, marginBottom: 16 },
   content: { paddingHorizontal: 24, paddingBottom: 40 },
-  label: { fontSize: 14, fontWeight: "600", color: "#0A2540", marginBottom: 10 },
+  label: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#0A2540",
+    marginBottom: 10,
+  },
   chipsContainer: { flexDirection: "row", marginBottom: 20 },
   chip: {
     flexDirection: "row",
@@ -475,7 +576,12 @@ const styles = StyleSheet.create({
     textAlign: "center",
     minWidth: 100,
   },
-  unitText: { fontSize: 18, fontWeight: "600", color: "#718096", marginLeft: 8 },
+  unitText: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#718096",
+    marginLeft: 8,
+  },
   btnWatch: {
     flexDirection: "row",
     alignItems: "center",
@@ -485,7 +591,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 20,
   },
-  btnWatchText: { color: "#00897B", fontWeight: "bold", marginLeft: 8, fontSize: 14 },
+  btnWatchText: {
+    color: "#00897B",
+    fontWeight: "bold",
+    marginLeft: 8,
+    fontSize: 14,
+  },
   obsWrapper: {
     flexDirection: "row",
     alignItems: "center",
