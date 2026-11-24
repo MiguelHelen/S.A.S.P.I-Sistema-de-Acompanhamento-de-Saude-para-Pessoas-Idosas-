@@ -9,6 +9,7 @@ import {
   ArrowLeft,
   HeartHandshake,
   UserPlus,
+  Smartphone,
   Loader2,
   ShieldAlert,
   Pencil,
@@ -381,12 +382,21 @@ export default function GerenciarIdososPage() {
             </p>
           </div>
 
-          <Link
-            href="/dashboard/idosos/novo"
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3 font-medium text-white shadow-sm transition hover:bg-[#0A2540]"
-          >
-            <UserPlus size={19} /> Admitir Novo Idoso
-          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/dashboard/idosos/acesso-app"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#1565C0] bg-blue-50 px-5 py-3 font-medium text-[#1565C0] transition hover:bg-blue-100"
+            >
+              <Smartphone size={19} /> Acesso App
+            </Link>
+
+            <Link
+              href="/dashboard/idosos/novo"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3 font-medium text-white shadow-sm transition hover:bg-[#0A2540]"
+            >
+              <UserPlus size={19} /> Admitir Novo Idoso
+            </Link>
+          </div>
         </div>
 
         {mensagemSucesso && (

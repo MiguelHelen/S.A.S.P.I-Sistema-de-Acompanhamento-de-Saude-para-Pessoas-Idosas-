@@ -113,6 +113,7 @@ export default function NovoVinculo() {
               return (
                 p !== "ADMINISTRADOR" &&
                 p !== "ADMIN" &&
+                p !== "IDOSO" &&
                 Boolean(clinicaId) &&
                 userClinicaId === clinicaId
               );
