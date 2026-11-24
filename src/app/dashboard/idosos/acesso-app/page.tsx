@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import DashboardNavbar from "@/components/DashboardNavbar";
@@ -48,7 +48,7 @@ function gerarSenhaSegura(tamanho = 10): string {
   );
 }
 
-export default function AcessoAppIdosoPage() {
+function AcessoAppIdosoContent() {
   const searchParams = useSearchParams();
   const idosoParam = searchParams.get("idoso_id") || "";
 
@@ -375,5 +375,23 @@ export default function AcessoAppIdosoPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function AcessoAppIdosoPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-[#F2F7FB]">
+          <DashboardNavbar />
+          <div className="flex items-center justify-center py-20 text-gray-500">
+            <Loader2 size={24} className="animate-spin text-[#1565C0]" />
+            <span className="ml-2 text-sm">Carregando...</span>
+          </div>
+        </main>
+      }
+    >
+      <AcessoAppIdosoContent />
+    </Suspense>
   );
 }
