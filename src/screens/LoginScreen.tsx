@@ -10,17 +10,20 @@ import {
   Platform,
   Alert,
   Image,
-  Linking,
 } from "react-native";
 import { useAuth } from "../contexts/AuthContext";
 import { Mail, Lock } from "lucide-react-native";
+import InfoModals from "../components/InfoModals";
 
-export default function LoginScreen() {
+export default function LoginScreen({ navigation }: any) {
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [manterConectado, setManterConectado] = useState(true);
+  const [modalTipo, setModalTipo] = useState<"PRIVACIDADE" | "SUPORTE" | null>(
+    null
+  );
 
   async function handleEntrar() {
     if (!email.trim() || !senha.trim()) {
@@ -33,7 +36,10 @@ export default function LoginScreen() {
     setSubmitting(false);
 
     if (!resultado.ok) {
-      Alert.alert("Falha no Acesso", resultado.message || "Credenciais inválidas.");
+      Alert.alert(
+        "Falha no Acesso",
+        resultado.message || "Credenciais inválidas."
+      );
     }
   }
 
@@ -48,7 +54,7 @@ export default function LoginScreen() {
       <View style={styles.content}>
         <View style={styles.logoContainer}>
           <Image
-            source={require("../../assets/icon.png")}
+            source={require("../../assets/logosemtexto.png")}
             style={styles.logoImg}
             resizeMode="contain"
           />
@@ -93,18 +99,19 @@ export default function LoginScreen() {
               onPress={() => setManterConectado(!manterConectado)}
               activeOpacity={0.7}
             >
-              <View style={[styles.checkbox, manterConectado && styles.checkboxActive]}>
+              <View
+                style={[
+                  styles.checkbox,
+                  manterConectado && styles.checkboxActive,
+                ]}
+              >
                 {manterConectado && <Text style={styles.checkMark}>✓</Text>}
               </View>
               <Text style={styles.checkboxLabel}>Manter conectado</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() =>
-                Linking.openURL(
-                  "https://s-a-s-p-i-sistema-de-acompanhamento.vercel.app/recuperar-senha"
-                )
-              }
+              onPress={() => navigation.navigate("RecuperarSenha")}
             >
               <Text style={styles.forgotText}>Esqueci minha senha</Text>
             </TouchableOpacity>
@@ -124,10 +131,18 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.sloganText}>
-          Mais cuidado hoje, mais{"\n"}independência amanhã.
-        </Text>
+        <View style={styles.footerLinks}>
+          <TouchableOpacity onPress={() => setModalTipo("PRIVACIDADE")}>
+            <Text style={styles.footerLinkText}>Privacidade e LGPD</Text>
+          </TouchableOpacity>
+          <Text style={styles.footerDot}>•</Text>
+          <TouchableOpacity onPress={() => setModalTipo("SUPORTE")}>
+            <Text style={styles.footerLinkText}>Ajuda e Suporte</Text>
+          </TouchableOpacity>
+        </View>
       </View>
+
+      <InfoModals tipo={modalTipo} onClose={() => setModalTipo(null)} />
     </KeyboardAvoidingView>
   );
 }
@@ -154,13 +169,38 @@ const styles = StyleSheet.create({
     backgroundColor: "#E2F5F0",
     opacity: 0.5,
   },
-  content: { flex: 1, justifyContent: "center", paddingHorizontal: 28, zIndex: 10 },
-  logoContainer: { alignItems: "center", marginBottom: 30 },
-  logoImg: { width: 70, height: 70, marginBottom: 10 },
-  brandTitle: { fontSize: 32, fontWeight: "900", color: "#00897B", letterSpacing: 1 },
-  brandSubtitle: { fontSize: 12, color: "#6C7A89", textAlign: "center", marginTop: 4 },
-  welcomeText: { fontSize: 24, fontWeight: "bold", color: "#0A2540", textAlign: "center" },
-  subWelcomeText: { fontSize: 14, color: "#718096", textAlign: "center", marginBottom: 30 },
+  content: {
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: 28,
+    zIndex: 10,
+  },
+  logoContainer: { alignItems: "center", marginBottom: 24 },
+  logoImg: { width: 90, height: 90, marginBottom: 8 },
+  brandTitle: {
+    fontSize: 32,
+    fontWeight: "900",
+    color: "#00897B",
+    letterSpacing: 1,
+  },
+  brandSubtitle: {
+    fontSize: 12,
+    color: "#6C7A89",
+    textAlign: "center",
+    marginTop: 4,
+  },
+  welcomeText: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#0A2540",
+    textAlign: "center",
+  },
+  subWelcomeText: {
+    fontSize: 14,
+    color: "#718096",
+    textAlign: "center",
+    marginBottom: 24,
+  },
   form: { width: "100%" },
   inputWrapper: {
     flexDirection: "row",
@@ -171,7 +211,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FAFCFE",
     paddingHorizontal: 16,
     height: 56,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   inputIcon: { marginRight: 12 },
   input: { flex: 1, fontSize: 16, color: "#0A2540" },
@@ -179,7 +219,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 30,
+    marginBottom: 24,
   },
   checkboxContainer: { flexDirection: "row", alignItems: "center" },
   checkbox: {
@@ -198,19 +238,29 @@ const styles = StyleSheet.create({
   forgotText: { fontSize: 14, color: "#00897B", fontWeight: "600" },
   primaryButton: {
     backgroundColor: "#00897B",
-    height: 56,
+    height: 54,
     borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 12,
   },
   primaryButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "bold" },
-  sloganText: {
-    textAlign: "center",
-    color: "#00897B",
-    fontSize: 13,
-    fontWeight: "500",
-    marginTop: 40,
-    fontStyle: "italic",
+  secondaryButton: {
+    borderWidth: 1.5,
+    borderColor: "#00897B",
+    height: 50,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
   },
+  secondaryButtonText: { color: "#00897B", fontSize: 15, fontWeight: "600" },
+  footerLinks: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 28,
+    gap: 10,
+  },
+  footerLinkText: { fontSize: 13, color: "#64748B", fontWeight: "500" },
+  footerDot: { color: "#CBD5E1" },
 });

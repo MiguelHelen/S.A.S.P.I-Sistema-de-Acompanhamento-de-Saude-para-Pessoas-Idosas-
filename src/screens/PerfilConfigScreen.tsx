@@ -7,7 +7,6 @@ import {
   ScrollView,
   Switch,
   Alert,
-  Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../contexts/AuthContext';
@@ -19,12 +18,14 @@ import {
   HelpCircle,
   UserCog,
 } from 'lucide-react-native';
+import InfoModals from '../components/InfoModals';
 
 export default function PerfilConfigScreen({ navigation }: any) {
   const { usuario, logout } = useAuth();
   const [mostrarAcessibilidade, setMostrarAcessibilidade] = useState(false);
   const [altoContraste, setAltoContraste] = useState(false);
   const [fonteGrande, setFonteGrande] = useState(false);
+  const [modalTipo, setModalTipo] = useState<'PRIVACIDADE' | 'SUPORTE' | null>(null);
 
   useEffect(() => {
     async function carregarPrefs() {
@@ -69,10 +70,11 @@ export default function PerfilConfigScreen({ navigation }: any) {
             <User size={45} color="#00897B" />
           </View>
           <Text style={[styles.userName, { color: textoForte, fontSize: fonteGrande ? 24 : 20 }]}>
-            {usuario?.nome || 'Usuário SASPI'}
+            {usuario?.nome || 'Usuário'}
           </Text>
           <Text style={[styles.userRole, { color: textoSuave, fontSize: subSize }]}>
-            {usuario?.perfil || 'CONTA'} • Conta ativa
+            {usuario?.perfil || 'CONTA'}
+            {usuario?.nomeClinica ? ` • ${usuario.nomeClinica}` : ' • Conta ativa'}
           </Text>
         </View>
 
@@ -88,7 +90,9 @@ export default function PerfilConfigScreen({ navigation }: any) {
             onPress={() =>
               Alert.alert(
                 'Dados Pessoais',
-                `Nome: ${usuario?.nome}\nE-mail: ${usuario?.email}\nPerfil: ${usuario?.perfil}`
+                `Nome: ${usuario?.nome}\nE-mail: ${usuario?.email}\nPerfil: ${usuario?.perfil}${
+                  usuario?.nomeClinica ? `\nInstituição: ${usuario.nomeClinica}` : ''
+                }`
               )
             }
           />
@@ -109,16 +113,12 @@ export default function PerfilConfigScreen({ navigation }: any) {
           <MenuOption
             icon={<Lock size={22} color="#00897B" />}
             title="Segurança da conta"
-            subtitle="Alterar ou recuperar senha"
+            subtitle="Redefinir senha de acesso"
             textoForte={textoForte}
             textoSuave={textoSuave}
             titleSize={titleSize}
             subSize={subSize}
-            onPress={() =>
-              Linking.openURL(
-                'https://s-a-s-p-i-sistema-de-acompanhamento.vercel.app/recuperar-senha'
-              )
-            }
+            onPress={() => navigation.navigate('RecuperarSenha')}
           />
 
           <MenuOption
@@ -165,29 +165,19 @@ export default function PerfilConfigScreen({ navigation }: any) {
             textoSuave={textoSuave}
             titleSize={titleSize}
             subSize={subSize}
-            onPress={() =>
-              Alert.alert(
-                'Privacidade (LGPD)',
-                'Suas credenciais são protegidas com criptografia nativa (SecureStore) e o acesso aos dados clínicos segue estritamente o seu vínculo autorizado pela clínica.'
-              )
-            }
+            onPress={() => setModalTipo('PRIVACIDADE')}
           />
 
           <MenuOption
             icon={<HelpCircle size={22} color="#00897B" />}
             title="Ajuda e suporte"
-            subtitle="Dúvidas sobre o S.A.S.P.I."
+            subtitle="Dúvidas sobre o aplicativo"
             textoForte={textoForte}
             textoSuave={textoSuave}
             titleSize={titleSize}
             subSize={subSize}
             noBorder
-            onPress={() =>
-              Alert.alert(
-                'Suporte S.A.S.P.I.',
-                'Em caso de dúvidas sobre cadastro, vínculos ou receitas, entre em contato com a administração da sua clínica.'
-              )
-            }
+            onPress={() => setModalTipo('SUPORTE')}
           />
         </View>
 
@@ -197,6 +187,12 @@ export default function PerfilConfigScreen({ navigation }: any) {
           <Text style={styles.logoutText}>Sair da conta</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <InfoModals
+        tipo={modalTipo}
+        onClose={() => setModalTipo(null)}
+        nomeClinica={usuario?.nomeClinica}
+      />
     </View>
   );
 }
