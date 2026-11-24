@@ -13,6 +13,7 @@ import AgendaConsultasScreen from '../screens/AgendaConsultasScreen';
 import MedicamentosScreen from '../screens/MedicamentosScreen';
 import SinaisVitaisScreen from '../screens/SinaisVitaisScreen';
 import NovoRegistroSinalScreen from '../screens/NovoRegistroSinalScreen';
+import RecuperarSenhaScreen from "../screens/RecuperarSenhaScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -52,6 +53,7 @@ export default function AppNavigator() {
     <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
       <Stack.Screen name="SelectElderly" component={SelectElderlyScreen} />
       <Stack.Screen name="MainTabs" component={TabNavigator} />
+      <Stack.Screen name="RecuperarSenha" component={RecuperarSenhaScreen} />
       
       {/* Telas que não ficam na TabBar inferior */}
       <Stack.Screen name="Agenda" component={AgendaConsultasScreen} />

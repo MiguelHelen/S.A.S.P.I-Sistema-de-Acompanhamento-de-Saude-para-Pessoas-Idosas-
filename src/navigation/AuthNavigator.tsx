@@ -1,19 +1,21 @@
-import React from 'react';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import LoginScreen from '../screens/LoginScreen';
+import React from "react";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import LoginScreen from "../screens/LoginScreen";
+import RecuperarSenhaScreen from "../screens/RecuperarSenhaScreen";
 
 const Stack = createNativeStackNavigator();
 
 export default function AuthNavigator() {
   return (
-    <Stack.Navigator 
-      screenOptions={{ 
+    <Stack.Navigator
+      screenOptions={{
         headerShown: false,
-        animation: 'fade', // Transição mais elegante ao abrir o login
+        animation: "fade", // Transição mais elegante ao abrir o login
       }}
     >
       <Stack.Screen name="Login" component={LoginScreen} />
-      {/* Telas futuras como RecuperarSenha entrariam aqui */}
+      <Stack.Screen name="Login" component={LoginScreen} />
+      <Stack.Screen name="RecuperarSenha" component={RecuperarSenhaScreen} />
     </Stack.Navigator>
   );
 }
