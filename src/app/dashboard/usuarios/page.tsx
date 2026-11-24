@@ -1,258 +1,164 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import DashboardNavbar from "@/components/DashboardNavbar";
 import {
-  ArrowLeft,
+  API_URL,
+  getAuthHeaders,
+  getUsuarioSessao,
+  isAdminPerfil,
+  normalizarPerfil,
+  validarEObterClinicaId,
+} from "@/lib/clinica";
+import {
   Users,
-  UserPlus,
+  Plus,
   Loader2,
-  ShieldAlert,
-  Pencil,
   Trash2,
-  CheckCircle2,
-  AlertCircle,
-  AlertTriangle,
   Search,
-  X,
-  Save,
-  MailWarning,
-  UserCheck
+  AlertCircle,
+  CheckCircle2,
+  ShieldAlert,
+  Mail,
 } from "lucide-react";
 
 interface UsuarioItem {
   id: string;
   nome: string;
   email: string;
-  cpf?: string | null;
-  telefone?: string | null;
   perfil: string;
-  status: string; // <-- Campo adicionado para a governança de acesso
-  clinica_id: string;
+  telefone?: string;
+  especialidade?: string;
+  clinica_id?: string;
 }
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://perfect-bravery-production-5ce7.up.railway.app";
-
-export default function GerenciarUsuariosPage() {
+export default function UsuariosPage() {
+  const [autorizado, setAutorizado] = useState<boolean | null>(null);
   const [usuarios, setUsuarios] = useState<UsuarioItem[]>([]);
   const [carregando, setCarregando] = useState(true);
-  const [autorizado, setAutorizado] = useState<boolean | null>(null);
   const [busca, setBusca] = useState("");
   const [filtroPerfil, setFiltroPerfil] = useState("TODOS");
+  const [excluindoId, setExcluindoId] = useState<string | null>(null);
+  const [mensagem, setMensagem] = useState("");
+  const [erro, setErro] = useState("");
+  const [meuId, setMeuId] = useState("");
 
-  const [mensagemSucesso, setMensagemSucesso] = useState("");
-  const [erroAcao, setErroAcao] = useState("");
+  const carregarUsuarios = useCallback(async () => {
+    setCarregando(true);
+    setErro("");
 
-  const [usuarioEditando, setUsuarioEditando] = useState<UsuarioItem | null>(null);
-  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
-
-  const [usuarioParaExcluir, setUsuarioParaExcluir] = useState<UsuarioItem | null>(null);
-  const [excluindo, setExcluindo] = useState(false);
-
-  useEffect(() => {
-    async function carregarUsuarios() {
-      const token = localStorage.getItem("saspi_token");
-      const userRaw = localStorage.getItem("saspi_user");
-      let clinicaId = "e63b19f5-d8e4-4973-bac6-12aba9a0545d";
-
-      if (!userRaw) {
-        setAutorizado(false);
-        setCarregando(false);
-        return;
-      }
-
-      try {
-        const parsed = JSON.parse(userRaw);
-        const userData = parsed.user || parsed.usuario || parsed;
-        const perfil = String(
-          userData.perfil || userData.role || ""
-        ).toUpperCase();
-
-        if (perfil !== "ADMINISTRADOR" && perfil !== "ADMIN") {
-          setAutorizado(false);
-          setCarregando(false);
-          return;
-        }
-        setAutorizado(true);
-        clinicaId = userData.clinica_id || userData.clinicaId || clinicaId;
-      } catch {
-        setAutorizado(false);
-        setCarregando(false);
-        return;
-      }
-
-      try {
-        const res = await fetch(`${API_URL}/usuario?clinica_id=${clinicaId}`, {
-          headers: { ...(token && { Authorization: `Bearer ${token}` }) },
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          const lista = Array.isArray(data) ? data : data.data || [];
-          setUsuarios(
-            lista.filter(
-              (u: UsuarioItem) => !u.clinica_id || u.clinica_id === clinicaId
-            )
-          );
-        }
-      } catch {
-        setErroAcao("Não foi possível carregar a lista de usuários.");
-      } finally {
-        setCarregando(false);
-      }
-    }
-
-    carregarUsuarios();
-  }, []);
-
-  async function salvarEdicaoUsuario(e: React.FormEvent) {
-    e.preventDefault();
-    if (!usuarioEditando) return;
-
-    setSalvandoEdicao(true);
-    setErroAcao("");
-    const token = localStorage.getItem("saspi_token");
-
-    const cpfLimpo = (usuarioEditando.cpf || "").replace(/\D/g, "");
-    const telLimpo = (usuarioEditando.telefone || "").replace(/\D/g, "");
-
-    if (cpfLimpo.length > 0 && cpfLimpo.length !== 11) {
-      setErroAcao("O CPF deve conter exatamente 11 dígitos numéricos.");
-      setSalvandoEdicao(false);
+    const sessao = getUsuarioSessao();
+    if (!sessao || !isAdminPerfil(sessao.perfil)) {
+      setAutorizado(false);
+      setCarregando(false);
       return;
     }
 
-    if (telLimpo.length > 0 && (telLimpo.length < 10 || telLimpo.length > 11)) {
-      setErroAcao(
-        "O telefone deve conter 10 ou 11 dígitos numéricos (com DDD)."
-      );
-      setSalvandoEdicao(false);
-      return;
-    }
+    setAutorizado(true);
+    setMeuId(sessao.id);
 
     try {
-      const res = await fetch(`${API_URL}/usuario/${usuarioEditando.id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token && { Authorization: `Bearer ${token}` }),
-        },
-        body: JSON.stringify({
-          nome: usuarioEditando.nome.trim(),
-          cpf: cpfLimpo,
-          telefone: telLimpo,
-          perfil: usuarioEditando.perfil,
-        }),
+      const clinicaId = validarEObterClinicaId(sessao);
+
+      const res = await fetch(`${API_URL}/usuario?clinica_id=${clinicaId}`, {
+        headers: getAuthHeaders(false),
       });
 
-      const resData = await res.json().catch(() => null);
-
       if (!res.ok) {
-        const msg = Array.isArray(resData?.message)
-          ? resData.message.join(", ")
-          : resData?.message || "Falha ao atualizar usuário.";
-        throw new Error(msg);
-      }
-
-      setUsuarios((prev) =>
-        prev.map((u) =>
-          u.id === usuarioEditando.id
-            ? {
-                ...u,
-                nome: usuarioEditando.nome.trim(),
-                cpf: cpfLimpo || null,
-                telefone: telLimpo || null,
-                perfil: usuarioEditando.perfil,
-              }
-            : u
-        )
-      );
-
-      setUsuarioEditando(null);
-      setMensagemSucesso("Dados do usuário atualizados com sucesso!");
-      setTimeout(() => setMensagemSucesso(""), 4000);
-    } catch (err: any) {
-      setErroAcao(err.message || "Erro ao salvar alterações do usuário.");
-    } finally {
-      setSalvandoEdicao(false);
-    }
-  }
-
-  async function confirmarExclusaoUsuario() {
-    if (!usuarioParaExcluir) return;
-
-    setExcluindo(true);
-    setErroAcao("");
-    const token = localStorage.getItem("saspi_token");
-
-    try {
-      const res = await fetch(`${API_URL}/usuario/${usuarioParaExcluir.id}`, {
-        method: "DELETE",
-        headers: { ...(token && { Authorization: `Bearer ${token}` }) },
-      });
-
-      const errData = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        const rawMsg = String(errData?.message || "").toLowerCase();
-        if (
-          res.status === 409 ||
-          res.status === 500 ||
-          rawMsg.includes("foreign key") ||
-          rawMsg.includes("constraint") ||
-          rawMsg.includes("p2003")
-        ) {
-          throw new Error(
-            "Não é possível excluir este usuário pois ele possui prescrições ou registros de atendimento vinculados."
-          );
-        }
+        const errData = await res.json().catch(() => null);
         throw new Error(
-          errData?.message || "Não foi possível remover este usuário."
+          errData?.message || "Não foi possível carregar os usuários da clínica."
         );
       }
 
-      setUsuarios((prev) => prev.filter((u) => u.id !== usuarioParaExcluir.id));
-      setUsuarioParaExcluir(null);
-      setMensagemSucesso("Usuário removido do sistema com sucesso!");
-      setTimeout(() => setMensagemSucesso(""), 4000);
+      const raw = await res.json();
+      const lista = Array.isArray(raw) ? raw : raw?.data || [];
+
+      const filtradosClinica: UsuarioItem[] = lista
+        .filter((u: any) => !u.clinica_id || u.clinica_id === clinicaId)
+        .map((u: any) => ({
+          id: String(u.id),
+          nome: String(u.nome || ""),
+          email: String(u.email || ""),
+          perfil: normalizarPerfil(u.perfil || u.role),
+          telefone: u.telefone || undefined,
+          especialidade: u.especialidade || undefined,
+          clinica_id: u.clinica_id || clinicaId,
+        }))
+        .filter((u: UsuarioItem) => u.perfil !== "IDOSO");
+
+      setUsuarios(filtradosClinica);
     } catch (err: any) {
-      setUsuarioParaExcluir(null);
-      setErroAcao(err.message || "Erro ao excluir usuário.");
+      setErro(err.message || "Falha ao buscar usuários.");
+      setUsuarios([]);
     } finally {
-      setExcluindo(false);
+      setCarregando(false);
     }
+  }, []);
+
+  useEffect(() => {
+    carregarUsuarios();
+  }, [carregarUsuarios]);
+
+  async function handleExcluir(usuario: UsuarioItem) {
+    if (usuario.id === meuId) {
+      setErro("Você não pode remover seu próprio usuário administrador.");
+      return;
+    }
+
+    const confirmou = window.confirm(
+      `Deseja realmente remover o acesso de "${usuario.nome}" (${usuario.email})?`
+    );
+    if (!confirmou) return;
+
+    setExcluindoId(usuario.id);
+    setErro("");
+    setMensagem("");
+
+    try {
+      const res = await fetch(`${API_URL}/usuario/${usuario.id}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(false),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(
+          errData?.message || "Não foi possível remover o usuário."
+        );
+      }
+
+      setUsuarios((prev) => prev.filter((u) => u.id !== usuario.id));
+      setMensagem(`Usuário "${usuario.nome}" removido com sucesso.`);
+      setTimeout(() => setMensagem(""), 4000);
+    } catch (err: any) {
+      setErro(err.message || "Erro ao excluir usuário.");
+    } finally {
+      setExcluindoId(null);
+    }
+  }
+
+  function badgePerfil(perfil: string) {
+    if (perfil === "ADMINISTRADOR")
+      return "bg-purple-50 text-purple-700 border-purple-200";
+    if (perfil === "MEDICO")
+      return "bg-blue-50 text-[#1565C0] border-blue-200";
+    if (perfil === "ENFERMEIRO" || perfil === "CUIDADOR")
+      return "bg-teal-50 text-teal-700 border-teal-200";
+    return "bg-amber-50 text-amber-700 border-amber-200";
   }
 
   const usuariosFiltrados = usuarios.filter((u) => {
     const batePerfil =
-      filtroPerfil === "TODOS" ||
-      String(u.perfil || "").toUpperCase() === filtroPerfil;
+      filtroPerfil === "TODOS" || u.perfil === filtroPerfil;
     const termo = busca.trim().toLowerCase();
     const bateBusca =
       !termo ||
       u.nome.toLowerCase().includes(termo) ||
-      u.email.toLowerCase().includes(termo) ||
-      String(u.status || "").toLowerCase().includes(termo) ||
-      String(u.cpf || "").includes(termo);
+      u.email.toLowerCase().includes(termo);
     return batePerfil && bateBusca;
   });
-
-  if (carregando || autorizado === null) {
-    return (
-      <main className="min-h-screen bg-[#F2F7FB]">
-        <DashboardNavbar />
-        <div className="mx-auto max-w-4xl px-4 py-16 text-center text-gray-500">
-          <Loader2 size={24} className="mx-auto animate-spin text-[#1565C0]" />
-          <p className="mt-2 text-sm font-medium">
-            Carregando equipe e usuários da instituição...
-          </p>
-        </div>
-      </main>
-    );
-  }
 
   if (autorizado === false) {
     return (
@@ -266,18 +172,8 @@ export default function GerenciarUsuariosPage() {
             Acesso Restrito
           </h1>
           <p className="mt-2 text-sm text-gray-600">
-            Apenas Administradores possuem permissão para gerenciar os usuários
-            da instituição.
+            Apenas Administradores podem gerenciar os usuários da clínica.
           </p>
-          <div className="mt-6">
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-2 rounded-xl bg-[#1565C0] px-5 py-2.5 text-sm font-medium text-white"
-            >
-              <ArrowLeft size={16} />
-              Voltar ao Dashboard
-            </Link>
-          </div>
         </div>
       </main>
     );
@@ -288,363 +184,150 @@ export default function GerenciarUsuariosPage() {
       <DashboardNavbar />
 
       <div className="mx-auto max-w-7xl px-4 py-8 md:px-8">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-[#1565C0]"
-            >
-              <ArrowLeft size={17} />
-              Voltar para o Painel Administrativo
-            </Link>
-
-            <span className="mt-6 block text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
-              Gestão de Equipe & Acessos
+            <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
+              Equipe & Familiares
             </span>
-
             <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0A2540] md:text-4xl">
-              Usuários Cadastrados ({usuarios.length})
+              Usuários da Clínica
             </h1>
-
-            <p className="mt-2 max-w-2xl text-gray-600">
-              Visualize, edite permissões e gerencie médicos, enfermeiros,
-              cuidadores e familiares da instituição.
+            <p className="mt-2 text-gray-600">
+              Pré-cadastre e gerencie médicos, enfermeiros, cuidadores e
+              familiares autorizados.
             </p>
           </div>
 
           <Link
             href="/dashboard/usuarios/novo"
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0A2540]"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3 font-medium text-white shadow-sm transition hover:bg-[#0A2540]"
           >
-            <UserPlus size={19} />
+            <Plus size={18} />
             Novo Usuário
           </Link>
         </div>
 
-        {mensagemSucesso && (
+        {mensagem && (
           <div className="mt-6 flex items-center gap-3 rounded-xl bg-emerald-50 p-4 text-emerald-800">
             <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
-            <p className="text-sm font-medium">{mensagemSucesso}</p>
+            <p className="text-sm font-medium">{mensagem}</p>
           </div>
         )}
 
-        {erroAcao && (
+        {erro && (
           <div className="mt-6 flex items-center gap-3 rounded-xl bg-red-50 p-4 text-red-700">
             <AlertCircle size={20} className="shrink-0 text-red-600" />
-            <p className="text-sm font-medium">{erroAcao}</p>
+            <p className="text-sm font-medium">{erro}</p>
           </div>
         )}
 
-        <div className="mt-8 flex flex-col gap-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative flex-1">
-            <Search
-              size={18}
-              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
-            />
-            <input
-              type="search"
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar por nome, e-mail ou status (ex: Pendente)..."
-              className="w-full rounded-xl border border-gray-200 py-2.5 pl-10 pr-4 text-sm text-gray-800 outline-none focus:border-[#1565C0]"
-            />
+        <div className="mt-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative flex-1 max-w-md">
+              <Search
+                size={17}
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+              />
+              <input
+                type="text"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar por nome ou e-mail..."
+                className="w-full rounded-xl border border-gray-200 py-2.5 pl-10 pr-4 text-sm text-gray-900 outline-none transition focus:border-[#1565C0]"
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {[
+                { label: "Todos", valor: "TODOS" },
+                { label: "Admins", valor: "ADMINISTRADOR" },
+                { label: "Médicos", valor: "MEDICO" },
+                { label: "Enfermeiros", valor: "ENFERMEIRO" },
+                { label: "Cuidadores", valor: "CUIDADOR" },
+                { label: "Familiares", valor: "FAMILIAR" },
+              ].map((item) => (
+                <button
+                  key={item.valor}
+                  type="button"
+                  onClick={() => setFiltroPerfil(item.valor)}
+                  className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
+                    filtroPerfil === item.valor
+                      ? "bg-[#1565C0] text-white"
+                      : "border border-gray-200 bg-[#FAFCFE] text-gray-600 hover:text-[#0A2540]"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <select
-            value={filtroPerfil}
-            onChange={(e) => setFiltroPerfil(e.target.value)}
-            className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 outline-none focus:border-[#1565C0]"
-          >
-            <option value="TODOS">Todos os Perfis</option>
-            <option value="MEDICO">Médicos</option>
-            <option value="ENFERMEIRO">Enfermeiros</option>
-            <option value="CUIDADOR">Cuidadores</option>
-            <option value="FAMILIAR">Familiares</option>
-            <option value="ADMINISTRADOR">Administradores</option>
-          </select>
-        </div>
-
-        <section className="mt-6 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-          {usuariosFiltrados.length === 0 ? (
-            <div className="p-12 text-center text-gray-500">
-              <Users size={36} className="mx-auto text-gray-300" />
-              <p className="mt-3 text-base font-semibold text-[#0A2540]">
-                Nenhum usuário encontrado com os filtros aplicados.
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-left">
-                <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50/50 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                    <th className="px-6 py-4">Nome / E-mail</th>
-                    <th className="px-6 py-4">Status & Perfil</th>
-                    <th className="px-6 py-4">CPF / Contato</th>
-                    <th className="px-6 py-4 text-right">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 text-sm">
-                  {usuariosFiltrados.map((u) => {
-                    const isPendente = u.status === "PENDENTE";
-                    
-                    return (
-                      <tr key={u.id} className="transition hover:bg-gray-50/50">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <img
-                              src={`https://ui-avatars.com/api/?name=${encodeURIComponent(
-                                u.nome
-                              )}&background=E8F1FB&color=1565C0&size=64&bold=true`}
-                              alt={u.nome}
-                              className="h-9 w-9 shrink-0 rounded-full object-cover"
-                            />
-                            <div>
-                              <p className="font-semibold text-[#0A2540]">
-                                {u.nome}
-                              </p>
-                              <p className="text-xs text-gray-500">{u.email}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex flex-col gap-1.5 items-start">
-                            {isPendente ? (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold tracking-wider text-amber-700">
-                                <MailWarning size={12} />
-                                PENDENTE
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold tracking-wider text-emerald-700">
-                                <UserCheck size={12} />
-                                ATIVO
-                              </span>
-                            )}
-                            <span className="inline-flex rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-[#1565C0]">
-                              {u.perfil}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-gray-600">
-                          <div className="text-xs">
-                            <p className="font-medium">CPF: {u.cpf || "Não informado"}</p>
-                            <p>Tel: {u.telefone || "Não informado"}</p>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="inline-flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setUsuarioEditando({ ...u })}
-                              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-[#1565C0] transition hover:bg-blue-100"
-                            >
-                              <Pencil size={13} />
-                              Editar
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setUsuarioParaExcluir(u)}
-                              className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-100"
-                            >
-                              <Trash2 size={13} />
-                              Excluir
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        {/* Modal de Edição */}
-        {usuarioEditando && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm">
-            <form
-              onSubmit={salvarEdicaoUsuario}
-              className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl"
-            >
-              <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-                <h2 className="text-lg font-bold text-[#0A2540]">
-                  Editar Usuário
-                </h2>
-                <button
-                  type="button"
-                  onClick={() => setUsuarioEditando(null)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X size={20} />
-                </button>
+          <div className="mt-6">
+            {carregando ? (
+              <div className="flex items-center justify-center py-12 text-sm text-gray-500">
+                <Loader2 size={24} className="animate-spin text-[#1565C0]" />
+                <span className="ml-2">Carregando usuários...</span>
               </div>
-
-              <div className="space-y-4 p-6">
-                <div>
-                  <label className="mb-1 block text-xs font-semibold uppercase text-gray-500">
-                    Nome Completo *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={usuarioEditando.nome}
-                    onChange={(e) =>
-                      setUsuarioEditando({
-                        ...usuarioEditando,
-                        nome: e.target.value,
-                      })
-                    }
-                    className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#1565C0]"
-                  />
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold uppercase text-gray-500">
-                      CPF (11 dígitos)
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={11}
-                      value={usuarioEditando.cpf || ""}
-                      onChange={(e) =>
-                        setUsuarioEditando({
-                          ...usuarioEditando,
-                          cpf: e.target.value.replace(/\D/g, "").slice(0, 11),
-                        })
-                      }
-                      placeholder="Somente números"
-                      className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#1565C0]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold uppercase text-gray-500">
-                      Telefone (10 ou 11 dígitos)
-                    </label>
-                    <input
-                      type="tel"
-                      inputMode="numeric"
-                      maxLength={11}
-                      value={usuarioEditando.telefone || ""}
-                      onChange={(e) =>
-                        setUsuarioEditando({
-                          ...usuarioEditando,
-                          telefone: e.target.value
-                            .replace(/\D/g, "")
-                            .slice(0, 11),
-                        })
-                      }
-                      placeholder="Ex.: 11999999999"
-                      className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#1565C0]"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-xs font-semibold uppercase text-gray-500">
-                    Perfil de Acesso *
-                  </label>
-                  <select
-                    value={usuarioEditando.perfil}
-                    onChange={(e) =>
-                      setUsuarioEditando({
-                        ...usuarioEditando,
-                        perfil: e.target.value,
-                      })
-                    }
-                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#1565C0]"
-                  >
-                    <option value="MEDICO">Médico</option>
-                    <option value="ENFERMEIRO">Enfermeiro</option>
-                    <option value="CUIDADOR">Cuidador</option>
-                    <option value="FAMILIAR">Familiar</option>
-                    <option value="ADMINISTRADOR">Administrador</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 bg-gray-50 px-6 py-4">
-                <button
-                  type="button"
-                  onClick={() => setUsuarioEditando(null)}
-                  className="rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-medium text-gray-700"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={salvandoEdicao}
-                  className="inline-flex items-center gap-2 rounded-xl bg-[#1565C0] px-5 py-2.5 text-sm font-medium text-white"
-                >
-                  {salvandoEdicao ? (
-                    <Loader2 size={16} className="animate-spin" />
-                  ) : (
-                    <Save size={16} />
-                  )}
-                  Salvar Alterações
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {/* Modal de Exclusão */}
-        {usuarioParaExcluir && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm">
-            <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
-              <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-red-600">
-                    <AlertTriangle size={20} />
-                  </div>
-                  <h2 className="text-lg font-bold text-[#0A2540]">
-                    Excluir Usuário
-                  </h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setUsuarioParaExcluir(null)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div className="p-6">
-                <p className="text-sm leading-relaxed text-gray-600">
-                  Confirma a exclusão permanente de{" "}
-                  <strong>{usuarioParaExcluir.nome}</strong>? O acesso desta
-                  credencial será revogado imediatamente.
+            ) : usuariosFiltrados.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-gray-200 p-10 text-center">
+                <Users size={34} className="mx-auto text-gray-300" />
+                <p className="mt-3 font-semibold text-[#0A2540]">
+                  Nenhum usuário encontrado
+                </p>
+                <p className="mt-1 text-sm text-gray-500">
+                  Ajuste os filtros ou cadastre um novo membro da equipe ou
+                  familiar.
                 </p>
               </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {usuariosFiltrados.map((u) => (
+                  <div
+                    key={u.id}
+                    className="flex flex-col justify-between gap-4 py-4 sm:flex-row sm:items-center"
+                  >
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <p className="font-semibold text-[#0A2540]">{u.nome}</p>
+                        <span
+                          className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${badgePerfil(
+                            u.perfil
+                          )}`}
+                        >
+                          {u.perfil}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-gray-500">
+                        <span className="inline-flex items-center gap-1">
+                          <Mail size={13} />
+                          {u.email}
+                        </span>
+                        {u.especialidade && <span>• {u.especialidade}</span>}
+                        {u.telefone && <span>• {u.telefone}</span>}
+                      </div>
+                    </div>
 
-              <div className="flex items-center justify-end gap-3 bg-gray-50 px-6 py-4">
-                <button
-                  type="button"
-                  onClick={() => setUsuarioParaExcluir(null)}
-                  className="rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-medium text-gray-700"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmarExclusaoUsuario}
-                  disabled={excluindo}
-                  className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-medium text-white"
-                >
-                  {excluindo ? (
-                    <Loader2 size={16} className="animate-spin" />
-                  ) : (
-                    <Trash2 size={16} />
-                  )}
-                  Confirmar Exclusão
-                </button>
+                    {u.id !== meuId && (
+                      <button
+                        type="button"
+                        disabled={excluindoId === u.id}
+                        onClick={() => handleExcluir(u)}
+                        className="inline-flex items-center gap-1.5 self-start rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-100 disabled:opacity-50 sm:self-center"
+                      >
+                        {excluindoId === u.id ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <Trash2 size={14} />
+                        )}
+                        Remover
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
-            </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </main>
   );

@@ -1,327 +1,254 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import DashboardNavbar from "@/components/DashboardNavbar";
-import ImageCropModal from "@/components/ImageCropModal";
+import AvatarCropModal from "@/components/AvatarCropModal";
 import { calcularIdadeReal } from "@/components/PatientSelector";
 import {
-  ArrowLeft,
-  HeartHandshake,
-  UserPlus,
-  Smartphone,
+  API_URL,
+  getAuthHeaders,
+  getTokenSessao,
+  getUsuarioSessao,
+  isAdminPerfil,
+  validarEObterClinicaId,
+} from "@/lib/clinica";
+import {
+  Users,
+  Plus,
   Loader2,
-  ShieldAlert,
-  Pencil,
   Trash2,
-  CheckCircle2,
-  AlertCircle,
-  AlertTriangle,
-  Search,
-  X,
-  Save,
   Camera,
-  ImageOff,
+  KeyRound,
+  Search,
+  AlertCircle,
+  CheckCircle2,
+  ShieldAlert,
+  Phone,
+  HeartPulse,
+  Calendar,
 } from "lucide-react";
 
-interface IdosoRegistro {
+interface IdosoItem {
   id: string;
   nome: string;
-  cpf?: string | null;
-  data_nascimento: string;
-  sexo?: string | null;
-  telefone?: string | null;
-  endereco?: string | null;
+  idade: number;
+  data_nascimento?: string;
+  telefone_emergencia?: string;
+  condicoes?: string;
   foto_url?: string | null;
-  clinica_id: string;
+  clinica_id?: string;
 }
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://perfect-bravery-production-5ce7.up.railway.app";
-
-export default function GerenciarIdososPage() {
-  const [idosos, setIdosos] = useState<IdosoRegistro[]>([]);
-  const [carregando, setCarregando] = useState(true);
+export default function IdososPage() {
   const [autorizado, setAutorizado] = useState<boolean | null>(null);
+  const [idosos, setIdosos] = useState<IdosoItem[]>([]);
+  const [carregando, setCarregando] = useState(true);
   const [busca, setBusca] = useState("");
+  const [excluindoId, setExcluindoId] = useState<string | null>(null);
+  const [enviandoFotoId, setEnviandoFotoId] = useState<string | null>(null);
+  const [mensagem, setMensagem] = useState("");
+  const [erro, setErro] = useState("");
 
-  const [mensagemSucesso, setMensagemSucesso] = useState("");
-  const [erroAcao, setErroAcao] = useState("");
+  // Estado para recorte de avatar
+  const [cropIdosoId, setCropIdosoId] = useState<string | null>(null);
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const idosoSelecionadoFotoRef = useRef<string | null>(null);
 
-  const [idosoEditando, setIdosoEditando] = useState<IdosoRegistro | null>(null);
-  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
-  const [idosoParaExcluir, setIdosoParaExcluir] = useState<IdosoRegistro | null>(null);
-  const [excluindo, setExcluindo] = useState(false);
+  const carregarIdosos = useCallback(async () => {
+    setCarregando(true);
+    setErro("");
 
-  // Estados do Modal de Corte
-  const [fotoOriginal, setFotoOriginal] = useState("");
-  const [modalCropAberto, setModalCropAberto] = useState(false);
-  const [idosoParaFoto, setIdosoParaFoto] = useState<IdosoRegistro | null>(null);
-  const [enviandoFoto, setEnviandoFoto] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const dataMaximaHoje = new Date().toISOString().split("T")[0];
-
-  useEffect(() => {
-    async function carregarIdosos() {
-      const token = localStorage.getItem("saspi_token");
-      const userRaw = localStorage.getItem("saspi_user");
-      let clinicaId = "e63b19f5-d8e4-4973-bac6-12aba9a0545d";
-
-      if (!userRaw) {
-        setAutorizado(false);
-        setCarregando(false);
-        return;
-      }
-
-      try {
-        const parsed = JSON.parse(userRaw);
-        const userData = parsed.user || parsed.usuario || parsed;
-        const perfil = String(userData.perfil || userData.role || "").toUpperCase();
-
-        if (perfil !== "ADMINISTRADOR" && perfil !== "ADMIN") {
-          setAutorizado(false);
-          setCarregando(false);
-          return;
-        }
-        setAutorizado(true);
-        clinicaId = userData.clinica_id || userData.clinicaId || clinicaId;
-      } catch {
-        setAutorizado(false);
-        setCarregando(false);
-        return;
-      }
-
-      try {
-        const res = await fetch(`${API_URL}/idoso?clinica_id=${clinicaId}`, {
-          headers: { ...(token && { Authorization: `Bearer ${token}` }) },
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          const lista = Array.isArray(data) ? data : data.data || [];
-          setIdosos(lista.filter((i: IdosoRegistro) => !i.clinica_id || i.clinica_id === clinicaId));
-        }
-      } catch {
-        setErroAcao("Não foi possível carregar os pacientes cadastrados.");
-      } finally {
-        setCarregando(false);
-      }
-    }
-
-    carregarIdosos();
-  }, []);
-
-  function dispararSelecaoFoto(idoso: IdosoRegistro) {
-    setIdosoParaFoto(idoso);
-    fileInputRef.current?.click();
-  }
-
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      setErroAcao("Selecione um arquivo de imagem válido (JPG, PNG ou WEBP).");
+    const sessao = getUsuarioSessao();
+    if (!sessao || !isAdminPerfil(sessao.perfil)) {
+      setAutorizado(false);
+      setCarregando(false);
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      setFotoOriginal(reader.result as string);
-      setModalCropAberto(true);
-    };
-    reader.readAsDataURL(file);
-    e.target.value = "";
-  }
-
-  async function handleCropSalvo(blob: Blob) {
-    if (!idosoParaFoto) return;
-    setModalCropAberto(false);
-    setEnviandoFoto(true);
-    setErroAcao("");
-
-    const token = localStorage.getItem("saspi_token");
-    const formData = new FormData();
-    formData.append("file", blob, `idoso_${idosoParaFoto.id}.jpg`);
+    setAutorizado(true);
 
     try {
-      // Envia foto para o endpoint de storage ou atualiza no idoso
-      let res = await fetch(`${API_URL}/storage/idoso/${idosoParaFoto.id}/foto`, {
-        method: "POST",
-        headers: { ...(token && { Authorization: `Bearer ${token}` }) },
-        body: formData,
-      });
+      const clinicaId = validarEObterClinicaId(sessao);
 
-      let fotoUrl = "";
-      if (res.ok) {
-        const dataUpload = await res.json();
-        fotoUrl = dataUpload.url;
-      } else {
-        // Fallback: Converte para Base64 se a rota dedicada não estiver ativa
-        const base64 = await new Promise<string>((resolve) => {
-          const r = new FileReader();
-          r.onloadend = () => resolve(r.result as string);
-          r.readAsDataURL(blob);
-        });
-        fotoUrl = base64;
-      }
-
-      await fetch(`${API_URL}/idoso/${idosoParaFoto.id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token && { Authorization: `Bearer ${token}` }),
-        },
-        body: JSON.stringify({ foto_url: fotoUrl }),
-      });
-
-      setIdosos((prev) =>
-        prev.map((i) => (i.id === idosoParaFoto.id ? { ...i, foto_url: fotoUrl } : i))
-      );
-
-      setMensagemSucesso(`Foto de ${idosoParaFoto.nome} atualizada com sucesso!`);
-      setTimeout(() => setMensagemSucesso(""), 4000);
-    } catch (err: any) {
-      setErroAcao(err.message || "Erro ao salvar a foto do paciente.");
-    } finally {
-      setEnviandoFoto(false);
-      setIdosoParaFoto(null);
-    }
-  }
-
-  async function removerFotoIdoso(idoso: IdosoRegistro) {
-    const token = localStorage.getItem("saspi_token");
-    setErroAcao("");
-
-    try {
-      await fetch(`${API_URL}/idoso/${idoso.id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token && { Authorization: `Bearer ${token}` }),
-        },
-        body: JSON.stringify({ foto_url: null }),
-      });
-
-      setIdosos((prev) =>
-        prev.map((i) => (i.id === idoso.id ? { ...i, foto_url: null } : i))
-      );
-      setMensagemSucesso(`Foto removida de ${idoso.nome}.`);
-      setTimeout(() => setMensagemSucesso(""), 4000);
-    } catch (err: any) {
-      setErroAcao("Falha ao remover a foto.");
-    }
-  }
-
-  async function salvarEdicaoIdoso(e: React.FormEvent) {
-    e.preventDefault();
-    if (!idosoEditando) return;
-
-    setSalvandoEdicao(true);
-    setErroAcao("");
-    const token = localStorage.getItem("saspi_token");
-
-    const cpfLimpo = (idosoEditando.cpf || "").replace(/\D/g, "");
-    const telLimpo = (idosoEditando.telefone || "").replace(/\D/g, "");
-    const dataNascStr = idosoEditando.data_nascimento.split("T")[0];
-
-    try {
-      const res = await fetch(`${API_URL}/idoso/${idosoEditando.id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token && { Authorization: `Bearer ${token}` }),
-        },
-        body: JSON.stringify({
-          nome: idosoEditando.nome.trim(),
-          cpf: cpfLimpo,
-          data_nascimento: dataNascStr,
-          sexo: idosoEditando.sexo || "Feminino",
-          telefone: telLimpo,
-          endereco: (idosoEditando.endereco || "").trim(),
-        }),
-      });
-
-      if (!res.ok) throw new Error("Falha ao atualizar dados.");
-
-      setIdosos((prev) =>
-        prev.map((i) =>
-          i.id === idosoEditando.id
-            ? {
-                ...i,
-                nome: idosoEditando.nome.trim(),
-                cpf: cpfLimpo || null,
-                data_nascimento: dataNascStr,
-                sexo: idosoEditando.sexo,
-                telefone: telLimpo || null,
-                endereco: (idosoEditando.endereco || "").trim() || null,
-              }
-            : i
-        )
-      );
-
-      setIdosoEditando(null);
-      setMensagemSucesso("Cadastro do paciente atualizado com sucesso!");
-      setTimeout(() => setMensagemSucesso(""), 4000);
-    } catch (err: any) {
-      setErroAcao(err.message || "Erro ao atualizar dados do paciente.");
-    } finally {
-      setSalvandoEdicao(false);
-    }
-  }
-
-  async function confirmarExclusaoIdoso() {
-    if (!idosoParaExcluir) return;
-
-    setExcluindo(true);
-    setErroAcao("");
-    const token = localStorage.getItem("saspi_token");
-
-    try {
-      const res = await fetch(`${API_URL}/idoso/${idosoParaExcluir.id}`, {
-        method: "DELETE",
-        headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+      const res = await fetch(`${API_URL}/idoso?clinica_id=${clinicaId}`, {
+        headers: getAuthHeaders(false),
       });
 
       if (!res.ok) {
-        throw new Error("Não é possível excluir idosos que já possuem prontuário ou registros vinculados.");
+        const errData = await res.json().catch(() => null);
+        throw new Error(
+          errData?.message || "Não foi possível carregar os pacientes da clínica."
+        );
       }
 
-      setIdosos((prev) => prev.filter((i) => i.id !== idosoParaExcluir.id));
-      setIdosoParaExcluir(null);
-      setMensagemSucesso("Paciente removido com sucesso!");
-      setTimeout(() => setMensagemSucesso(""), 4000);
+      const raw = await res.json();
+      const lista = Array.isArray(raw) ? raw : raw?.data || [];
+
+      const filtrados: IdosoItem[] = lista
+        .filter((i: any) => !i.clinica_id || i.clinica_id === clinicaId)
+        .map((i: any) => {
+          const idadeReal = calcularIdadeReal(i.data_nascimento);
+          return {
+            id: String(i.id),
+            nome: String(i.nome || ""),
+            idade: idadeReal > 0 ? idadeReal : Number(i.idade || 0),
+            data_nascimento: i.data_nascimento || undefined,
+            telefone_emergencia: i.telefone_emergencia || undefined,
+            condicoes: i.condicoes || undefined,
+            foto_url: i.foto_url || null,
+            clinica_id: i.clinica_id || clinicaId,
+          };
+        });
+
+      setIdosos(filtrados);
     } catch (err: any) {
-      setIdosoParaExcluir(null);
-      setErroAcao(err.message || "Falha ao excluir paciente.");
+      setErro(err.message || "Falha ao buscar lista de pacientes.");
+      setIdosos([]);
     } finally {
-      setExcluindo(false);
+      setCarregando(false);
     }
+  }, []);
+
+  useEffect(() => {
+    carregarIdosos();
+  }, [carregarIdosos]);
+
+  function iniciarUploadFoto(idosoId: string) {
+    idosoSelecionadoFotoRef.current = idosoId;
+    fileInputRef.current?.click();
+  }
+
+  function handleArquivoSelecionado(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    const idosoId = idosoSelecionadoFotoRef.current;
+    if (!file || !idosoId) return;
+
+    const objectUrl = URL.createObjectURL(file);
+    setCropIdosoId(idosoId);
+    setCropImageSrc(objectUrl);
+
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function fecharModalCrop() {
+    if (cropImageSrc) {
+      URL.revokeObjectURL(cropImageSrc);
+    }
+    setCropImageSrc(null);
+    setCropIdosoId(null);
+  }
+
+  async function handleCropSalvo(croppedBlob: Blob) {
+    const idosoId = cropIdosoId;
+    fecharModalCrop();
+    if (!idosoId) return;
+
+    setEnviandoFotoId(idosoId);
+    setErro("");
+    setMensagem("");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", croppedBlob, `idoso-${idosoId}.jpg`);
+
+      const token = getTokenSessao();
+      const res = await fetch(`${API_URL}/storage/idoso/${idosoId}/foto`, {
+        method: "POST",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: formData,
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        const msg = Array.isArray(data?.message)
+          ? data.message.join(", ")
+          : data?.message;
+        throw new Error(
+          msg ||
+            "Não foi possível enviar a foto para o armazenamento. Nenhum dado inválido foi salvo."
+        );
+      }
+
+      const novaFotoUrl =
+        data?.foto_url || data?.url || data?.data?.foto_url || "";
+
+      if (!novaFotoUrl) {
+        throw new Error(
+          "O servidor não retornou a URL pública da foto enviada."
+        );
+      }
+
+      setIdosos((prev) =>
+        prev.map((item) =>
+          item.id === idosoId ? { ...item, foto_url: novaFotoUrl } : item
+        )
+      );
+
+      window.dispatchEvent(new Event("saspi_elderly_updated"));
+      setMensagem("Foto do paciente atualizada com sucesso!");
+      setTimeout(() => setMensagem(""), 4000);
+    } catch (err: any) {
+      setErro(err.message || "Erro ao enviar foto do paciente.");
+    } finally {
+      setEnviandoFotoId(null);
+    }
+  }
+
+  async function handleExcluir(idoso: IdosoItem) {
+    const confirmou = window.confirm(
+      `Deseja realmente remover o paciente "${idoso.nome}" e seus vínculos desta clínica?`
+    );
+    if (!confirmou) return;
+
+    setExcluindoId(idoso.id);
+    setErro("");
+    setMensagem("");
+
+    try {
+      const res = await fetch(`${API_URL}/idoso/${idoso.id}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(false),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(
+          errData?.message || "Não foi possível remover o paciente."
+        );
+      }
+
+      setIdosos((prev) => prev.filter((item) => item.id !== idoso.id));
+      window.dispatchEvent(new Event("saspi_elderly_updated"));
+      setMensagem(`Paciente "${idoso.nome}" removido com sucesso.`);
+      setTimeout(() => setMensagem(""), 4000);
+    } catch (err: any) {
+      setErro(err.message || "Erro ao excluir paciente.");
+    } finally {
+      setExcluindoId(null);
+    }
+  }
+
+  function formatarDataNascimento(dataStr?: string) {
+    if (!dataStr) return null;
+    const limpa = String(dataStr).split("T")[0];
+    const partes = limpa.split("-");
+    if (partes.length !== 3) return limpa;
+    return `${partes[2]}/${partes[1]}/${partes[0]}`;
   }
 
   const idososFiltrados = idosos.filter((i) => {
     const termo = busca.trim().toLowerCase();
+    if (!termo) return true;
     return (
-      !termo ||
       i.nome.toLowerCase().includes(termo) ||
-      String(i.cpf || "").includes(termo) ||
-      String(i.endereco || "").toLowerCase().includes(termo)
+      (i.condicoes && i.condicoes.toLowerCase().includes(termo))
     );
   });
-
-  if (carregando || autorizado === null) {
-    return (
-      <main className="min-h-screen bg-[#F2F7FB]">
-        <DashboardNavbar />
-        <div className="mx-auto max-w-4xl px-4 py-16 text-center text-gray-500">
-          <Loader2 size={24} className="mx-auto animate-spin text-[#1565C0]" />
-          <p className="mt-2 text-sm font-medium">Carregando prontuários de admissão...</p>
-        </div>
-      </main>
-    );
-  }
 
   if (autorizado === false) {
     return (
@@ -331,9 +258,12 @@ export default function GerenciarIdososPage() {
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
             <ShieldAlert size={32} />
           </div>
-          <h1 className="mt-4 text-2xl font-bold text-[#0A2540]">Acesso Restrito</h1>
+          <h1 className="mt-4 text-2xl font-bold text-[#0A2540]">
+            Acesso Restrito
+          </h1>
           <p className="mt-2 text-sm text-gray-600">
-            Apenas Administradores possuem permissão para gerenciar a base cadastral de pacientes.
+            Apenas Administradores podem gerenciar o cadastro de pacientes da
+            clínica.
           </p>
         </div>
       </main>
@@ -347,350 +277,231 @@ export default function GerenciarIdososPage() {
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/png, image/jpeg, image/webp"
+        accept="image/*"
+        onChange={handleArquivoSelecionado}
         className="hidden"
-        onChange={handleFileChange}
       />
 
-      <ImageCropModal
-        isOpen={modalCropAberto}
-        imageSrc={fotoOriginal}
-        onClose={() => setModalCropAberto(false)}
-        onCropComplete={handleCropSalvo}
-      />
+      {cropImageSrc && (
+        <AvatarCropModal
+          imageSrc={cropImageSrc}
+          onClose={fecharModalCrop}
+          onCropComplete={handleCropSalvo}
+        />
+      )}
 
       <div className="mx-auto max-w-7xl px-4 py-8 md:px-8">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-[#1565C0]"
-            >
-              <ArrowLeft size={17} /> Voltar para o Painel Administrativo
-            </Link>
-
-            <span className="mt-6 block text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
-              Gestão Institucional de Pacientes
+            <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
+              Pacientes & Prontuário
             </span>
-
             <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0A2540] md:text-4xl">
-              Idosos Cadastrados ({idosos.length})
+              Pacientes Idosos
             </h1>
-
-            <p className="mt-2 max-w-2xl text-gray-600">
-              Gerencie os dados cadastrais, fotos dos pacientes, acomodações/leitos e contatos.
+            <p className="mt-2 text-gray-600">
+              Cadastre pacientes, atualize fotos de identificação e configure o
+              acesso ao aplicativo móvel.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap gap-3">
             <Link
               href="/dashboard/idosos/acesso-app"
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#1565C0] bg-blue-50 px-5 py-3 font-medium text-[#1565C0] transition hover:bg-blue-100"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#BFD8F2] bg-[#E8F1FB] px-4 py-3 text-sm font-semibold text-[#1565C0] transition hover:bg-[#d7e7f9]"
             >
-              <Smartphone size={19} /> Acesso App
+              <KeyRound size={17} />
+              Acesso App do Idoso
             </Link>
-
             <Link
               href="/dashboard/idosos/novo"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3 font-medium text-white shadow-sm transition hover:bg-[#0A2540]"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-[#0A2540]"
             >
-              <UserPlus size={19} /> Admitir Novo Idoso
+              <Plus size={18} />
+              Novo Paciente
             </Link>
           </div>
         </div>
 
-        {mensagemSucesso && (
+        {mensagem && (
           <div className="mt-6 flex items-center gap-3 rounded-xl bg-emerald-50 p-4 text-emerald-800">
             <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
-            <p className="text-sm font-medium">{mensagemSucesso}</p>
+            <p className="text-sm font-medium">{mensagem}</p>
           </div>
         )}
 
-        {erroAcao && (
+        {erro && (
           <div className="mt-6 flex items-center gap-3 rounded-xl bg-red-50 p-4 text-red-700">
             <AlertCircle size={20} className="shrink-0 text-red-600" />
-            <p className="text-sm font-medium">{erroAcao}</p>
+            <p className="text-sm font-medium">{erro}</p>
           </div>
         )}
 
-        <div className="mt-8 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-          <div className="relative">
-            <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="search"
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar paciente por nome, CPF ou acomodação/leito..."
-              className="w-full rounded-xl border border-gray-200 py-2.5 pl-10 pr-4 text-sm text-gray-800 outline-none focus:border-[#1565C0]"
-            />
-          </div>
-        </div>
-
-        <section className="mt-6 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-          {idososFiltrados.length === 0 ? (
-            <div className="p-12 text-center text-gray-500">
-              <HeartHandshake size={36} className="mx-auto text-gray-300" />
-              <p className="mt-3 text-base font-semibold text-[#0A2540]">
-                Nenhum paciente encontrado.
-              </p>
+        <div className="mt-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative flex-1 max-w-md">
+              <Search
+                size={17}
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+              />
+              <input
+                type="text"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar por nome ou condição clínica..."
+                className="w-full rounded-xl border border-gray-200 py-2.5 pl-10 pr-4 text-sm text-gray-900 outline-none transition focus:border-[#1565C0]"
+              />
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-left">
-                <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50/50 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                    <th className="px-6 py-4">Paciente (Foto)</th>
-                    <th className="px-6 py-4">Idade / Nascimento</th>
-                    <th className="px-6 py-4">CPF</th>
-                    <th className="px-6 py-4">Acomodação / Leito</th>
-                    <th className="px-6 py-4 text-right">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 text-sm">
-                  {idososFiltrados.map((i) => {
-                    const idadeCalculada = calcularIdadeReal(i.data_nascimento);
-                    const avatarUrl =
-                      i.foto_url ||
-                      `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                        i.nome
-                      )}&background=E8F1FB&color=1565C0&size=64&bold=true`;
 
-                    return (
-                      <tr key={i.id} className="transition hover:bg-gray-50/50">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="relative group">
+            <span className="text-xs font-medium text-gray-500">
+              {idososFiltrados.length}{" "}
+              {idososFiltrados.length === 1
+                ? "paciente cadastrado"
+                : "pacientes cadastrados"}
+            </span>
+          </div>
+
+          <div className="mt-6">
+            {carregando ? (
+              <div className="flex items-center justify-center py-12 text-sm text-gray-500">
+                <Loader2 size={24} className="animate-spin text-[#1565C0]" />
+                <span className="ml-2">Carregando pacientes...</span>
+              </div>
+            ) : idososFiltrados.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-gray-200 p-10 text-center">
+                <Users size={34} className="mx-auto text-gray-300" />
+                <p className="mt-3 font-semibold text-[#0A2540]">
+                  Nenhum paciente encontrado
+                </p>
+                <p className="mt-1 text-sm text-gray-500">
+                  Cadastre o primeiro idoso da clínica para iniciar o
+                  acompanhamento.
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {idososFiltrados.map((idoso) => {
+                  const iniciais = idoso.nome
+                    .split(" ")
+                    .slice(0, 2)
+                    .map((p) => p[0])
+                    .join("")
+                    .toUpperCase();
+
+                  const dataNascFmt = formatarDataNascimento(
+                    idoso.data_nascimento
+                  );
+
+                  return (
+                    <div
+                      key={idoso.id}
+                      className="flex flex-col justify-between rounded-2xl border border-gray-100 bg-[#FAFCFE] p-5 transition hover:border-[#BFD8F2] hover:bg-white"
+                    >
+                      <div>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3.5">
+                            {idoso.foto_url ? (
                               <img
-                                src={avatarUrl}
-                                alt={i.nome}
-                                className="h-11 w-11 shrink-0 rounded-full object-cover ring-2 ring-gray-100"
+                                src={idoso.foto_url}
+                                alt={idoso.nome}
+                                className="h-14 w-14 shrink-0 rounded-2xl object-cover shadow-xs"
                               />
-                              <button
-                                type="button"
-                                onClick={() => dispararSelecaoFoto(i)}
-                                title="Alterar/Adicionar Foto com Recorte"
-                                className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-[#1565C0] text-white shadow hover:bg-[#0A2540]"
-                              >
-                                <Camera size={12} />
-                              </button>
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <p className="font-semibold text-[#0A2540]">{i.nome}</p>
-                                {i.foto_url && (
-                                  <button
-                                    onClick={() => removerFotoIdoso(i)}
-                                    title="Remover foto do idoso"
-                                    className="text-gray-400 hover:text-red-500 transition"
-                                  >
-                                    <ImageOff size={13} />
-                                  </button>
-                                )}
+                            ) : (
+                              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#E8F1FB] text-base font-bold text-[#1565C0]">
+                                {iniciais || "ID"}
                               </div>
-                              <p className="text-xs text-gray-500">
-                                {i.sexo || "Não informado"} • Tel: {i.telefone || "Não informado"}
+                            )}
+
+                            <div>
+                              <h2 className="font-bold text-[#0A2540]">
+                                {idoso.nome}
+                              </h2>
+                              <p className="mt-0.5 text-xs font-medium text-[#1565C0]">
+                                {idoso.idade > 0
+                                  ? `${idoso.idade} anos`
+                                  : "Idade não informada"}
                               </p>
                             </div>
                           </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="font-semibold text-[#0A2540]">
-                            {idadeCalculada > 0 ? `${idadeCalculada} anos` : "--"}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-gray-600">{i.cpf || "Não informado"}</td>
-                        <td className="px-6 py-4 text-gray-600">{i.endereco || "Leito não informado"}</td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="inline-flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setIdosoEditando({
-                                  ...i,
-                                  data_nascimento: i.data_nascimento
-                                    ? i.data_nascimento.split("T")[0]
-                                    : "",
-                                })
-                              }
-                              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-[#1565C0] hover:bg-blue-100"
-                            >
-                              <Pencil size={13} /> Editar
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setIdosoParaExcluir(i)}
-                              className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100"
-                            >
-                              <Trash2 size={13} /> Excluir
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
 
-        {/* Modal de Edição */}
-        {idosoEditando && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm">
-            <form
-              onSubmit={salvarEdicaoIdoso}
-              className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl"
-            >
-              <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-                <h2 className="text-lg font-bold text-[#0A2540]">Editar Cadastro do Paciente</h2>
-                <button
-                  type="button"
-                  onClick={() => setIdosoEditando(null)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X size={20} />
-                </button>
+                          <button
+                            type="button"
+                            disabled={enviandoFotoId === idoso.id}
+                            onClick={() => iniciarUploadFoto(idoso.id)}
+                            title="Atualizar foto do paciente"
+                            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 transition hover:border-[#1565C0] hover:text-[#1565C0] disabled:opacity-50"
+                          >
+                            {enviandoFotoId === idoso.id ? (
+                              <Loader2 size={15} className="animate-spin" />
+                            ) : (
+                              <Camera size={15} />
+                            )}
+                          </button>
+                        </div>
+
+                        <div className="mt-4 space-y-2 text-xs text-gray-600">
+                          {dataNascFmt && (
+                            <p className="flex items-center gap-2">
+                              <Calendar
+                                size={14}
+                                className="shrink-0 text-gray-400"
+                              />
+                              <span>Nascimento: {dataNascFmt}</span>
+                            </p>
+                          )}
+                          {idoso.telefone_emergencia && (
+                            <p className="flex items-center gap-2">
+                              <Phone
+                                size={14}
+                                className="shrink-0 text-[#26A69A]"
+                              />
+                              <span>Emergência: {idoso.telefone_emergencia}</span>
+                            </p>
+                          )}
+                          {idoso.condicoes && (
+                            <p className="flex items-start gap-2">
+                              <HeartPulse
+                                size={14}
+                                className="mt-0.5 shrink-0 text-rose-500"
+                              />
+                              <span className="line-clamp-2">
+                                {idoso.condicoes}
+                              </span>
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-5 flex items-center justify-between gap-2 border-t border-gray-100 pt-4">
+                        <Link
+                          href={`/dashboard/idosos/acesso-app?idoso_id=${idoso.id}`}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-[#E8F1FB] px-3 py-1.5 text-xs font-semibold text-[#1565C0] transition hover:bg-[#d6e6f9]"
+                        >
+                          <KeyRound size={13} />
+                          Credencial App
+                        </Link>
+
+                        <button
+                          type="button"
+                          disabled={excluindoId === idoso.id}
+                          onClick={() => handleExcluir(idoso)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-100 disabled:opacity-50"
+                        >
+                          {excluindoId === idoso.id ? (
+                            <Loader2 size={13} className="animate-spin" />
+                          ) : (
+                            <Trash2 size={13} />
+                          )}
+                          Remover
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-
-              <div className="space-y-4 p-6">
-                <div>
-                  <label className="mb-1 block text-xs font-semibold uppercase text-gray-500">
-                    Nome Completo *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={idosoEditando.nome}
-                    onChange={(e) =>
-                      setIdosoEditando({ ...idosoEditando, nome: e.target.value })
-                    }
-                    className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-[#1565C0]"
-                  />
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold uppercase text-gray-500">
-                      Data de Nascimento *
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      min="1900-01-01"
-                      max={dataMaximaHoje}
-                      value={idosoEditando.data_nascimento}
-                      onChange={(e) =>
-                        setIdosoEditando({
-                          ...idosoEditando,
-                          data_nascimento: e.target.value,
-                        })
-                      }
-                      className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-[#1565C0]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold uppercase text-gray-500">
-                      Sexo *
-                    </label>
-                    <select
-                      value={idosoEditando.sexo || "Feminino"}
-                      onChange={(e) =>
-                        setIdosoEditando({ ...idosoEditando, sexo: e.target.value })
-                      }
-                      className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-[#1565C0]"
-                    >
-                      <option value="Feminino">Feminino</option>
-                      <option value="Masculino">Masculino</option>
-                      <option value="Outro">Outro</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-xs font-semibold uppercase text-gray-500">
-                    Acomodação / Leito
-                  </label>
-                  <input
-                    type="text"
-                    value={idosoEditando.endereco || ""}
-                    onChange={(e) =>
-                      setIdosoEditando({ ...idosoEditando, endereco: e.target.value })
-                    }
-                    placeholder="Ex.: Quarto 102 - Leito A"
-                    className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-[#1565C0]"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 bg-gray-50 px-6 py-4">
-                <button
-                  type="button"
-                  onClick={() => setIdosoEditando(null)}
-                  className="rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-medium text-gray-700"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={salvandoEdicao}
-                  className="inline-flex items-center gap-2 rounded-xl bg-[#1565C0] px-5 py-2.5 text-sm font-medium text-white"
-                >
-                  {salvandoEdicao ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                  Salvar Alterações
-                </button>
-              </div>
-            </form>
+            )}
           </div>
-        )}
-
-        {/* Modal de Exclusão */}
-        {idosoParaExcluir && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm">
-            <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
-              <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-red-600">
-                    <AlertTriangle size={20} />
-                  </div>
-                  <h2 className="text-lg font-bold text-[#0A2540]">Excluir Paciente</h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIdosoParaExcluir(null)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div className="p-6">
-                <p className="text-sm leading-relaxed text-gray-600">
-                  Confirma a exclusão de <strong>{idosoParaExcluir.nome}</strong>? Pacientes com prontuários vinculados serão preservados conforme as regras de auditoria clínica.
-                </p>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 bg-gray-50 px-6 py-4">
-                <button
-                  type="button"
-                  onClick={() => setIdosoParaExcluir(null)}
-                  className="rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-medium text-gray-700"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmarExclusaoIdoso}
-                  disabled={excluindo}
-                  className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-medium text-white"
-                >
-                  {excluindo ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-                  Confirmar Exclusão
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        </div>
       </div>
     </main>
   );

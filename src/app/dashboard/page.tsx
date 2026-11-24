@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { io, Socket } from "socket.io-client";
 import DashboardNavbar from "@/components/DashboardNavbar";
@@ -11,6 +12,12 @@ import MetricCard, {
 import InfoCard from "@/components/InfoCard";
 import HealthChart, { PontoGraficoSaude } from "@/components/HealthChart";
 import PatientSelector, { Idoso } from "@/components/PatientSelector";
+import {
+  API_URL,
+  getUsuarioSessao,
+  getTokenSessao,
+  getAuthHeaders,
+} from "@/lib/clinica";
 import {
   HeartPulse,
   Activity,
@@ -28,12 +35,10 @@ import {
   AlertTriangle,
 } from "lucide-react";
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://perfect-bravery-production-5ce7.up.railway.app";
-
 export default function Dashboard() {
+  const router = useRouter();
   const [carregandoSessao, setCarregandoSessao] = useState(true);
+  const [semClinica, setSemClinica] = useState(false);
   const [user, setUser] = useState<{
     id: string;
     nome: string;
@@ -43,7 +48,7 @@ export default function Dashboard() {
     id: "",
     nome: "",
     perfil: "",
-    clinica_id: "e63b19f5-d8e4-4973-bac6-12aba9a0545d",
+    clinica_id: "",
   });
 
   const [contadoresAdmin, setContadoresAdmin] = useState({
@@ -54,8 +59,10 @@ export default function Dashboard() {
 
   const [idosoAtivo, setIdosoAtivo] = useState<Idoso | null>(null);
   const [pontosGrafico, setPontosGrafico] = useState<PontoGraficoSaude[]>([]);
-  const [alertasEmergencia, setAlertasEmergencia] = useState<{id: number, msg: string}[]>([]);
-  
+  const [alertasEmergencia, setAlertasEmergencia] = useState<
+    { id: number; msg: string }[]
+  >([]);
+
   const [resumoClinico, setResumoClinico] = useState({
     fc: "--",
     spo2: "--",
@@ -68,26 +75,23 @@ export default function Dashboard() {
   });
 
   const carregarUsuario = useCallback(() => {
-    const userRaw = localStorage.getItem("saspi_user");
-    if (userRaw) {
-      try {
-        const parsed = JSON.parse(userRaw);
-        const data = parsed.user || parsed.usuario || parsed;
+    const token = getTokenSessao();
+    const sessao = getUsuarioSessao();
 
-        setUser({
-          id: data.id || "",
-          nome:
-            data.nome ||
-            data.name ||
-            (data.email ? data.email.split("@")[0] : "Profissional"),
-          perfil: (data.perfil || data.role || "MEDICO").toUpperCase(),
-          clinica_id:
-            data.clinica_id ||
-            data.clinicaId ||
-            "e63b19f5-d8e4-4973-bac6-12aba9a0545d",
-        });
-      } catch {}
+    if (!token || !sessao) {
+      setCarregandoSessao(false);
+      router.push("/login");
+      return;
     }
+
+    setUser({
+      id: sessao.id,
+      nome: sessao.nome || "Profissional",
+      perfil: sessao.perfil,
+      clinica_id: sessao.clinica_id,
+    });
+
+    setSemClinica(!sessao.clinica_id);
 
     const savedElderly = localStorage.getItem("saspi_active_elderly");
     if (savedElderly) {
@@ -96,7 +100,7 @@ export default function Dashboard() {
       } catch {}
     }
     setCarregandoSessao(false);
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     carregarUsuario();
@@ -107,7 +111,7 @@ export default function Dashboard() {
         try {
           const parsed = JSON.parse(savedElderly);
           setIdosoAtivo(parsed);
-          setAlertasEmergencia([]); // Limpa os alertas ao trocar de idoso
+          setAlertasEmergencia([]);
         } catch {}
       } else {
         setIdosoAtivo(null);
@@ -131,11 +135,9 @@ export default function Dashboard() {
   const isMedico = perfilUpper === "MEDICO";
   const isLeituraSomente = perfilUpper === "FAMILIAR";
 
-  // Busca contadores caso seja Administrador
   useEffect(() => {
-    if (!isAdmin) return;
-    const token = localStorage.getItem("saspi_token");
-    const headers = { ...(token && { Authorization: `Bearer ${token}` }) };
+    if (!isAdmin || !user.clinica_id) return;
+    const headers = getAuthHeaders();
 
     Promise.all([
       fetch(`${API_URL}/usuario?clinica_id=${user.clinica_id}`, {
@@ -149,20 +151,38 @@ export default function Dashboard() {
       ),
     ])
       .then(([uList, iList, vList]) => {
+        const usuariosClinica = Array.isArray(uList)
+          ? uList.filter(
+              (u: any) => !u.clinica_id || u.clinica_id === user.clinica_id
+            )
+          : [];
+        const idososClinica = Array.isArray(iList)
+          ? iList.filter(
+              (i: any) => !i.clinica_id || i.clinica_id === user.clinica_id
+            )
+          : [];
+        const idsIdososClinica = new Set(
+          idososClinica.map((i: any) => i.id)
+        );
+        const vinculosClinica = Array.isArray(vList)
+          ? vList.filter((v: any) => {
+              const iId = v.idoso_id || v.idosoId || v.idoso?.id;
+              return !iId || idsIdososClinica.has(iId);
+            })
+          : [];
+
         setContadoresAdmin({
-          usuarios: Array.isArray(uList) ? uList.length : 0,
-          idosos: Array.isArray(iList) ? iList.length : 0,
-          vinculos: Array.isArray(vList) ? vList.length : 0,
+          usuarios: usuariosClinica.length,
+          idosos: idososClinica.length,
+          vinculos: vinculosClinica.length,
         });
       })
       .catch(() => {});
   }, [isAdmin, user.clinica_id]);
 
-  // Carrega resumo clínico base
   useEffect(() => {
     async function carregarResumoPaciente(idosoId: string) {
-      const token = localStorage.getItem("saspi_token");
-      const headers = { ...(token && { Authorization: `Bearer ${token}` }) };
+      const headers = getAuthHeaders();
 
       try {
         const [resReg, resPresc, resCons] = await Promise.all([
@@ -275,16 +295,15 @@ export default function Dashboard() {
     }
   }, [idosoAtivo?.id, isAdmin]);
 
-  // COLETOR WEB SOCKETS EM TEMPO REAL (FASE 5)
   useEffect(() => {
     if (!idosoAtivo?.id || isAdmin) return;
-    
-    const token = localStorage.getItem("saspi_token");
+
+    const token = getTokenSessao();
     if (!token) return;
 
-    const socket: Socket = io(API_URL.replace('http', 'ws'), {
+    const socket: Socket = io(API_URL.replace("http", "ws"), {
       auth: { token },
-      transports: ['websocket'],
+      transports: ["websocket"],
     });
 
     socket.on("connect", () => {
@@ -292,8 +311,15 @@ export default function Dashboard() {
     });
 
     socket.on("novo-registro-saude", (registro: any) => {
-      const nomeInd = String(registro.indicador_saude?.nome || registro.indicador_nome || "").toLowerCase();
-      const valBruto = String(registro.valor_numerico ?? registro.valor_categorico ?? registro.valor ?? "--");
+      const nomeInd = String(
+        registro.indicador_saude?.nome || registro.indicador_nome || ""
+      ).toLowerCase();
+      const valBruto = String(
+        registro.valor_numerico ??
+          registro.valor_categorico ??
+          registro.valor ??
+          "--"
+      );
 
       setResumoClinico((prev) => {
         const novoResumo = { ...prev };
@@ -301,22 +327,32 @@ export default function Dashboard() {
           novoResumo.fc = valBruto;
           const num = Number(registro.valor_numerico ?? registro.valor);
           if (!Number.isNaN(num)) {
-            const hora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-            setPontosGrafico((graficoPrev) => [...graficoPrev, { horario: hora, valor: num }].slice(-20));
+            const hora = new Date().toLocaleTimeString("pt-BR", {
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+            setPontosGrafico((graficoPrev) =>
+              [...graficoPrev, { horario: hora, valor: num }].slice(-20)
+            );
           }
+        } else if (nomeInd.includes("oxig") || nomeInd.includes("spo")) {
+          novoResumo.spo2 = valBruto;
+        } else if (nomeInd.includes("temp")) {
+          novoResumo.temp = valBruto;
+        } else if (nomeInd.includes("press")) {
+          novoResumo.pa = valBruto;
         }
-        else if (nomeInd.includes("oxig") || nomeInd.includes("spo")) novoResumo.spo2 = valBruto;
-        else if (nomeInd.includes("temp")) novoResumo.temp = valBruto;
-        else if (nomeInd.includes("press")) novoResumo.pa = valBruto;
         return novoResumo;
       });
 
-      // Força a Navbar a checar notificações (se aplicável)
       window.dispatchEvent(new Event("saspi_elderly_updated"));
     });
 
     socket.on("alerta-saude", (data: { mensagem: string }) => {
-      setAlertasEmergencia(prev => [...prev, { id: Date.now(), msg: data.mensagem }]);
+      setAlertasEmergencia((prev) => [
+        ...prev,
+        { id: Date.now(), msg: data.mensagem },
+      ]);
       window.dispatchEvent(new Event("saspi_elderly_updated"));
     });
 
@@ -354,6 +390,34 @@ export default function Dashboard() {
         <DashboardNavbar />
         <div className="flex h-96 items-center justify-center">
           <Loader2 size={32} className="animate-spin text-[#1565C0]" />
+        </div>
+      </main>
+    );
+  }
+
+  if (semClinica) {
+    return (
+      <main className="min-h-screen bg-[#F2F7FB]">
+        <DashboardNavbar />
+        <div className="mx-auto max-w-xl px-4 py-16 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+            <AlertTriangle size={32} />
+          </div>
+          <h1 className="mt-4 text-2xl font-bold text-[#0A2540]">
+            Clínica Não Vinculada
+          </h1>
+          <p className="mt-2 text-sm text-gray-600">
+            Não foi possível identificar uma unidade clínica vinculada à sua
+            sessão. Entre em contato com o administrador ou acesse novamente.
+          </p>
+          <div className="mt-6">
+            <Link
+              href="/login"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#1565C0] px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#0A2540]"
+            >
+              Voltar para o Login
+            </Link>
+          </div>
         </div>
       </main>
     );
@@ -609,7 +673,6 @@ export default function Dashboard() {
 
             {idosoAtivo ? (
               <>
-                {/* BANNER DE ALERTAS CLÍNICOS ATIVOS + EVENTOS EM TEMPO REAL */}
                 {(alertasAtivos.length > 0 || alertasEmergencia.length > 0) && (
                   <div className="rounded-2xl border border-red-200 bg-red-50/90 p-5 shadow-sm animate-pulse">
                     <div className="flex items-start gap-3">
@@ -748,7 +811,6 @@ export default function Dashboard() {
                         </div>
                       ))}
 
-                      {/* Notificações em Tempo Real no Sidecard */}
                       {alertasEmergencia.map((al) => (
                         <div
                           key={al.id}

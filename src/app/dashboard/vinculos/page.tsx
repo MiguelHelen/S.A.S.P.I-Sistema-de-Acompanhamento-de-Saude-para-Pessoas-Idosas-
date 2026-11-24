@@ -1,233 +1,154 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import DashboardNavbar from "@/components/DashboardNavbar";
 import {
-  ArrowLeft,
+  API_URL,
+  getAuthHeaders,
+  getUsuarioSessao,
+  isAdminPerfil,
+  validarEObterClinicaId,
+} from "@/lib/clinica";
+import {
   Link2,
   Plus,
   Loader2,
-  ShieldAlert,
-  HeartHandshake,
-  User,
   Trash2,
-  CheckCircle2,
-  AlertTriangle,
   AlertCircle,
-  X,
+  CheckCircle2,
+  ShieldAlert,
+  UserCheck,
+  HeartHandshake,
 } from "lucide-react";
 
-interface VinculoRegistro {
+interface VinculoItem {
   id: string;
-  usuario_id?: string;
-  usuarioId?: string;
-  idoso_id?: string;
-  idosoId?: string;
+  papel?: string;
+  parentesco?: string;
   usuario?: {
-    id?: string;
-    nome?: string;
+    id: string;
+    nome: string;
+    email: string;
     perfil?: string;
+    clinica_id?: string;
   };
   idoso?: {
-    id?: string;
-    nome?: string;
+    id: string;
+    nome: string;
+    clinica_id?: string;
   };
-  tipo_vinculo?: string;
-  tipoVinculo?: string;
 }
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://perfect-bravery-production-5ce7.up.railway.app";
-
-function formatarTipoVinculo(tipo?: string): string {
-  if (!tipo) return "Vínculo de Acompanhamento";
-  const t = tipo.toUpperCase();
-  switch (t) {
-    case "MEDICO_RESPONSAVEL":
-      return "Médico Responsável";
-    case "ENFERMEIRO":
-    case "ENFERMEIRO_RESPONSAVEL":
-      return "Enfermeiro(a) Responsável";
-    case "CUIDADOR":
-      return "Cuidador";
-    case "FAMILIAR":
-      return "Familiar";
-    default:
-      return tipo;
-  }
-}
-
-export default function ListaVinculosPage() {
-  const [vinculos, setVinculos] = useState<VinculoRegistro[]>([]);
-  const [usuariosMap, setUsuariosMap] = useState<
-    Record<string, { nome: string; perfil: string }>
-  >({});
-  const [idososMap, setIdososMap] = useState<Record<string, string>>({});
-  const [carregando, setCarregando] = useState(true);
+export default function VinculosPage() {
   const [autorizado, setAutorizado] = useState<boolean | null>(null);
-  const [mensagemSucesso, setMensagemSucesso] = useState("");
-  const [erroAcao, setErroAcao] = useState("");
+  const [vinculos, setVinculos] = useState<VinculoItem[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [removendoId, setRemovendoId] = useState<string | null>(null);
+  const [mensagem, setMensagem] = useState("");
+  const [erro, setErro] = useState("");
 
-  const [vinculoParaDeletar, setVinculoParaDeletar] = useState<string | null>(
-    null
-  );
-  const [apagando, setApagando] = useState(false);
+  const carregarVinculos = useCallback(async () => {
+    setCarregando(true);
+    setErro("");
 
-  useEffect(() => {
-    async function carregarDados() {
-      const token = localStorage.getItem("saspi_token");
-      const userRaw = localStorage.getItem("saspi_user");
-      let clinicaId = "e63b19f5-d8e4-4973-bac6-12aba9a0545d";
-
-      if (userRaw) {
-        try {
-          const parsed = JSON.parse(userRaw);
-          const userData = parsed.user || parsed.usuario || parsed;
-          const perfil = (userData.perfil || userData.role || "").toUpperCase();
-
-          if (perfil !== "ADMINISTRADOR" && perfil !== "ADMIN") {
-            setAutorizado(false);
-            setCarregando(false);
-            return;
-          }
-          setAutorizado(true);
-          clinicaId = userData.clinica_id || userData.clinicaId || clinicaId;
-        } catch {
-          setAutorizado(false);
-          setCarregando(false);
-          return;
-        }
-      } else {
-        setAutorizado(false);
-        setCarregando(false);
-        return;
-      }
-
-      try {
-        const headersAuth = {
-          ...(token && { Authorization: `Bearer ${token}` }),
-        };
-
-        const [resUsers, resIdosos, resVinculos] = await Promise.all([
-          fetch(`${API_URL}/usuario?clinica_id=${clinicaId}`, {
-            headers: headersAuth,
-          }).catch(() => null),
-          fetch(`${API_URL}/idoso?clinica_id=${clinicaId}`, {
-            headers: headersAuth,
-          }).catch(() => null),
-          fetch(`${API_URL}/usuario-idoso`, {
-            headers: headersAuth,
-          }).catch(() => null),
-        ]);
-
-        if (resUsers?.ok) {
-          const usersData = await resUsers.json();
-          const uMap: Record<string, { nome: string; perfil: string }> = {};
-          if (Array.isArray(usersData)) {
-            usersData.forEach((u: any) => {
-              if (u.id) uMap[u.id] = { nome: u.nome, perfil: u.perfil };
-            });
-          }
-          setUsuariosMap(uMap);
-        }
-
-        let listaIdososDaClinica: any[] = [];
-        if (resIdosos?.ok) {
-          const idososData = await resIdosos.json();
-          const iMap: Record<string, string> = {};
-          if (Array.isArray(idososData)) {
-            listaIdososDaClinica = idososData;
-            idososData.forEach((i: any) => {
-              if (i.id) iMap[i.id] = i.nome;
-            });
-          }
-          setIdososMap(iMap);
-        }
-
-        if (resVinculos?.ok) {
-          const vinculosData = await resVinculos.json();
-          const arrVinculos = Array.isArray(vinculosData)
-            ? vinculosData
-            : vinculosData.data || [];
-          setVinculos(arrVinculos);
-        } else if (listaIdososDaClinica.length > 0) {
-          // Fallback resiliente: busca os vínculos por idoso na rota legada GET /usuario-idoso/idoso/:idosoId
-          const promessasPorIdoso = listaIdososDaClinica.map((idosoObj) =>
-            fetch(`${API_URL}/usuario-idoso/idoso/${idosoObj.id}`, {
-              headers: headersAuth,
-            })
-              .then((r) => (r.ok ? r.json() : []))
-              .catch(() => [])
-          );
-          const resultadosPorIdoso = await Promise.all(promessasPorIdoso);
-          const agregados = resultadosPorIdoso.flat();
-          setVinculos(Array.isArray(agregados) ? agregados : []);
-        } else {
-          setVinculos([]);
-        }
-      } catch {
-        setVinculos([]);
-      } finally {
-        setCarregando(false);
-      }
+    const sessao = getUsuarioSessao();
+    if (!sessao || !isAdminPerfil(sessao.perfil)) {
+      setAutorizado(false);
+      setCarregando(false);
+      return;
     }
 
-    carregarDados();
-  }, []);
-
-  async function confirmarEExecutarDesvinculo() {
-    if (!vinculoParaDeletar) return;
-
-    setApagando(true);
-    setErroAcao("");
-    const token = localStorage.getItem("saspi_token");
+    setAutorizado(true);
 
     try {
-      const res = await fetch(
-        `${API_URL}/usuario-idoso/${vinculoParaDeletar}`,
-        {
-          method: "DELETE",
-          headers: {
-            ...(token && { Authorization: `Bearer ${token}` }),
-          },
+      const clinicaId = validarEObterClinicaId(sessao);
+      const headers = getAuthHeaders(false);
+
+      const [resVinculos, resIdosos] = await Promise.all([
+        fetch(`${API_URL}/usuario-idoso`, { headers }),
+        fetch(`${API_URL}/idoso?clinica_id=${clinicaId}`, { headers }).catch(
+          () => null
+        ),
+      ]);
+
+      if (!resVinculos.ok) {
+        throw new Error("Não foi possível carregar os vínculos de cuidado.");
+      }
+
+      const rawVinculos = await resVinculos.json();
+      const listaVinculos = Array.isArray(rawVinculos)
+        ? rawVinculos
+        : rawVinculos?.data || [];
+
+      const idsIdososClinica = new Set<string>();
+      if (resIdosos?.ok) {
+        const rawIdosos = await resIdosos.json();
+        const listaIdosos = Array.isArray(rawIdosos)
+          ? rawIdosos
+          : rawIdosos?.data || [];
+        listaIdosos
+          .filter((i: any) => !i.clinica_id || i.clinica_id === clinicaId)
+          .forEach((i: any) => idsIdososClinica.add(String(i.id)));
+      }
+
+      const filtrados: VinculoItem[] = listaVinculos.filter((v: any) => {
+        const idosoId = String(v.idoso?.id || v.idoso_id || "");
+        const clinicaDoIdoso = v.idoso?.clinica_id;
+        const clinicaDoUsuario = v.usuario?.clinica_id;
+
+        if (clinicaDoIdoso && clinicaDoIdoso !== clinicaId) return false;
+        if (clinicaDoUsuario && clinicaDoUsuario !== clinicaId) return false;
+        if (idsIdososClinica.size > 0 && idosoId) {
+          return idsIdososClinica.has(idosoId);
         }
-      );
+        return true;
+      });
+
+      setVinculos(filtrados);
+    } catch (err: any) {
+      setErro(err.message || "Falha ao carregar vínculos.");
+      setVinculos([]);
+    } finally {
+      setCarregando(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    carregarVinculos();
+  }, [carregarVinculos]);
+
+  async function handleRemoverVinculo(v: VinculoItem) {
+    const confirmou = window.confirm(
+      `Desvincular "${v.usuario?.nome || "Usuário"}" de "${v.idoso?.nome || "Paciente"}"?`
+    );
+    if (!confirmou) return;
+
+    setRemovendoId(v.id);
+    setErro("");
+    setMensagem("");
+
+    try {
+      const res = await fetch(`${API_URL}/usuario-idoso/${v.id}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(false),
+      });
 
       if (!res.ok) {
         const errData = await res.json().catch(() => null);
         throw new Error(
-          errData?.message || "Falha no servidor ao excluir o vínculo."
+          errData?.message || "Não foi possível remover o vínculo."
         );
       }
 
-      setVinculos((prev) => prev.filter((v) => v.id !== vinculoParaDeletar));
-      setVinculoParaDeletar(null);
-      setMensagemSucesso("Vínculo removido permanentemente!");
-      setTimeout(() => setMensagemSucesso(""), 4000);
+      setVinculos((prev) => prev.filter((item) => item.id !== v.id));
+      setMensagem("Vínculo removido com sucesso!");
+      setTimeout(() => setMensagem(""), 4000);
     } catch (err: any) {
-      setVinculoParaDeletar(null);
-      setErroAcao(
-        err.message || "Erro ao tentar desvincular paciente na base de dados."
-      );
+      setErro(err.message || "Erro ao desvincular.");
     } finally {
-      setApagando(false);
+      setRemovendoId(null);
     }
-  }
-
-  if (carregando || autorizado === null) {
-    return (
-      <main className="min-h-screen bg-[#F2F7FB]">
-        <DashboardNavbar />
-        <div className="mx-auto max-w-4xl px-4 py-16 text-center text-gray-500">
-          <Loader2 size={24} className="mx-auto animate-spin text-[#1565C0]" />
-          <p className="mt-2 text-sm font-medium">
-            Buscando histórico de vínculos...
-          </p>
-        </div>
-      </main>
-    );
   }
 
   if (autorizado === false) {
@@ -242,18 +163,9 @@ export default function ListaVinculosPage() {
             Acesso Restrito
           </h1>
           <p className="mt-2 text-sm text-gray-600">
-            Apenas o nível de gestão (Administrador) tem permissão para listar e
-            modificar os vínculos institucionais.
+            Apenas Administradores podem gerenciar vínculos entre equipe,
+            familiares e pacientes.
           </p>
-          <div className="mt-6">
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-2 rounded-xl bg-[#1565C0] px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#0A2540]"
-            >
-              <ArrowLeft size={16} />
-              Voltar ao Dashboard
-            </Link>
-          </div>
         </div>
       </main>
     );
@@ -264,214 +176,119 @@ export default function ListaVinculosPage() {
       <DashboardNavbar />
 
       <div className="mx-auto max-w-7xl px-4 py-8 md:px-8">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-[#1565C0]"
-            >
-              <ArrowLeft size={17} />
-              Voltar para o Dashboard
-            </Link>
-
-            <span className="mt-6 block text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
-              Gestão Institucional
+            <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
+              Rede de Cuidados
             </span>
-
             <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0A2540] md:text-4xl">
-              Vínculos da Instituição
+              Vínculos de Acompanhamento
             </h1>
-
-            <p className="mt-2 max-w-2xl text-gray-600">
-              Relação ativa de profissionais de saúde e familiares associados
-              aos pacientes da clínica.
+            <p className="mt-2 text-gray-600">
+              Associe médicos, cuidadores e familiares aos pacientes da clínica.
             </p>
           </div>
 
           <Link
             href="/dashboard/vinculos/novo"
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0A2540] hover:shadow-md"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3 font-medium text-white shadow-sm transition hover:bg-[#0A2540]"
           >
-            <Plus size={19} />
+            <Plus size={18} />
             Novo Vínculo
           </Link>
         </div>
 
-        {mensagemSucesso && (
+        {mensagem && (
           <div className="mt-6 flex items-center gap-3 rounded-xl bg-emerald-50 p-4 text-emerald-800">
             <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
-            <p className="text-sm font-medium">{mensagemSucesso}</p>
+            <p className="text-sm font-medium">{mensagem}</p>
           </div>
         )}
 
-        {erroAcao && (
+        {erro && (
           <div className="mt-6 flex items-center gap-3 rounded-xl bg-red-50 p-4 text-red-700">
             <AlertCircle size={20} className="shrink-0 text-red-600" />
-            <p className="text-sm font-medium">{erroAcao}</p>
+            <p className="text-sm font-medium">{erro}</p>
           </div>
         )}
 
-        <section className="mt-8 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-          {vinculos.length === 0 ? (
-            <div className="p-12 text-center text-gray-500">
-              <Link2 size={36} className="mx-auto text-gray-300" />
-              <p className="mt-3 text-base font-semibold text-[#0A2540]">
-                Nenhum vínculo registrado no banco de dados.
-              </p>
-              <p className="mt-1 text-sm">
-                Utilize o botão acima para atribuir médicos e cuidadores aos
-                idosos.
-              </p>
+        <div className="mt-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+            <div className="flex items-center gap-2.5">
+              <Link2 size={20} className="text-[#1565C0]" />
+              <h2 className="text-lg font-semibold text-[#0A2540]">
+                Vínculos Ativos ({vinculos.length})
+              </h2>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-left">
-                <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50/50 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                    <th className="px-6 py-4">Profissional / Familiar</th>
-                    <th className="px-6 py-4">Paciente Monitorado</th>
-                    <th className="px-6 py-4">Status / Tipo de Vínculo</th>
-                    <th className="px-6 py-4 text-right">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 text-sm">
-                  {vinculos.map((v) => {
-                    const uId = v.usuario?.id || v.usuario_id || v.usuarioId;
-                    const iId = v.idoso?.id || v.idoso_id || v.idosoId;
+          </div>
 
-                    const nomeUsuario =
-                      v.usuario?.nome ||
-                      (uId && usuariosMap[uId]?.nome) ||
-                      "Usuário não identificado";
-                    const perfilUsuario =
-                      v.usuario?.perfil ||
-                      (uId && usuariosMap[uId]?.perfil) ||
-                      "Membro";
-                    const nomeIdoso =
-                      v.idoso?.nome ||
-                      (iId && idososMap[iId]) ||
-                      "Paciente não identificado";
-
-                    const tipoRaw = v.tipo_vinculo || v.tipoVinculo;
-                    const tipoFormatado = formatarTipoVinculo(tipoRaw);
-
-                    return (
-                      <tr key={v.id} className="transition hover:bg-gray-50/50">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#E8F1FB] text-[#1565C0]">
-                              <User size={18} />
-                            </div>
-                            <div className="max-w-[220px] min-w-0">
-                              <p
-                                className="truncate font-semibold text-[#0A2540]"
-                                title={nomeUsuario}
-                              >
-                                {nomeUsuario}
-                              </p>
-                              <p
-                                className="truncate text-xs text-gray-500"
-                                title={perfilUsuario}
-                              >
-                                {perfilUsuario}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2 font-medium text-gray-800">
-                            <HeartHandshake
-                              size={16}
-                              className="shrink-0 text-[#26A69A]"
-                            />
-                            <span
-                              className="max-w-[220px] truncate"
-                              title={nomeIdoso}
-                            >
-                              {nomeIdoso}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-[#1565C0]">
-                            {tipoFormatado}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <button
-                            type="button"
-                            onClick={() => setVinculoParaDeletar(v.id)}
-                            className="inline-flex items-center gap-2 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-100"
-                          >
-                            <Trash2 size={14} />
-                            Desvincular
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        {vinculoParaDeletar && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm">
-            <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
-              <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-red-600">
-                    <AlertTriangle size={20} />
-                  </div>
-                  <h2 className="text-lg font-bold text-[#0A2540]">
-                    Remover Vínculo
-                  </h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setVinculoParaDeletar(null)}
-                  className="text-gray-400 hover:text-gray-600"
-                  disabled={apagando}
-                >
-                  <X size={20} />
-                </button>
+          <div className="mt-6">
+            {carregando ? (
+              <div className="flex items-center justify-center py-12 text-sm text-gray-500">
+                <Loader2 size={24} className="animate-spin text-[#1565C0]" />
+                <span className="ml-2">Carregando vínculos...</span>
               </div>
-
-              <div className="p-6">
-                <p className="text-sm leading-relaxed text-gray-600">
-                  Tem certeza que deseja desvincular este paciente do
-                  profissional? O acesso ao acompanhamento e ao prontuário deste
-                  idoso será revogado imediatamente.
+            ) : vinculos.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-gray-200 p-10 text-center">
+                <HeartHandshake size={36} className="mx-auto text-gray-300" />
+                <p className="mt-3 font-semibold text-[#0A2540]">
+                  Nenhum vínculo cadastrado
+                </p>
+                <p className="mt-1 text-sm text-gray-500">
+                  Crie vínculos para liberar o acompanhamento clínico ou familiar
+                  de cada paciente.
                 </p>
               </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {vinculos.map((v) => (
+                  <div
+                    key={v.id}
+                    className="flex flex-col justify-between gap-4 py-4 sm:flex-row sm:items-center"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 font-semibold text-[#0A2540]">
+                          <UserCheck size={16} className="text-[#1565C0]" />
+                          {v.usuario?.nome || "Usuário"}
+                        </span>
+                        <span className="rounded-full bg-[#E8F1FB] px-2.5 py-0.5 text-[11px] font-semibold text-[#1565C0]">
+                          {v.papel || v.usuario?.perfil || "VÍNCULO"}
+                        </span>
+                        {v.parentesco && (
+                          <span className="rounded-full bg-teal-50 px-2.5 py-0.5 text-[11px] font-medium text-teal-700">
+                            {v.parentesco}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        Paciente acompanhado:{" "}
+                        <strong className="text-gray-700">
+                          {v.idoso?.nome || "Paciente"}
+                        </strong>
+                        {v.usuario?.email ? ` • ${v.usuario.email}` : ""}
+                      </p>
+                    </div>
 
-              <div className="flex items-center justify-end gap-3 bg-gray-50 px-6 py-4">
-                <button
-                  type="button"
-                  onClick={() => setVinculoParaDeletar(null)}
-                  disabled={apagando}
-                  className="rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100 disabled:opacity-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmarEExecutarDesvinculo}
-                  disabled={apagando}
-                  className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-70"
-                >
-                  {apagando ? (
-                    <Loader2 size={16} className="animate-spin" />
-                  ) : (
-                    <Trash2 size={16} />
-                  )}
-                  {apagando ? "Removendo..." : "Sim, desvincular"}
-                </button>
+                    <button
+                      type="button"
+                      disabled={removendoId === v.id}
+                      onClick={() => handleRemoverVinculo(v)}
+                      className="inline-flex items-center gap-1.5 self-start rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-100 disabled:opacity-50 sm:self-center"
+                    >
+                      {removendoId === v.id ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Trash2 size={14} />
+                      )}
+                      Desvincular
+                    </button>
+                  </div>
+                ))}
               </div>
-            </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </main>
   );

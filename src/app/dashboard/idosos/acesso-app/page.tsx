@@ -1,371 +1,379 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import DashboardNavbar from "@/components/DashboardNavbar";
+import { calcularIdadeReal } from "@/components/PatientSelector";
+import {
+  API_URL,
+  getAuthHeaders,
+  getUsuarioSessao,
+  isAdminPerfil,
+  validarEObterClinicaId,
+} from "@/lib/clinica";
 import {
   ArrowLeft,
   Smartphone,
-  UserCheck,
-  Mail,
-  Lock,
-  Eye,
-  EyeOff,
+  KeyRound,
+  Save,
   Loader2,
   CheckCircle2,
   AlertCircle,
-  Sparkles,
+  ShieldAlert,
+  RefreshCw,
+  Copy,
+  Check,
 } from "lucide-react";
 
-interface Idoso {
+interface IdosoOpcao {
   id: string;
   nome: string;
-  cpf?: string;
-  data_nascimento?: string;
-  telefone?: string;
-  clinica_id: string;
+  idade: number;
 }
 
-export default function CriarAcessoAppIdosoPage() {
-  const router = useRouter();
+function gerarSenhaSegura(tamanho = 10): string {
+  const caracteres =
+    "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@#$";
+  const array = new Uint32Array(tamanho);
+  if (typeof window !== "undefined" && window.crypto?.getRandomValues) {
+    window.crypto.getRandomValues(array);
+  } else {
+    for (let i = 0; i < tamanho; i++) {
+      array[i] = Math.floor(Math.random() * caracteres.length);
+    }
+  }
+  return Array.from(array, (val) => caracteres[val % caracteres.length]).join(
+    ""
+  );
+}
 
-  const [idososDisponiveis, setIdososDisponiveis] = useState<Idoso[]>([]);
-  const [idosoSelecionadoId, setIdosoSelecionadoId] = useState("");
-  const [email, setEmail] = useState("");
-  const [senha, setSenha] = useState("");
-  const [mostrarSenha, setMostrarSenha] = useState(false);
+export default function AcessoAppIdosoPage() {
+  const searchParams = useSearchParams();
+  const idosoParam = searchParams.get("idoso_id") || "";
 
-  const [carregandoDados, setCarregandoDados] = useState(true);
-  const [enviando, setEnviando] = useState(false);
+  const [autorizado, setAutorizado] = useState<boolean | null>(null);
+  const [carregando, setCarregando] = useState(true);
+  const [salvando, setSalvando] = useState(false);
+  const [sucesso, setSucesso] = useState(false);
   const [erro, setErro] = useState("");
-  const [sucesso, setSucesso] = useState("");
+  const [copiado, setCopiado] = useState(false);
 
-  const apiUrl =
-    process.env.NEXT_PUBLIC_API_URL ||
-    "https://perfect-bravery-production-5ce7.up.railway.app";
+  const [idosos, setIdosos] = useState<IdosoOpcao[]>([]);
+  const [idosoId, setIdosoId] = useState(idosoParam);
+  const [emailApp, setEmailApp] = useState("");
+  const [senhaApp, setSenhaApp] = useState("");
+
+  useEffect(() => {
+    setSenhaApp(gerarSenhaSegura(10));
+  }, []);
 
   useEffect(() => {
     async function carregarIdosos() {
+      const sessao = getUsuarioSessao();
+      if (!sessao || !isAdminPerfil(sessao.perfil)) {
+        setAutorizado(false);
+        setCarregando(false);
+        return;
+      }
+
+      setAutorizado(true);
+
       try {
-        const token = localStorage.getItem("saspi_token");
-        const userRaw = localStorage.getItem("saspi_user");
+        const clinicaId = validarEObterClinicaId(sessao);
 
-        if (!token || !userRaw) {
-          router.push("/login");
-          return;
+        const res = await fetch(`${API_URL}/idoso?clinica_id=${clinicaId}`, {
+          headers: getAuthHeaders(false),
+        });
+
+        if (!res.ok) {
+          throw new Error("Não foi possível carregar os pacientes da clínica.");
         }
 
-        const user = JSON.parse(userRaw);
-        if (user?.perfil !== "ADMINISTRADOR") {
-          router.push("/dashboard");
-          return;
+        const raw = await res.json();
+        const lista = Array.isArray(raw) ? raw : raw?.data || [];
+
+        const opcoes: IdosoOpcao[] = lista
+          .filter((i: any) => !i.clinica_id || i.clinica_id === clinicaId)
+          .map((i: any) => {
+            const idadeReal = calcularIdadeReal(i.data_nascimento);
+            return {
+              id: String(i.id),
+              nome: String(i.nome || ""),
+              idade: idadeReal > 0 ? idadeReal : Number(i.idade || 0),
+            };
+          });
+
+        setIdosos(opcoes);
+
+        if (idosoParam && opcoes.some((o) => o.id === idosoParam)) {
+          setIdosoId(idosoParam);
+        } else if (opcoes.length > 0 && !idosoId) {
+          setIdosoId(opcoes[0].id);
         }
-
-        const headers = { Authorization: `Bearer ${token}` };
-
-        const [resIdosos, resVinculos] = await Promise.all([
-          fetch(`${apiUrl}/idoso`, { headers }),
-          fetch(`${apiUrl}/usuario-idoso`, { headers }),
-        ]);
-
-        if (!resIdosos.ok) {
-          throw new Error("Não foi possível carregar a lista de idosos.");
-        }
-
-        const listaIdosos: Idoso[] = await resIdosos.json();
-        const listaVinculos = resVinculos.ok ? await resVinculos.json() : [];
-
-        // Filtra idosos que já possuem vínculo como PROPRIO_IDOSO
-        const idsComAcesso = new Set(
-          (Array.isArray(listaVinculos) ? listaVinculos : [])
-            .filter((v: any) => v.tipo_vinculo === "PROPRIO_IDOSO")
-            .map((v: any) => v.idoso_id)
-        );
-
-        const filtrados = (Array.isArray(listaIdosos) ? listaIdosos : []).filter(
-          (i) => !idsComAcesso.has(i.id)
-        );
-
-        setIdososDisponiveis(filtrados);
       } catch (err: any) {
-        setErro(err.message || "Erro ao carregar dados.");
+        setErro(err.message || "Falha ao carregar pacientes.");
       } finally {
-        setCarregandoDados(false);
+        setCarregando(false);
       }
     }
 
     carregarIdosos();
-  }, [apiUrl, router]);
+  }, [idosoParam]);
 
-  const idosoAtual = idososDisponiveis.find((i) => i.id === idosoSelecionadoId);
-
-  function gerarSenhaSugerida() {
-    const num = Math.floor(1000 + Math.random() * 9000);
-    setSenha(`saspi${num}`);
-    setMostrarSenha(true);
-  }
-
-  function formatarData(dataIso?: string) {
-    if (!dataIso) return "Não informada";
-    const [ano, mes, dia] = dataIso.split("T")[0].split("-");
-    return `${dia}/${mes}/${ano}`;
+  function handleCopiarCredenciais() {
+    const paciente = idosos.find((i) => i.id === idosoId);
+    const texto = `Acesso App S.A.S.P.I.\nPaciente: ${paciente?.nome || ""}\nE-mail: ${emailApp}\nSenha: ${senhaApp}`;
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(texto);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 3000);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setSalvando(true);
     setErro("");
-    setSucesso("");
+    setSucesso(false);
 
-    if (!idosoSelecionadoId) {
-      setErro("Selecione um idoso cadastrado.");
+    if (!idosoId) {
+      setErro("Selecione um paciente.");
+      setSalvando(false);
       return;
     }
 
-    if (senha.length < 6) {
-      setErro("A senha deve ter pelo menos 6 caracteres.");
+    const emailLimpo = emailApp.trim().toLowerCase();
+    if (!emailLimpo) {
+      setErro("Informe o e-mail de acesso para o aplicativo.");
+      setSalvando(false);
       return;
     }
 
-    setEnviando(true);
+    if (senhaApp.length < 6) {
+      setErro("A senha do aplicativo deve ter no mínimo 6 caracteres.");
+      setSalvando(false);
+      return;
+    }
 
     try {
-      const token = localStorage.getItem("saspi_token");
-      const userRaw = localStorage.getItem("saspi_user");
-      const user = userRaw ? JSON.parse(userRaw) : null;
-
-      const res = await fetch(`${apiUrl}/auth/criar-acesso-idoso`, {
+      const res = await fetch(`${API_URL}/idoso/${idosoId}/acesso-app`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: getAuthHeaders(true),
         body: JSON.stringify({
-          idoso_id: idosoSelecionadoId,
-          email: email.trim().toLowerCase(),
-          senha,
-          clinica_id: user?.clinica_id,
+          email: emailLimpo,
+          senha: senhaApp,
         }),
       });
 
-      const data = await res.json();
-
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
+        const msg = Array.isArray(data?.message)
+          ? data.message.join(", ")
+          : data?.message;
         throw new Error(
-          data.message || "Não foi possível criar o acesso mobile do idoso."
+          msg || "Não foi possível configurar as credenciais do aplicativo."
         );
       }
 
-      setSucesso(
-        `Acesso criado com sucesso! ${idosoAtual?.nome} já pode entrar no aplicativo mobile usando o e-mail ${email.trim().toLowerCase()} e a senha definida.`
-      );
-
-      // Remove o idoso recém-vinculado da lista de disponíveis
-      setIdososDisponiveis((prev) =>
-        prev.filter((i) => i.id !== idosoSelecionadoId)
-      );
-      setIdosoSelecionadoId("");
-      setEmail("");
-      setSenha("");
+      setSucesso(true);
     } catch (err: any) {
-      setErro(err.message || "Erro ao criar acesso.");
+      setErro(err.message || "Erro ao salvar credencial do aplicativo.");
     } finally {
-      setEnviando(false);
+      setSalvando(false);
     }
   }
 
+  if (autorizado === false) {
+    return (
+      <main className="min-h-screen bg-[#F2F7FB]">
+        <DashboardNavbar />
+        <div className="mx-auto max-w-xl px-4 py-16 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
+            <ShieldAlert size={32} />
+          </div>
+          <h1 className="mt-4 text-2xl font-bold text-[#0A2540]">
+            Acesso Restrito
+          </h1>
+          <p className="mt-2 text-sm text-gray-600">
+            Apenas Administradores podem criar ou redefinir credenciais do
+            aplicativo móvel do idoso.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-8">
-      <div className="flex items-center justify-between">
+    <main className="min-h-screen bg-[#F2F7FB]">
+      <DashboardNavbar />
+
+      <div className="mx-auto max-w-4xl px-4 py-8 md:px-8">
         <Link
           href="/dashboard/idosos"
-          className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 transition hover:text-[#1565C0]"
+          className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-[#1565C0]"
         >
-          <ArrowLeft size={16} />
-          Voltar para Idosos
+          <ArrowLeft size={17} />
+          Voltar para pacientes
         </Link>
-      </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
-        <div className="mb-6 flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#1565C0]">
-            <Smartphone size={24} />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-[#0A2540] md:text-2xl">
-              Criar Acesso ao Aplicativo Mobile (Idoso)
-            </h1>
-            <p className="mt-1 text-sm text-slate-600">
-              Selecione um idoso já cadastrado na clínica e defina o e-mail e a
-              senha para ele acessar a rotina e medicamentos pelo celular.
-            </p>
-          </div>
+        <div className="mt-8">
+          <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
+            Aplicativo Móvel do Paciente
+          </span>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0A2540] md:text-4xl">
+            Acesso App do Idoso
+          </h1>
+          <p className="mt-2 text-gray-600">
+            Configure o e-mail e a senha exclusivos para que o paciente entre no
+            aplicativo móvel S.A.S.P.I.
+          </p>
         </div>
 
         {erro && (
-          <div className="mb-6 flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-            <AlertCircle size={18} className="mt-0.5 shrink-0" />
-            <span>{erro}</span>
+          <div className="mt-6 flex items-center gap-3 rounded-xl bg-red-50 p-4 text-red-700">
+            <AlertCircle size={20} className="shrink-0 text-red-600" />
+            <p className="text-sm font-medium">{erro}</p>
           </div>
         )}
 
         {sucesso && (
-          <div className="mb-6 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
-            <CheckCircle2 size={18} className="mt-0.5 shrink-0" />
-            <span>{sucesso}</span>
+          <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900">
+            <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+              <div className="flex items-center gap-2.5 font-semibold">
+                <CheckCircle2 size={20} className="text-emerald-600" />
+                <span>Credencial do aplicativo configurada com sucesso!</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCopiarCredenciais}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-emerald-800"
+              >
+                {copiado ? <Check size={14} /> : <Copy size={14} />}
+                {copiado ? "Credenciais Copiadas" : "Copiar Dados de Acesso"}
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-emerald-800">
+              Compartilhe este e-mail e senha apenas com o paciente ou seu
+              responsável direto para login no app móvel.
+            </p>
           </div>
         )}
 
-        {carregandoDados ? (
-          <div className="flex items-center justify-center py-12 text-slate-500">
-            <Loader2 className="mr-2 animate-spin" size={20} />
-            Carregando idosos cadastrados...
+        {carregando ? (
+          <div className="mt-10 flex items-center justify-center py-12 text-gray-500">
+            <Loader2 size={24} className="animate-spin text-[#1565C0]" />
+            <span className="ml-2 text-sm">Carregando pacientes...</span>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Seleção do Idoso */}
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-[#0A2540]">
-                1. Selecione o Idoso Cadastrado *
-              </label>
-              <select
-                value={idosoSelecionadoId}
-                onChange={(e) => {
-                  setIdosoSelecionadoId(e.target.value);
-                  setErro("");
-                  setSucesso("");
-                }}
-                required
-                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-[#1565C0]"
-              >
-                <option value="">
-                  {idososDisponiveis.length === 0
-                    ? "Todos os idosos já possuem acesso mobile"
-                    : "Escolha um idoso da lista..."}
-                </option>
-                {idososDisponiveis.map((idoso) => (
-                  <option key={idoso.id} value={idoso.id}>
-                    {idoso.nome} {idoso.cpf ? `— CPF: ${idoso.cpf}` : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Dados Puxados Automaticamente */}
-            {idosoAtual && (
-              <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4">
-                <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#1565C0]">
-                  <UserCheck size={15} />
-                  Dados Herdados do Cadastro
+          <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+            <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
+              <div className="flex items-center gap-3 border-b border-gray-100 pb-5">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#E8F1FB] text-[#1565C0]">
+                  <Smartphone size={22} />
                 </div>
-                <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-                  <div>
-                    <span className="text-slate-500">Nome Completo:</span>
-                    <p className="font-medium text-slate-800">
-                      {idosoAtual.nome}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-slate-500">CPF:</span>
-                    <p className="font-medium text-slate-800">
-                      {idosoAtual.cpf || "Não informado"}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-slate-500">Data de Nascimento:</span>
-                    <p className="font-medium text-slate-800">
-                      {formatarData(idosoAtual.data_nascimento)}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-slate-500">Telefone:</span>
-                    <p className="font-medium text-slate-800">
-                      {idosoAtual.telefone || "Não informado"}
-                    </p>
-                  </div>
+                <div>
+                  <h2 className="font-semibold text-[#0A2540]">
+                    Credenciais do Aplicativo
+                  </h2>
+                  <p className="text-xs text-gray-500">
+                    Este acesso é exclusivo para o app móvel e não libera entrada
+                    no painel web administrativo.
+                  </p>
                 </div>
               </div>
-            )}
 
-            {/* Credenciais de Acesso */}
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-[#0A2540]">
-                  2. E-mail de Acesso ao App *
-                </label>
-                <div className="relative">
-                  <Mail
-                    size={18}
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
-                  />
+              <div className="mt-6 grid gap-5 md:grid-cols-2">
+                <div className="md:col-span-2">
+                  <label className="mb-2 block text-sm font-medium text-[#0A2540]">
+                    Paciente (Idoso) *
+                  </label>
+                  <select
+                    required
+                    value={idosoId}
+                    onChange={(e) => setIdosoId(e.target.value)}
+                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                  >
+                    <option value="">Selecione o paciente...</option>
+                    {idosos.map((i) => (
+                      <option key={i.id} value={i.id}>
+                        {i.nome}
+                        {i.idade > 0 ? ` (${i.idade} anos)` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-[#0A2540]">
+                    E-mail de login no App *
+                  </label>
                   <input
                     type="email"
                     required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="idoso@exemplo.com"
-                    className="w-full rounded-xl border border-slate-300 py-3 pl-10 pr-4 text-sm outline-none transition focus:border-[#1565C0]"
+                    value={emailApp}
+                    onChange={(e) => setEmailApp(e.target.value)}
+                    placeholder="paciente@exemplo.com"
+                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   />
                 </div>
-              </div>
 
-              <div>
-                <div className="mb-2 flex items-center justify-between">
-                  <label className="text-sm font-semibold text-[#0A2540]">
-                    3. Senha de Acesso *
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-[#0A2540]">
+                    Senha do App *
                   </label>
-                  <button
-                    type="button"
-                    onClick={gerarSenhaSugerida}
-                    className="inline-flex items-center gap-1 text-xs font-medium text-[#1565C0] hover:underline"
-                  >
-                    <Sparkles size={13} />
-                    Gerar senha simples
-                  </button>
-                </div>
-                <div className="relative">
-                  <Lock
-                    size={18}
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
-                  />
-                  <input
-                    type={mostrarSenha ? "text" : "password"}
-                    required
-                    minLength={6}
-                    value={senha}
-                    onChange={(e) => setSenha(e.target.value)}
-                    placeholder="Mínimo 6 caracteres"
-                    className="w-full rounded-xl border border-slate-300 py-3 pl-10 pr-11 text-sm outline-none transition focus:border-[#1565C0]"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setMostrarSenha(!mostrarSenha)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                  >
-                    {mostrarSenha ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <KeyRound
+                        size={16}
+                        className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+                      />
+                      <input
+                        type="text"
+                        required
+                        minLength={6}
+                        value={senhaApp}
+                        onChange={(e) => setSenhaApp(e.target.value)}
+                        className="w-full rounded-xl border border-gray-300 py-3 pl-10 pr-3 font-mono text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSenhaApp(gerarSenhaSegura(10))}
+                      title="Gerar nova senha segura"
+                      className="inline-flex items-center justify-center rounded-xl border border-gray-300 bg-[#FAFCFE] px-3.5 text-gray-600 transition hover:border-[#1565C0] hover:text-[#1565C0]"
+                    >
+                      <RefreshCw size={16} />
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            </section>
 
-            <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-5">
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <Link
                 href="/dashboard/idosos"
-                className="rounded-xl border border-slate-300 px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                className="rounded-xl border border-gray-300 bg-white px-6 py-3 text-center font-medium text-gray-700 hover:bg-gray-50"
               >
                 Cancelar
               </Link>
               <button
                 type="submit"
-                disabled={enviando || !idosoSelecionadoId}
-                className="inline-flex items-center gap-2 rounded-xl bg-[#1565C0] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0A2540] disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={salvando || idosos.length === 0}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-6 py-3 font-medium text-white shadow-sm hover:bg-[#0A2540] disabled:opacity-70"
               >
-                {enviando && <Loader2 size={16} className="animate-spin" />}
-                {enviando ? "Criando acesso..." : "Criar Acesso Mobile"}
+                {salvando ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : (
+                  <Save size={18} />
+                )}
+                {salvando ? "Salvando..." : "Salvar Credencial do App"}
               </button>
             </div>
           </form>
         )}
       </div>
-    </div>
+    </main>
   );
 }

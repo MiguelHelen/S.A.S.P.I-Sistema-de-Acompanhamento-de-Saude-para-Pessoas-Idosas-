@@ -1,267 +1,211 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import DashboardNavbar from "@/components/DashboardNavbar";
-import ImageCropModal from "@/components/ImageCropModal";
 import {
-  Mail,
-  Phone,
+  API_URL,
+  getAuthHeaders,
+  getTokenSessao,
+  getUsuarioSessao,
+  salvarUsuarioSessao,
+} from "@/lib/clinica";
+import {
+  UserCircle2,
   Save,
-  UserRound,
-  IdCard,
-  ShieldCheck,
-  CheckCircle2,
   Loader2,
+  CheckCircle2,
   AlertCircle,
   Camera,
+  Building2,
+  ShieldCheck,
 } from "lucide-react";
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://perfect-bravery-production-5ce7.up.railway.app";
-
-export default function Perfil() {
+export default function PerfilPage() {
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
-  const [salvo, setSalvo] = useState(false);
+  const [enviandoFoto, setEnviandoFoto] = useState(false);
+  const [mensagem, setMensagem] = useState("");
   const [erro, setErro] = useState("");
-  
-  // Estados para Corte e Enquadramento da Foto de Perfil
-  const [fotoOriginal, setFotoOriginal] = useState("");
-  const [modalCropAberto, setModalCropAberto] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [userId, setUserId] = useState("");
+  const [perfil, setPerfil] = useState("");
+  const [clinicaNome, setClinicaNome] = useState("");
+  const [fotoUrl, setFotoUrl] = useState("");
 
   const [formData, setFormData] = useState({
-    id: "",
     nome: "",
     email: "",
     telefone: "",
-    cpf: "",
-    perfil: "",
-    foto_url: "",
+    especialidade: "",
+    registro_profissional: "",
   });
 
-  useEffect(() => {
-    async function sincronizarPerfil() {
-      const userRaw = localStorage.getItem("saspi_user");
-      const token = localStorage.getItem("saspi_token");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-      let sessaoLocal: Record<string, any> = {};
-      if (userRaw) {
-        try {
-          const parsed = JSON.parse(userRaw);
-          sessaoLocal = parsed.user || parsed.usuario || parsed;
-        } catch {}
+  useEffect(() => {
+    async function carregarPerfil() {
+      const sessao = getUsuarioSessao();
+      if (!sessao?.id) {
+        setErro("Sessão de usuário não encontrada.");
+        setCarregando(false);
+        return;
       }
 
-      const currentEmail = sessaoLocal.email || "";
-      const currentId = sessaoLocal.id || "";
-
+      setUserId(sessao.id);
+      setPerfil(sessao.perfil);
+      setClinicaNome(sessao.clinica_nome);
+      setFotoUrl(sessao.foto_url || "");
       setFormData({
-        id: currentId,
-        nome: sessaoLocal.nome || sessaoLocal.name || "Usuário",
-        email: currentEmail,
-        telefone: sessaoLocal.telefone || "",
-        cpf: sessaoLocal.cpf || "",
-        perfil: (sessaoLocal.perfil || sessaoLocal.role || "MEDICO").toUpperCase(),
-        foto_url: sessaoLocal.foto_url || "",
+        nome: sessao.nome || "",
+        email: sessao.email || "",
+        telefone: sessao.telefone || "",
+        especialidade: sessao.especialidade || "",
+        registro_profissional: sessao.registro_profissional || "",
       });
 
-      if (token && currentEmail) {
-        try {
-          const res = await fetch(
-            `${API_URL}/usuario?email=${encodeURIComponent(currentEmail)}`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-
-          if (res.ok) {
-            const data = await res.json();
-            const usuarioEncontrado = Array.isArray(data)
-              ? data.find((u: any) => u.email?.toLowerCase() === currentEmail.toLowerCase())
-              : data;
-
-            if (usuarioEncontrado && usuarioEncontrado.nome) {
-              setFormData((prev) => ({
-                ...prev,
-                id: usuarioEncontrado.id || currentId,
-                nome: usuarioEncontrado.nome,
-                telefone: usuarioEncontrado.telefone || "",
-                cpf: usuarioEncontrado.cpf || "",
-                foto_url: usuarioEncontrado.foto_url || prev.foto_url,
-              }));
-            }
-          }
-        } catch {}
+      try {
+        const res = await fetch(`${API_URL}/usuario/${sessao.id}`, {
+          headers: getAuthHeaders(false),
+        });
+        if (res.ok) {
+          const raw = await res.json();
+          const u = raw?.data || raw;
+          setFormData({
+            nome: String(u.nome || sessao.nome || ""),
+            email: String(u.email || sessao.email || ""),
+            telefone: String(u.telefone || ""),
+            especialidade: String(u.especialidade || ""),
+            registro_profissional: String(u.registro_profissional || ""),
+          });
+          if (u.foto_url) setFotoUrl(String(u.foto_url));
+          if (u.clinica?.nome) setClinicaNome(String(u.clinica.nome));
+        }
+      } catch {
+      } finally {
+        setCarregando(false);
       }
-
-      setCarregando(false);
     }
 
-    sincronizarPerfil();
+    carregarPerfil();
   }, []);
 
-  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      setErro("Selecione um arquivo de imagem válido (PNG, JPG ou WEBP).");
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      setFotoOriginal(reader.result as string);
-      setModalCropAberto(true);
-    };
-    reader.readAsDataURL(file);
-    e.target.value = "";
-  }
-
-  async function handleCropSalvo(blob: Blob) {
-    setModalCropAberto(false);
-    setErro("");
-
-    const token = localStorage.getItem("saspi_token");
-    const dataUpload = new FormData();
-    dataUpload.append("file", blob, `perfil_${formData.id}.jpg`);
-
-    try {
-      const res = await fetch(`${API_URL}/storage/usuario/${formData.id}/foto-perfil`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: dataUpload,
-      });
-
-      const resData = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        throw new Error(resData?.message || "Erro ao realizar upload da imagem.");
-      }
-
-      const novaUrl = resData.url;
-      setFormData((prev) => ({ ...prev, foto_url: novaUrl }));
-
-      const userRaw = localStorage.getItem("saspi_user");
-      if (userRaw) {
-        const parsed = JSON.parse(userRaw);
-        parsed.foto_url = novaUrl;
-        if (parsed.user) parsed.user.foto_url = novaUrl;
-        if (parsed.usuario) parsed.usuario.foto_url = novaUrl;
-        localStorage.setItem("saspi_user", JSON.stringify(parsed));
-        window.dispatchEvent(new Event("saspi_user_updated"));
-      }
-
-      setSalvo(true);
-      setTimeout(() => setSalvo(false), 3000);
-    } catch (err: any) {
-      setErro(err.message || "Falha ao salvar a imagem no servidor.");
-    }
-  }
-
-  async function handleSave(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSalvando(true);
     setErro("");
-    setSalvo(false);
+    setMensagem("");
 
-    const token = localStorage.getItem("saspi_token");
-    const telefoneLimpo = formData.telefone.replace(/\D/g, "");
-    const cpfLimpo = formData.cpf.replace(/\D/g, "");
-
-    const payload = {
-      nome: formData.nome.trim(),
-      telefone: telefoneLimpo,
-      cpf: cpfLimpo,
-    };
+    if (!userId) {
+      setErro("Usuário não identificado.");
+      setSalvando(false);
+      return;
+    }
 
     try {
-      if (token && formData.id) {
-        const res = await fetch(`${API_URL}/usuario/${formData.id}`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(payload),
-        });
-
-        if (!res.ok) {
-          throw new Error("Não foi possível atualizar os dados.");
-        }
-      }
-
-      const userRaw = localStorage.getItem("saspi_user");
-      let sessaoAtual: Record<string, any> = {};
-      if (userRaw) {
-        try {
-          sessaoAtual = JSON.parse(userRaw);
-        } catch {}
-      }
-
-      const usuarioAtualizado = {
-        ...sessaoAtual,
-        ...formData,
+      const payload = {
         nome: formData.nome.trim(),
-        telefone: telefoneLimpo,
-        cpf: cpfLimpo,
+        telefone: formData.telefone.trim() || undefined,
+        especialidade: formData.especialidade.trim() || undefined,
+        registro_profissional:
+          formData.registro_profissional.trim() || undefined,
       };
 
-      localStorage.setItem("saspi_user", JSON.stringify(usuarioAtualizado));
-      window.dispatchEvent(new Event("saspi_user_updated"));
+      const res = await fetch(`${API_URL}/usuario/${userId}`, {
+        method: "PATCH",
+        headers: getAuthHeaders(true),
+        body: JSON.stringify(payload),
+      });
 
-      setSalvo(true);
-      setTimeout(() => setSalvo(false), 3000);
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        const msg = Array.isArray(data?.message)
+          ? data.message.join(", ")
+          : data?.message;
+        throw new Error(msg || "Não foi possível atualizar o perfil.");
+      }
+
+      salvarUsuarioSessao({
+        nome: payload.nome,
+        telefone: payload.telefone || "",
+        especialidade: payload.especialidade || "",
+        registro_profissional: payload.registro_profissional || "",
+      });
+
+      setMensagem("Perfil atualizado com sucesso!");
+      setTimeout(() => setMensagem(""), 4000);
     } catch (err: any) {
-      setErro(err.message || "Erro ao salvar alterações no perfil.");
+      setErro(err.message || "Falha ao salvar perfil.");
     } finally {
       setSalvando(false);
     }
   }
 
-  if (carregando) {
-    return (
-      <main className="min-h-screen bg-[#F2F7FB]">
-        <DashboardNavbar />
-        <div className="flex h-96 items-center justify-center">
-          <Loader2 className="animate-spin text-[#1565C0]" size={36} />
-        </div>
-      </main>
-    );
-  }
+  async function handleUploadFoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !userId) return;
 
-  const avatarUrl =
-    formData.foto_url ||
-    `https://ui-avatars.com/api/?name=${encodeURIComponent(
-      formData.nome || "Usuario"
-    )}&background=1565C0&color=fff&size=128&bold=true`;
+    setEnviandoFoto(true);
+    setErro("");
+    setMensagem("");
+
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+
+      const token = getTokenSessao();
+      const res = await fetch(`${API_URL}/storage/usuario/${userId}/foto-perfil`, {
+        method: "POST",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: fd,
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(
+          data?.message || "Não foi possível enviar a foto de perfil."
+        );
+      }
+
+      const novaUrl =
+        data?.foto_url || data?.url || data?.data?.foto_url || "";
+      if (novaUrl) {
+        setFotoUrl(novaUrl);
+        salvarUsuarioSessao({ foto_url: novaUrl });
+      }
+
+      setMensagem("Foto de perfil atualizada com sucesso!");
+      setTimeout(() => setMensagem(""), 4000);
+    } catch (err: any) {
+      setErro(err.message || "Erro ao enviar foto de perfil.");
+    } finally {
+      setEnviandoFoto(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
 
   return (
     <main className="min-h-screen bg-[#F2F7FB]">
       <DashboardNavbar />
 
-      <ImageCropModal
-        isOpen={modalCropAberto}
-        imageSrc={fotoOriginal}
-        onClose={() => setModalCropAberto(false)}
-        onCropComplete={handleCropSalvo}
-      />
+      <div className="mx-auto max-w-4xl px-4 py-8 md:px-8">
+        <div>
+          <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
+            Conta & Credenciais
+          </span>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0A2540] md:text-4xl">
+            Meu Perfil
+          </h1>
+          <p className="mt-2 text-gray-600">
+            Atualize seus dados pessoais e profissionais exibidos na plataforma.
+          </p>
+        </div>
 
-      <div className="mx-auto max-w-5xl px-4 py-8 md:px-8">
-        <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
-          Minha conta
-        </span>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0A2540] md:text-4xl">
-          Perfil do Usuário
-        </h1>
-        <p className="mt-2 max-w-2xl text-gray-600">
-          Dados sincronizados com a sua credencial de acesso no S.A.S.P.I.
-        </p>
-
-        {salvo && (
+        {mensagem && (
           <div className="mt-6 flex items-center gap-3 rounded-xl bg-emerald-50 p-4 text-emerald-800">
             <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
-            <p className="text-sm font-medium">Informações salvas e sincronizadas com sucesso!</p>
+            <p className="text-sm font-medium">{mensagem}</p>
           </div>
         )}
 
@@ -272,150 +216,171 @@ export default function Perfil() {
           </div>
         )}
 
-        <div className="mt-8 grid gap-6 lg:grid-cols-[280px_1fr]">
-          <aside className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-            <div className="relative mx-auto h-24 w-24">
-              <img
-                src={avatarUrl}
-                alt={formData.nome}
-                className="h-24 w-24 rounded-full object-cover shadow-sm ring-4 ring-gray-100"
-              />
+        {carregando ? (
+          <div className="mt-10 flex items-center justify-center py-12 text-gray-500">
+            <Loader2 size={24} className="animate-spin text-[#1565C0]" />
+            <span className="ml-2 text-sm">Carregando perfil...</span>
+          </div>
+        ) : (
+          <div className="mt-8 space-y-6">
+            <section className="flex flex-col items-start justify-between gap-5 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:flex-row sm:items-center">
+              <div className="flex items-center gap-4">
+                {fotoUrl ? (
+                  <img
+                    src={fotoUrl}
+                    alt={formData.nome}
+                    className="h-16 w-16 rounded-2xl object-cover shadow-xs"
+                  />
+                ) : (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#E8F1FB] text-[#1565C0]">
+                    <UserCircle2 size={34} />
+                  </div>
+                )}
 
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                title="Alterar e enquadrar foto de perfil"
-                className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-[#1565C0] text-white shadow-md transition hover:bg-[#0A2540]"
-              >
-                <Camera size={15} />
-              </button>
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/png, image/jpeg, image/webp"
-                className="hidden"
-                onChange={handleFileSelect}
-              />
-            </div>
-
-            <h2 className="mt-5 text-center text-xl font-semibold text-[#0A2540]">
-              {formData.nome}
-            </h2>
-            <p className="mt-1 text-center text-sm font-medium text-[#26A69A]">
-              {formData.perfil}
-            </p>
-
-            <div className="mt-6 border-t border-gray-100 pt-6">
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-                Contato Registrado
-              </p>
-              <div className="mt-4 space-y-3">
-                <div className="flex items-center gap-3 text-sm text-gray-600">
-                  <Mail size={17} className="shrink-0 text-[#1565C0]" />
-                  <span className="truncate">{formData.email}</span>
-                </div>
-                <div className="flex items-center gap-3 text-sm text-gray-600">
-                  <Phone size={17} className="shrink-0 text-[#26A69A]" />
-                  <span>{formData.telefone || "Não informado"}</span>
+                <div>
+                  <h2 className="text-lg font-bold text-[#0A2540]">
+                    {formData.nome || "Usuário"}
+                  </h2>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#E8F1FB] px-2.5 py-0.5 font-semibold text-[#1565C0]">
+                      <ShieldCheck size={13} />
+                      {perfil || "USUÁRIO"}
+                    </span>
+                    {clinicaNome && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-0.5 font-medium text-gray-600">
+                        <Building2 size={13} />
+                        {clinicaNome}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          </aside>
-
-          <form onSubmit={handleSave} className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
-            <div className="flex items-center gap-3 border-b border-gray-100 pb-5">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#E6F4EF] text-[#26A69A]">
-                <UserRound size={22} />
-              </div>
-              <div>
-                <h2 className="font-semibold text-[#0A2540]">Dados Pessoais</h2>
-                <p className="mt-1 text-sm text-gray-500">Edite as informações cadastrais da sua credencial.</p>
-              </div>
-            </div>
-
-            <div className="mt-6 grid gap-5 md:grid-cols-2">
-              <div className="md:col-span-2">
-                <label htmlFor="nome" className="mb-2 block text-sm font-medium text-[#0A2540]">
-                  Nome completo *
-                </label>
-                <input
-                  id="nome"
-                  type="text"
-                  required
-                  value={formData.nome}
-                  onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                  className="w-full rounded-xl border border-gray-300 py-3 px-4 text-sm outline-none focus:border-[#1565C0]"
-                />
-              </div>
 
               <div>
-                <label htmlFor="email" className="mb-2 block text-sm font-medium text-[#0A2540]">
-                  E-mail
-                </label>
                 <input
-                  id="email"
-                  type="email"
-                  disabled
-                  value={formData.email}
-                  className="w-full cursor-not-allowed rounded-xl border border-gray-200 bg-gray-50 py-3 px-4 text-sm text-gray-500 outline-none"
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleUploadFoto}
+                  className="hidden"
                 />
+                <button
+                  type="button"
+                  disabled={enviandoFoto}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-[#FAFCFE] px-4 py-2.5 text-xs font-semibold text-[#0A2540] transition hover:border-[#1565C0] hover:text-[#1565C0] disabled:opacity-60"
+                >
+                  {enviandoFoto ? (
+                    <Loader2 size={15} className="animate-spin" />
+                  ) : (
+                    <Camera size={15} />
+                  )}
+                  {enviandoFoto ? "Enviando..." : "Alterar Foto"}
+                </button>
+              </div>
+            </section>
+
+            <form
+              onSubmit={handleSubmit}
+              className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm md:p-8"
+            >
+              <div className="grid gap-5 md:grid-cols-2">
+                <div className="md:col-span-2">
+                  <label className="mb-2 block text-sm font-medium text-[#0A2540]">
+                    Nome completo *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.nome}
+                    onChange={(e) =>
+                      setFormData({ ...formData, nome: e.target.value })
+                    }
+                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-[#0A2540]">
+                    E-mail institucional
+                  </label>
+                  <input
+                    type="email"
+                    readOnly
+                    value={formData.email}
+                    className="w-full cursor-not-allowed rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-[#0A2540]">
+                    Telefone
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.telefone}
+                    onChange={(e) =>
+                      setFormData({ ...formData, telefone: e.target.value })
+                    }
+                    placeholder="(11) 99999-9999"
+                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-[#0A2540]">
+                    Especialidade / Área
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.especialidade}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        especialidade: e.target.value,
+                      })
+                    }
+                    placeholder="Ex.: Geriatria, Enfermagem, Cuidador"
+                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-[#0A2540]">
+                    Registro Profissional (CRM / COREN)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.registro_profissional}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        registro_profissional: e.target.value,
+                      })
+                    }
+                    placeholder="Ex.: CRM-SP 123456"
+                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label htmlFor="telefone" className="mb-2 block text-sm font-medium text-[#0A2540]">
-                  Telefone
-                </label>
-                <input
-                  id="telefone"
-                  type="tel"
-                  maxLength={11}
-                  value={formData.telefone}
-                  onChange={(e) => setFormData({ ...formData, telefone: e.target.value.replace(/\D/g, "") })}
-                  className="w-full rounded-xl border border-gray-300 py-3 px-4 text-sm outline-none focus:border-[#1565C0]"
-                />
+              <div className="mt-6 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={salvando}
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#1565C0] px-6 py-3 font-medium text-white shadow-sm transition hover:bg-[#0A2540] disabled:opacity-70"
+                >
+                  {salvando ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : (
+                    <Save size={18} />
+                  )}
+                  {salvando ? "Salvando..." : "Salvar Perfil"}
+                </button>
               </div>
-
-              <div>
-                <label htmlFor="cpf" className="mb-2 block text-sm font-medium text-[#0A2540]">
-                  CPF
-                </label>
-                <input
-                  id="cpf"
-                  type="text"
-                  maxLength={11}
-                  value={formData.cpf}
-                  onChange={(e) => setFormData({ ...formData, cpf: e.target.value.replace(/\D/g, "") })}
-                  className="w-full rounded-xl border border-gray-300 py-3 px-4 text-sm outline-none focus:border-[#1565C0]"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="perfil" className="mb-2 block text-sm font-medium text-[#0A2540]">
-                  Perfil de Acesso
-                </label>
-                <input
-                  id="perfil"
-                  type="text"
-                  disabled
-                  value={formData.perfil}
-                  className="w-full cursor-not-allowed rounded-xl border border-gray-200 bg-gray-50 py-3 px-4 text-sm text-gray-500 outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="mt-8 flex justify-end border-t border-gray-100 pt-6">
-              <button
-                type="submit"
-                disabled={salvando}
-                className="inline-flex items-center gap-2 rounded-xl bg-[#1565C0] px-6 py-3 font-medium text-white shadow-sm hover:bg-[#0A2540] disabled:opacity-70"
-              >
-                {salvando ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                {salvando ? "Salvando..." : "Salvar alterações"}
-              </button>
-            </div>
-          </form>
-        </div>
+            </form>
+          </div>
+        )}
       </div>
     </main>
   );
