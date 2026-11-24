@@ -42,4 +42,25 @@ export class AuthController {
       req.user.id,
     );
   }
+
+  @Post('criar-acesso-idoso')
+  @UseGuards(AuthGuard)
+  criarAcessoIdoso(
+    @Body()
+    body: {
+      idoso_id: string;
+      email: string;
+      senha: string;
+      clinica_id?: string;
+    },
+    @Request() req: any,
+  ) {
+    return this.authService.criarAcessoIdoso(
+      body.idoso_id,
+      body.email,
+      body.senha,
+      body.clinica_id,
+      req.user.id,
+    );
+  }
 }
