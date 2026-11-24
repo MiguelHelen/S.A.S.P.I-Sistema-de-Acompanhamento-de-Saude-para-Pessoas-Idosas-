@@ -1,312 +1,287 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
-import { Users, Loader2, AlertCircle } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+import {
+  API_URL,
+  getAuthHeaders,
+  getUsuarioSessao,
+} from "@/lib/clinica";
+import { Users, CheckCircle2, Loader2, AlertCircle } from "lucide-react";
 
 export interface Idoso {
   id: string;
   nome: string;
   idade: number;
-  quarto?: string;
-  sexo?: string;
-  clinica_id?: string;
   data_nascimento?: string;
+  quarto?: string | null;
   foto_url?: string | null;
+  condicoes?: string | null;
+  telefone_emergencia?: string | null;
+  clinica_id?: string;
 }
 
 interface PatientSelectorProps {
-  onSelect?: (idoso: Idoso) => void;
+  onSelect: (idoso: Idoso) => void;
   selectedId?: string;
 }
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://perfect-bravery-production-5ce7.up.railway.app";
+export function calcularIdadeReal(dataNascimento?: string | null): number {
+  if (!dataNascimento) return 0;
+  const limpa = String(dataNascimento).split("T")[0];
+  const partes = limpa.split("-");
+  if (partes.length !== 3) return 0;
 
-export function calcularIdadeReal(dataNasc?: string): number {
-  if (!dataNasc) return 0;
+  const ano = Number(partes[0]);
+  const mes = Number(partes[1]) - 1;
+  const dia = Number(partes[2]);
+  if (Number.isNaN(ano) || Number.isNaN(mes) || Number.isNaN(dia)) return 0;
+
   const hoje = new Date();
-  const nasc = new Date(dataNasc);
-  if (Number.isNaN(nasc.getTime())) return 0;
-  let idade = hoje.getUTCFullYear() - nasc.getUTCFullYear();
-  const mes = hoje.getUTCMonth() - nasc.getUTCMonth();
-  if (mes < 0 || (mes === 0 && hoje.getUTCDate() < nasc.getUTCDate())) {
+  let idade = hoje.getFullYear() - ano;
+  const diffMes = hoje.getMonth() - mes;
+  if (diffMes < 0 || (diffMes === 0 && hoje.getDate() < dia)) {
     idade--;
   }
-  return idade >= 0 && idade <= 130 ? idade : 0;
+  return idade > 0 ? idade : 0;
+}
+
+function normalizarIdoso(bruto: any): Idoso {
+  const idadeCalculada = calcularIdadeReal(bruto.data_nascimento);
+  return {
+    id: String(bruto.id || ""),
+    nome: String(bruto.nome || "Paciente"),
+    idade: idadeCalculada > 0 ? idadeCalculada : Number(bruto.idade || 0),
+    data_nascimento: bruto.data_nascimento,
+    quarto: bruto.quarto || null,
+    foto_url: bruto.foto_url || null,
+    condicoes: bruto.condicoes || null,
+    telefone_emergencia: bruto.telefone_emergencia || null,
+    clinica_id: bruto.clinica_id || undefined,
+  };
 }
 
 export default function PatientSelector({
   onSelect,
   selectedId,
 }: PatientSelectorProps) {
-  const [listaIdosos, setListaIdosos] = useState<Idoso[]>([]);
-  const [ativo, setAtivo] = useState<Idoso | null>(null);
+  const [idosos, setIdosos] = useState<Idoso[]>([]);
   const [carregando, setCarregando] = useState(true);
-  const [perfilUsuario, setPerfilUsuario] = useState<string>("");
+  const [erro, setErro] = useState("");
 
-  const onSelectRef = useRef(onSelect);
-  onSelectRef.current = onSelect;
-
-  const carregarIdososAutorizados = useCallback(async () => {
+  const carregarIdosos = useCallback(async () => {
     setCarregando(true);
+    setErro("");
 
-    const token =
-      typeof window !== "undefined" ? localStorage.getItem("saspi_token") : null;
-    const userRaw =
-      typeof window !== "undefined" ? localStorage.getItem("saspi_user") : null;
-
-    let perfil = "";
-    let userId = "";
-
-    if (userRaw) {
-      try {
-        const parsed = JSON.parse(userRaw);
-        const userData = parsed.user || parsed.usuario || parsed;
-        perfil = String(userData.perfil || userData.role || "").toUpperCase();
-        userId = userData.id || "";
-        setPerfilUsuario(perfil);
-      } catch {}
-    }
-
-    if (!userId || !token) {
-      setListaIdosos([]);
-      setAtivo(null);
+    const usuario = getUsuarioSessao();
+    if (!usuario?.id) {
+      setIdosos([]);
       setCarregando(false);
       return;
     }
 
+    const headers = getAuthHeaders(false);
+
     try {
+      let listaNormalizada: Idoso[] = [];
+
       const resVinculos = await fetch(
-        `${API_URL}/usuario-idoso/usuario/${userId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+        `${API_URL}/usuario-idoso/usuario/${usuario.id}`,
+        { headers }
+      ).catch(() => null);
 
-      let idososVinculados: Idoso[] = [];
+      if (resVinculos?.ok) {
+        const dataVinculos = await resVinculos.json();
+        const arrVinculos = Array.isArray(dataVinculos)
+          ? dataVinculos
+          : dataVinculos?.data || [];
 
-      if (resVinculos.ok) {
-        const vinculosData = await resVinculos.json();
-        const arrayVinculos = Array.isArray(vinculosData)
-          ? vinculosData
-          : vinculosData.data || [];
+        const extraidos = arrVinculos
+          .map((v: any) => v.idoso || (v.nome ? v : null))
+          .filter((item: any) => Boolean(item?.id))
+          .filter(
+            (item: any) =>
+              !usuario.clinica_id ||
+              !item.clinica_id ||
+              item.clinica_id === usuario.clinica_id
+          )
+          .map(normalizarIdoso);
 
         const mapaUnico = new Map<string, Idoso>();
-
-        arrayVinculos.forEach((v: any) => {
-          const item = v.idoso;
-          if (item && item.id && !mapaUnico.has(item.id)) {
-            mapaUnico.set(item.id, {
-              id: item.id,
-              nome: item.nome,
-              idade: calcularIdadeReal(item.data_nascimento),
-              quarto: item.endereco || "Leito não informado",
-              sexo: item.sexo,
-              clinica_id: item.clinica_id,
-              data_nascimento: item.data_nascimento,
-              foto_url: item.foto_url || null,
-            });
-          }
-        });
-
-        idososVinculados = Array.from(mapaUnico.values());
+        extraidos.forEach((i: Idoso) => mapaUnico.set(i.id, i));
+        listaNormalizada = Array.from(mapaUnico.values());
       }
 
-      setListaIdosos(idososVinculados);
-      localStorage.setItem(
-        "saspi_elderly_list",
-        JSON.stringify(idososVinculados)
-      );
+      if (
+        listaNormalizada.length === 0 &&
+        usuario.clinica_id &&
+        usuario.perfil !== "FAMILIAR"
+      ) {
+        const resClinica = await fetch(
+          `${API_URL}/idoso?clinica_id=${usuario.clinica_id}`,
+          { headers }
+        ).catch(() => null);
 
-      const savedActiveRaw = localStorage.getItem("saspi_active_elderly");
-      let idosoParaAtivar: Idoso | null = null;
+        if (resClinica?.ok) {
+          const dataClinica = await resClinica.json();
+          const arrClinica = Array.isArray(dataClinica)
+            ? dataClinica
+            : dataClinica?.data || [];
 
-      if (selectedId) {
-        idosoParaAtivar =
-          idososVinculados.find((i) => i.id === selectedId) || null;
-      } else if (savedActiveRaw) {
+          listaNormalizada = arrClinica
+            .filter(
+              (item: any) =>
+                !item.clinica_id || item.clinica_id === usuario.clinica_id
+            )
+            .map(normalizarIdoso);
+        }
+      }
+
+      setIdosos(listaNormalizada);
+
+      if (listaNormalizada.length > 0) {
+        let ativoStorage: Idoso | null = null;
         try {
-          const parsedSaved = JSON.parse(savedActiveRaw);
-          idosoParaAtivar =
-            idososVinculados.find((i) => i.id === parsedSaved.id) || null;
+          const raw = localStorage.getItem("saspi_active_elderly");
+          if (raw) ativoStorage = JSON.parse(raw);
         } catch {}
-      }
 
-      if (!idosoParaAtivar && idososVinculados.length > 0) {
-        idosoParaAtivar = idososVinculados[0];
-      }
+        const idPreferencial = selectedId || ativoStorage?.id;
+        const encontrado =
+          listaNormalizada.find((i) => i.id === idPreferencial) ||
+          listaNormalizada[0];
 
-      if (idosoParaAtivar) {
-        setAtivo(idosoParaAtivar);
         localStorage.setItem(
           "saspi_active_elderly",
-          JSON.stringify(idosoParaAtivar)
+          JSON.stringify(encontrado)
         );
-        onSelectRef.current?.(idosoParaAtivar);
+        onSelect(encontrado);
       } else {
-        setAtivo(null);
         localStorage.removeItem("saspi_active_elderly");
-        window.dispatchEvent(new Event("saspi_elderly_updated"));
       }
     } catch {
-      setListaIdosos([]);
-      setAtivo(null);
+      setErro("Não foi possível carregar a lista de pacientes vinculados.");
+      setIdosos([]);
     } finally {
       setCarregando(false);
     }
-  }, [selectedId]);
+  }, [onSelect, selectedId]);
 
   useEffect(() => {
-    carregarIdososAutorizados();
+    carregarIdosos();
 
-    function handleElderlyUpdate() {
-      const savedActiveRaw = localStorage.getItem("saspi_active_elderly");
-      if (savedActiveRaw) {
-        try {
-          const parsed = JSON.parse(savedActiveRaw);
-          if (parsed && parsed.id) {
-            setAtivo(parsed);
-          }
-        } catch {}
-      } else {
-        setAtivo(null);
-      }
+    function handleAtualizacaoExterna() {
+      carregarIdosos();
     }
 
-    window.addEventListener("saspi_elderly_updated", handleElderlyUpdate);
+    window.addEventListener("saspi_elderly_updated", handleAtualizacaoExterna);
     return () => {
-      window.removeEventListener("saspi_elderly_updated", handleElderlyUpdate);
+      window.removeEventListener(
+        "saspi_elderly_updated",
+        handleAtualizacaoExterna
+      );
     };
-  }, [carregarIdososAutorizados]);
+  }, [carregarIdosos]);
 
-  function handleSelect(idoso: Idoso) {
-    if (perfilUsuario === "FAMILIAR" && listaIdosos.length <= 1) return;
-    setAtivo(idoso);
-    try {
-      localStorage.setItem("saspi_active_elderly", JSON.stringify(idoso));
-      window.dispatchEvent(new Event("saspi_elderly_updated"));
-    } catch {}
-    onSelectRef.current?.(idoso);
+  function selecionarPaciente(idoso: Idoso) {
+    localStorage.setItem("saspi_active_elderly", JSON.stringify(idoso));
+    onSelect(idoso);
   }
 
-  const isFamiliarUnico =
-    perfilUsuario === "FAMILIAR" && listaIdosos.length === 1;
+  if (carregando) {
+    return (
+      <div className="flex items-center gap-3 rounded-2xl border border-gray-100 bg-white p-4 text-sm text-gray-500 shadow-sm">
+        <Loader2 size={18} className="animate-spin text-[#1565C0]" />
+        <span>Carregando pacientes sob acompanhamento...</span>
+      </div>
+    );
+  }
 
-  const avatarAtivoUrl =
-    ativo?.foto_url ||
-    (ativo
-      ? `https://ui-avatars.com/api/?name=${encodeURIComponent(
-          ativo.nome
-        )}&background=1565C0&color=fff&size=96&bold=true`
-      : "");
+  if (erro) {
+    return (
+      <div className="flex items-center gap-3 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
+        <AlertCircle size={18} className="shrink-0 text-red-600" />
+        <span>{erro}</span>
+      </div>
+    );
+  }
+
+  if (idosos.length === 0) {
+    return (
+      <div className="flex items-center gap-3 rounded-2xl border border-dashed border-gray-200 bg-white p-4 text-sm text-gray-600">
+        <Users size={18} className="shrink-0 text-gray-400" />
+        <span>
+          Nenhum paciente vinculado ao seu perfil no momento. Solicite ao
+          administrador da clínica a vinculação do idoso.
+        </span>
+      </div>
+    );
+  }
 
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm md:p-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          {ativo ? (
-            <img
-              src={avatarAtivoUrl}
-              alt={`Foto de ${ativo.nome}`}
-              className="h-12 w-12 shrink-0 rounded-full object-cover shadow-sm ring-2 ring-[#E8F1FB]"
-            />
-          ) : (
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#E8F1FB] text-[#1565C0]">
-              <Users size={22} />
-            </div>
-          )}
-          <div>
-            <h2 className="text-base font-semibold text-[#0A2540]">
-              {ativo
-                ? `Paciente em Acompanhamento: ${ativo.nome}`
-                : "Paciente em Acompanhamento"}
-            </h2>
-            <p className="text-sm text-gray-500">
-              {isFamiliarUnico
-                ? "Visualização dedicada ao paciente vinculado à sua conta."
-                : "Selecione o paciente vinculado para visualizar os prontuários e sinais vitais."}
-            </p>
-          </div>
-        </div>
+    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+      <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+        <Users size={15} className="text-[#1565C0]" />
+        <span>Paciente em Acompanhamento ({idosos.length})</span>
       </div>
 
-      <div className="mt-5 border-t border-gray-100 pt-5">
-        {carregando ? (
-          <div className="flex items-center gap-2 py-3 text-sm text-gray-500">
-            <Loader2 size={18} className="animate-spin text-[#1565C0]" />
-            Carregando pacientes vinculados...
-          </div>
-        ) : listaIdosos.length === 0 ? (
-          <div className="flex items-center gap-3 rounded-xl border border-dashed border-gray-200 bg-gray-50/50 p-4">
-            <AlertCircle size={18} className="shrink-0 text-amber-500" />
-            <p className="text-sm text-gray-500">
-              Nenhum paciente atribuído ao seu usuário até o momento. Solicite o
-              vínculo à administração da clínica.
-            </p>
-          </div>
-        ) : isFamiliarUnico && ativo ? (
-          <div className="inline-flex items-center gap-2.5 rounded-xl bg-[#1565C0] py-2 pl-2.5 pr-4 text-sm font-medium text-white shadow-sm">
-            <img
-              src={
-                ativo.foto_url ||
-                `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                  ativo.nome
-                )}&background=ffffff&color=1565C0&size=64&bold=true`
-              }
-              alt={ativo.nome}
-              className="h-6 w-6 rounded-full object-cover"
-            />
-            <span>{ativo.nome}</span>
-            {ativo.idade > 0 && (
-              <span className="text-xs text-blue-100">
-                ({ativo.idade} anos)
-              </span>
-            )}
-          </div>
-        ) : (
-          <div className="flex flex-wrap items-center gap-2.5">
-            {listaIdosos.map((idoso) => {
-              const isSelected = ativo?.id === idoso.id;
-              const thumbUrl =
-                idoso.foto_url ||
-                `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                  idoso.nome
-                )}&background=${
-                  isSelected ? "ffffff" : "E8F1FB"
-                }&color=1565C0&size=64&bold=true`;
+      <div className="flex flex-wrap gap-2.5">
+        {idosos.map((idoso) => {
+          const ativo = idoso.id === selectedId;
+          const iniciais = idoso.nome
+            .split(" ")
+            .slice(0, 2)
+            .map((p) => p[0])
+            .join("")
+            .toUpperCase();
 
-              return (
-                <button
-                  key={idoso.id}
-                  type="button"
-                  onClick={() => handleSelect(idoso)}
-                  className={`inline-flex items-center gap-2.5 rounded-xl py-2 pl-2.5 pr-4 text-sm font-medium transition ${
-                    isSelected
-                      ? "bg-[#1565C0] text-white shadow-sm ring-2 ring-[#1565C0]/20"
-                      : "border border-gray-200 bg-gray-50 text-gray-700 hover:border-blue-200 hover:bg-[#F2F7FB]"
+          return (
+            <button
+              key={idoso.id}
+              type="button"
+              onClick={() => selecionarPaciente(idoso)}
+              className={`flex items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left transition ${
+                ativo
+                  ? "border-[#1565C0] bg-[#E8F1FB] text-[#0A2540] shadow-xs"
+                  : "border-gray-200 bg-[#FAFCFE] text-gray-700 hover:border-[#BFD8F2] hover:bg-white"
+              }`}
+            >
+              {idoso.foto_url ? (
+                <img
+                  src={idoso.foto_url}
+                  alt={idoso.nome}
+                  className="h-9 w-9 shrink-0 rounded-full object-cover"
+                />
+              ) : (
+                <div
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                    ativo
+                      ? "bg-[#1565C0] text-white"
+                      : "bg-gray-200 text-gray-700"
                   }`}
                 >
-                  <img
-                    src={thumbUrl}
-                    alt={idoso.nome}
-                    className="h-6 w-6 rounded-full object-cover"
-                  />
-                  <span>{idoso.nome}</span>
-                  {idoso.idade > 0 && (
-                    <span
-                      className={`text-xs ${
-                        isSelected ? "text-blue-100" : "text-gray-400"
-                      }`}
-                    >
-                      ({idoso.idade} anos)
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
+                  {iniciais || "ID"}
+                </div>
+              )}
+
+              <div>
+                <p className="text-sm font-semibold leading-tight">
+                  {idoso.nome}
+                </p>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  {idoso.idade > 0 ? `${idoso.idade} anos` : "Paciente ativo"}
+                  {idoso.quarto ? ` • ${idoso.quarto}` : ""}
+                </p>
+              </div>
+
+              {ativo && (
+                <CheckCircle2
+                  size={16}
+                  className="ml-1 shrink-0 text-[#1565C0]"
+                />
+              )}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

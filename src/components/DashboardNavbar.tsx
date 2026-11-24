@@ -6,13 +6,22 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { gerarAlertasClinicos } from "@/components/MetricCard";
 import {
+  API_URL,
+  UsuarioSessao,
+  getAuthHeaders,
+  getClinicaDados,
+  getTokenSessao,
+  getUsuarioSessao,
+  isAdminPerfil,
+  limparSessao,
+} from "@/lib/clinica";
+import {
   Activity,
   HeartPulse,
   Pill,
   CalendarDays,
   History,
   User,
-  UserPlus,
   Users,
   HeartHandshake,
   LogOut,
@@ -28,16 +37,6 @@ import {
   CheckCheck,
 } from "lucide-react";
 
-interface UsuarioLogado {
-  id?: string;
-  nome: string;
-  email: string;
-  perfil: string;
-  foto_url?: string | null;
-  clinica_id?: string;
-  clinica_nome?: string;
-}
-
 interface NotificacaoSistema {
   id: string;
   tipo: "alerta_clinico" | "vinculo" | "consulta";
@@ -47,10 +46,6 @@ interface NotificacaoSistema {
   href: string;
   critico?: boolean;
 }
-
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://perfect-bravery-production-5ce7.up.railway.app";
 
 const CLINICAL_NAV_LINKS = [
   { href: "/dashboard", label: "Visão Geral", icon: Activity },
@@ -87,69 +82,20 @@ export default function DashboardNavbar() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
+  const [usuario, setUsuario] = useState<UsuarioSessao | null>(null);
   const [nomeClinica, setNomeClinica] = useState<string>("");
   const [buscandoClinica, setBuscandoClinica] = useState(false);
   const [notificacoes, setNotificacoes] = useState<NotificacaoSistema[]>([]);
   const [notificacoesLidas, setNotificacoesLidas] = useState<string[]>([]);
 
-  const buscarNomeClinica = useCallback(
-    async (cId: string, token: string | null) => {
-      if (!cId) return;
-      setBuscandoClinica(true);
-
-      try {
-        const res = await fetch(`${API_URL}/clinica/${cId}`, {
-          headers: {
-            ...(token && { Authorization: `Bearer ${token}` }),
-          },
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          if (data?.nome) {
-            setNomeClinica(data.nome);
-
-            const userRaw = localStorage.getItem("saspi_user");
-            if (userRaw) {
-              try {
-                const parsed = JSON.parse(userRaw);
-                if (parsed.user) parsed.user.clinica_nome = data.nome;
-                else if (parsed.usuario)
-                  parsed.usuario.clinica_nome = data.nome;
-                else parsed.clinica_nome = data.nome;
-                localStorage.setItem("saspi_user", JSON.stringify(parsed));
-              } catch {}
-            }
-          }
-        }
-      } catch {
-      } finally {
-        setBuscandoClinica(false);
-      }
-    },
-    [],
-  );
-
   const carregarNotificacoes = useCallback(async () => {
     if (typeof window === "undefined") return;
-    const token = localStorage.getItem("saspi_token");
-    const userRaw = localStorage.getItem("saspi_user");
-    if (!token || !userRaw) return;
 
-    let userId = "";
-    let perfil = "";
-    try {
-      const parsed = JSON.parse(userRaw);
-      const u = parsed.user || parsed.usuario || parsed;
-      userId = u.id || "";
-      perfil = String(u.perfil || u.role || "").toUpperCase();
-    } catch {
-      return;
-    }
+    const token = getTokenSessao();
+    const sessao = getUsuarioSessao();
+    if (!token || !sessao?.id) return;
 
-    if (!userId) return;
-
+    const userId = sessao.id;
     const lidasStorage = localStorage.getItem(`saspi_notif_lidas_${userId}`);
     if (lidasStorage) {
       try {
@@ -157,11 +103,11 @@ export default function DashboardNavbar() {
       } catch {}
     }
 
-    const headers = { Authorization: `Bearer ${token}` };
+    const headers = getAuthHeaders();
     const listaNotif: NotificacaoSistema[] = [];
 
     try {
-      if (perfil === "ADMINISTRADOR" || perfil === "ADMIN") {
+      if (isAdminPerfil(sessao.perfil)) {
         const resVinc = await fetch(`${API_URL}/usuario-idoso`, {
           headers,
         }).catch(() => null);
@@ -216,10 +162,10 @@ export default function DashboardNavbar() {
 
             regs.forEach((r: any) => {
               const nomeInd = String(
-                r.indicador_saude?.nome || r.indicador_nome || "",
+                r.indicador_saude?.nome || r.indicador_nome || ""
               ).toLowerCase();
               const val = String(
-                r.valor_numerico ?? r.valor_categorico ?? r.valor ?? "--",
+                r.valor_numerico ?? r.valor_categorico ?? r.valor ?? "--"
               );
               if (nomeInd.includes("card") && fc === "--") fc = val;
               else if (
@@ -256,7 +202,7 @@ export default function DashboardNavbar() {
             cons
               .filter(
                 (c: any) =>
-                  c.status !== "Cancelada" && c.status !== "Realizada",
+                  c.status !== "Cancelada" && c.status !== "Realizada"
               )
               .slice(0, 2)
               .forEach((c: any) => {
@@ -279,7 +225,7 @@ export default function DashboardNavbar() {
 
       const resMeusVinculos = await fetch(
         `${API_URL}/usuario-idoso/usuario/${userId}`,
-        { headers },
+        { headers }
       ).catch(() => null);
 
       if (resMeusVinculos?.ok) {
@@ -306,43 +252,32 @@ export default function DashboardNavbar() {
     } catch {}
   }, []);
 
-  const carregarUsuario = useCallback(() => {
-    if (typeof window === "undefined") return;
-    const userRaw = localStorage.getItem("saspi_user");
-    const token = localStorage.getItem("saspi_token");
+  const carregarUsuario = useCallback(async () => {
+    const sessao = getUsuarioSessao();
+    if (!sessao) {
+      setUsuario(null);
+      setNomeClinica("");
+      return;
+    }
 
-    if (!userRaw) return;
+    setUsuario(sessao);
 
-    try {
-      const parsed = JSON.parse(userRaw);
-      const userData = parsed.user || parsed.usuario || parsed;
+    if (sessao.clinica_nome) {
+      setNomeClinica(sessao.clinica_nome);
+    }
 
-      const cId =
-        userData.clinica_id || userData.clinicaId || userData.clinica?.id || "";
-
-      const cNomeInicial =
-        userData.clinica?.nome || userData.clinica_nome || "";
-
-      setUsuario({
-        id: userData.id || "",
-        nome:
-          userData.nome ||
-          userData.name ||
-          (userData.email ? userData.email.split("@")[0] : "Usuário"),
-        email: userData.email || "",
-        perfil: (userData.perfil || userData.role || "MEDICO").toUpperCase(),
-        foto_url: userData.foto_url || null,
-        clinica_id: cId,
-        clinica_nome: cNomeInicial,
-      });
-
-      if (cNomeInicial) {
-        setNomeClinica(cNomeInicial);
-      } else if (cId) {
-        buscarNomeClinica(cId, token);
+    if (sessao.clinica_id || getTokenSessao()) {
+      setBuscandoClinica(true);
+      try {
+        const dadosClinica = await getClinicaDados();
+        if (dadosClinica?.nome) {
+          setNomeClinica(dadosClinica.nome);
+        }
+      } finally {
+        setBuscandoClinica(false);
       }
-    } catch {}
-  }, [buscarNomeClinica]);
+    }
+  }, []);
 
   useEffect(() => {
     carregarUsuario();
@@ -377,14 +312,7 @@ export default function DashboardNavbar() {
   }, [carregarUsuario, carregarNotificacoes]);
 
   function handleLogout() {
-    localStorage.removeItem("saspi_token");
-    localStorage.removeItem("saspi_user");
-    localStorage.removeItem("saspi_active_elderly");
-    localStorage.removeItem("saspi_elderly_list");
-    document.cookie = "saspi_token=; path=/; max-age=0; SameSite=Lax";
-    document.cookie = "saspi_user=; path=/; max-age=0; SameSite=Lax";
-
-    window.dispatchEvent(new Event("saspi_user_updated"));
+    limparSessao();
     router.push("/login");
   }
 
@@ -398,7 +326,7 @@ export default function DashboardNavbar() {
     setNotificacoesLidas(novasLidas);
     localStorage.setItem(
       `saspi_notif_lidas_${usuario.id}`,
-      JSON.stringify(novasLidas),
+      JSON.stringify(novasLidas)
     );
   }
 
@@ -408,16 +336,15 @@ export default function DashboardNavbar() {
     setNotificacoesLidas(todosIds);
     localStorage.setItem(
       `saspi_notif_lidas_${usuario.id}`,
-      JSON.stringify(todosIds),
+      JSON.stringify(todosIds)
     );
   }
 
-  const isAdmin =
-    usuario?.perfil === "ADMINISTRADOR" || usuario?.perfil === "ADMIN";
+  const isAdmin = isAdminPerfil(usuario?.perfil);
   const navLinksAtivos = isAdmin ? ADMIN_NAV_LINKS : CLINICAL_NAV_LINKS;
 
   const notificacoesNaoLidas = notificacoes.filter(
-    (n) => !notificacoesLidas.includes(n.id),
+    (n) => !notificacoesLidas.includes(n.id)
   );
   const qtdCriticas = notificacoesNaoLidas.filter((n) => n.critico).length;
 
@@ -425,7 +352,7 @@ export default function DashboardNavbar() {
     usuario?.foto_url ||
     (usuario?.nome
       ? `https://ui-avatars.com/api/?name=${encodeURIComponent(
-          usuario.nome,
+          usuario.nome
         )}&background=1565C0&color=fff&size=64&bold=true`
       : "");
 
@@ -508,7 +435,7 @@ export default function DashboardNavbar() {
             </button>
 
             {notificacoesAbertas && (
-              <div className="absolute right-0 mt-2 w-80 sm:w-105 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-xl ring-1 ring-black/5 z-50">
+              <div className="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-xl ring-1 ring-black/5 sm:w-105">
                 <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50/60 px-4 py-3">
                   <span className="text-sm font-bold text-[#0A2540]">
                     Notificações e Alertas ({notificacoesNaoLidas.length})
@@ -521,8 +448,9 @@ export default function DashboardNavbar() {
                     )}
                     {notificacoesNaoLidas.length > 0 && (
                       <button
+                        type="button"
                         onClick={marcarTodasComoLidas}
-                        className="flex items-center gap-1 text-[11px] font-medium text-[#1565C0] hover:text-[#0A2540] transition"
+                        className="flex items-center gap-1 text-[11px] font-medium text-[#1565C0] transition hover:text-[#0A2540]"
                         title="Marcar todas como lidas"
                       >
                         <CheckCheck size={14} />
@@ -535,19 +463,19 @@ export default function DashboardNavbar() {
                 <div className="max-h-87.5 divide-y divide-gray-100 overflow-y-auto">
                   {notificacoesNaoLidas.length === 0 ? (
                     <div className="p-8 text-center">
-                      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 mb-3">
+                      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
                         <CheckCheck size={24} />
                       </div>
                       <p className="text-sm font-medium text-[#0A2540]">
                         Tudo limpo!
                       </p>
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="mt-1 text-xs text-gray-500">
                         Nenhuma notificação pendente.
                       </p>
                     </div>
                   ) : (
                     notificacoesNaoLidas.map((n) => (
-                      <div key={n.id} className="relative group">
+                      <div key={n.id} className="group relative">
                         <Link
                           href={n.href}
                           onClick={() => {
@@ -555,11 +483,12 @@ export default function DashboardNavbar() {
                             if (!notificacoesLidas.includes(n.id)) {
                               const novasLidas = [...notificacoesLidas, n.id];
                               setNotificacoesLidas(novasLidas);
-                              if (usuario?.id)
+                              if (usuario?.id) {
                                 localStorage.setItem(
                                   `saspi_notif_lidas_${usuario.id}`,
-                                  JSON.stringify(novasLidas),
+                                  JSON.stringify(novasLidas)
                                 );
+                              }
                             }
                           }}
                           className={`flex items-start gap-3 p-4 pr-10 transition hover:bg-gray-50 ${
@@ -603,8 +532,9 @@ export default function DashboardNavbar() {
                         </Link>
 
                         <button
+                          type="button"
                           onClick={(e) => marcarComoLida(n.id, e)}
-                          className="absolute right-3 top-4 p-1.5 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition opacity-0 group-hover:opacity-100"
+                          className="absolute right-3 top-4 rounded-md p-1.5 text-gray-400 opacity-0 transition hover:bg-gray-100 hover:text-gray-700 group-hover:opacity-100"
                           title="Descartar notificação"
                         >
                           <X size={14} />
@@ -617,7 +547,7 @@ export default function DashboardNavbar() {
             )}
           </div>
 
-          {/* MENU DO USUÁRIO COM FOTO ATUALIZADA */}
+          {/* MENU DO USUÁRIO */}
           <div className="relative" ref={dropdownRef}>
             <button
               type="button"
@@ -662,7 +592,7 @@ export default function DashboardNavbar() {
             </button>
 
             {dropdownAberto && usuario && (
-              <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-gray-100 bg-white p-2 shadow-lg ring-1 ring-black/5 z-50">
+              <div className="absolute right-0 z-50 mt-2 w-64 rounded-2xl border border-gray-100 bg-white p-2 shadow-lg ring-1 ring-black/5">
                 <div className="border-b border-gray-100 px-3 py-2 md:hidden">
                   <p className="text-sm font-semibold text-[#0A2540]">
                     {usuario.nome}

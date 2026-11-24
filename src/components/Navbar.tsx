@@ -1,295 +1,193 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, X, User, ChevronDown, Activity, LogOut } from "lucide-react";
+import {
+  getTokenSessao,
+  getUsuarioSessao,
+  limparSessao,
+  UsuarioSessao,
+} from "@/lib/clinica";
+import {
+  HeartPulse,
+  Menu,
+  X,
+  LayoutDashboard,
+  LogOut,
+  LogIn,
+} from "lucide-react";
 
-interface UsuarioLogado {
-  id?: string;
-  nome: string;
-  email: string;
-  perfil: string;
-  foto_url?: string | null;
-}
+const LINKS_PUBLICOS = [
+  { href: "/", label: "Início" },
+  { href: "/sobre", label: "Sobre o Sistema" },
+  { href: "/ajuda", label: "Central de Ajuda" },
+  { href: "/contato", label: "Contato" },
+];
 
 export default function Navbar() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [isScrolled, setIsScrolled] = useState(false);
-  const [dropdownAberto, setDropdownAberto] = useState(false);
-  const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
-
   const pathname = usePathname();
   const router = useRouter();
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [menuAberto, setMenuAberto] = useState(false);
+  const [usuario, setUsuario] = useState<UsuarioSessao | null>(null);
+  const [autenticado, setAutenticado] = useState(false);
 
   useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 10);
-    };
-
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  useEffect(() => {
-    function carregarUsuario() {
-      if (typeof window === "undefined") return;
-      const userRaw = localStorage.getItem("saspi_user");
-      const token = localStorage.getItem("saspi_token");
-
-      if (userRaw && token) {
-        try {
-          const parsed = JSON.parse(userRaw);
-          const userData = parsed.user || parsed.usuario || parsed;
-
-          setUsuario({
-            id: userData.id || "",
-            nome:
-              userData.nome ||
-              userData.name ||
-              (userData.email ? userData.email.split("@")[0] : "Usuário"),
-            email: userData.email || "",
-            perfil: (userData.perfil || userData.role || "MEDICO").toUpperCase(),
-            foto_url: userData.foto_url || null,
-          });
-        } catch {
-          setUsuario(null);
-        }
-      } else {
-        setUsuario(null);
-      }
+    function sincronizarSessao() {
+      const token = getTokenSessao();
+      const user = getUsuarioSessao();
+      setAutenticado(Boolean(token && user));
+      setUsuario(user);
     }
 
-    carregarUsuario();
-    window.addEventListener("saspi_user_updated", carregarUsuario);
-    window.addEventListener("storage", carregarUsuario);
+    sincronizarSessao();
+    window.addEventListener("saspi_user_updated", sincronizarSessao);
+    window.addEventListener("storage", sincronizarSessao);
 
-    function handleClickFora(event: MouseEvent) {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setDropdownAberto(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickFora);
     return () => {
-      window.removeEventListener("saspi_user_updated", carregarUsuario);
-      window.removeEventListener("storage", carregarUsuario);
-      document.removeEventListener("mousedown", handleClickFora);
+      window.removeEventListener("saspi_user_updated", sincronizarSessao);
+      window.removeEventListener("storage", sincronizarSessao);
     };
   }, []);
 
   function handleLogout() {
-    localStorage.removeItem("saspi_token");
-    localStorage.removeItem("saspi_user");
-    localStorage.removeItem("saspi_active_elderly");
-    localStorage.removeItem("saspi_elderly_list");
-    document.cookie = "saspi_token=; path=/; max-age=0; SameSite=Lax";
-    document.cookie = "saspi_user=; path=/; max-age=0; SameSite=Lax";
+    limparSessao();
+    setAutenticado(false);
     setUsuario(null);
-    setDropdownAberto(false);
-
-    window.dispatchEvent(new Event("saspi_user_updated"));
-    router.push("/");
+    setMenuAberto(false);
+    router.push("/login");
   }
 
-  const navLinks = [
-    { name: "Início", href: "/" },
-    { name: "Sobre o Projeto", href: "/sobre" },
-    { name: "Funcionalidades", href: "/#funcionalidades" },
-    { name: "Ajuda / FAQ", href: "/ajuda" },
-    { name: "Contato", href: "/contato" },
-  ];
-
-  const avatarUrl =
-    usuario?.foto_url ||
-    (usuario?.nome
-      ? `https://ui-avatars.com/api/?name=${encodeURIComponent(
-          usuario.nome,
-        )}&background=1565C0&color=fff&size=64&bold=true`
-      : "");
-
   return (
-    <header
-      className={`sticky top-0 z-50 w-full transition-all duration-300 ${
-        isScrolled
-          ? "bg-white/95 shadow-sm backdrop-blur-md"
-          : "bg-[#F2F7FB]"
-      }`}
-    >
-      <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center gap-2">
-          <Image
-            src="/logo.png"
-            alt="S.A.S.P.I."
-            width={180}
-            height={48}
-            priority
-            className="h-11 w-auto object-contain"
-          />
+    <header className="sticky top-0 z-40 border-b border-gray-100 bg-white/95 backdrop-blur-md">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 md:px-8">
+        <Link href="/" className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1565C0] text-white shadow-sm">
+            <HeartPulse size={22} />
+          </div>
+          <div>
+            <span className="block text-lg font-bold tracking-tight text-[#0A2540]">
+              S.A.S.P.I.
+            </span>
+            <span className="hidden text-[11px] font-medium text-gray-500 sm:block">
+              Acompanhamento de Saúde da Pessoa Idosa
+            </span>
+          </div>
         </Link>
 
-        <nav className="hidden items-center gap-8 md:flex">
-          {navLinks.map((link) => (
-            <Link
-              key={link.name}
-              href={link.href}
-              className={`text-sm font-medium transition hover:text-[#1565C0] ${
-                pathname === link.href ? "text-[#1565C0]" : "text-gray-600"
-              }`}
-            >
-              {link.name}
-            </Link>
-          ))}
+        <nav className="hidden items-center gap-7 md:flex">
+          {LINKS_PUBLICOS.map((item) => {
+            const ativo = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`text-sm font-medium transition ${
+                  ativo
+                    ? "font-semibold text-[#1565C0]"
+                    : "text-gray-600 hover:text-[#0A2540]"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
 
-        <div className="hidden md:block">
-          {usuario ? (
-            <div className="relative" ref={dropdownRef}>
+        <div className="hidden items-center gap-3 md:flex">
+          {autenticado && usuario ? (
+            <>
+              <Link
+                href="/dashboard"
+                className="inline-flex items-center gap-2 rounded-xl bg-[#1565C0] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0A2540]"
+              >
+                <LayoutDashboard size={16} />
+                Acessar Painel
+              </Link>
               <button
                 type="button"
-                onClick={() => setDropdownAberto(!dropdownAberto)}
-                className="flex items-center gap-3 rounded-full border border-[#1565C0]/20 bg-white p-1.5 pr-4 transition hover:bg-gray-50 shadow-sm"
-                aria-expanded={dropdownAberto}
+                onClick={handleLogout}
+                title="Encerrar sessão"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm font-medium text-gray-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
               >
-                {usuario.foto_url ? (
-                  <img
-                    src={usuario.foto_url}
-                    alt={usuario.nome}
-                    className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-gray-200"
-                  />
-                ) : (
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#1565C0] text-sm font-semibold text-white shadow-sm">
-                    {usuario.nome.trim().charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <span className="text-sm font-semibold text-[#0A2540]">Painel</span>
-                <ChevronDown
-                  size={16}
-                  className={`text-[#1565C0] transition-transform ${
-                    dropdownAberto ? "rotate-180" : ""
-                  }`}
-                />
+                <LogOut size={16} />
+                Sair
               </button>
-
-              {dropdownAberto && (
-                <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-gray-100 bg-white p-2 shadow-xl ring-1 ring-black/5 animate-in fade-in zoom-in-95">
-                  <div className="border-b border-gray-100 px-3 py-3">
-                    <p className="text-sm font-semibold text-[#0A2540] truncate">
-                      {usuario.nome}
-                    </p>
-                    <p className="text-xs text-gray-500 truncate">{usuario.email}</p>
-                  </div>
-                  <div className="py-2">
-                    <Link
-                      href="/dashboard"
-                      className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-[#1565C0] transition hover:bg-[#E8F1FB]"
-                    >
-                      <Activity size={16} />
-                      Acessar Sistema
-                    </Link>
-                  </div>
-                  <div className="border-t border-gray-100 pt-1 mt-1">
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm text-rose-600 transition hover:bg-rose-50"
-                    >
-                      <LogOut size={16} />
-                      Sair
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+            </>
           ) : (
             <Link
               href="/login"
-              className="flex items-center gap-2 rounded-xl bg-[#1565C0] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0A2540] shadow-sm hover:shadow-md"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#1565C0] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0A2540]"
             >
-              <User size={16} />
-              Entrar
+              <LogIn size={16} />
+              Entrar no Sistema
             </Link>
           )}
         </div>
 
         <button
-          className="rounded-lg p-2 text-gray-600 transition hover:bg-gray-100 md:hidden"
-          onClick={() => setIsOpen(!isOpen)}
-          aria-label="Abrir menu"
+          type="button"
+          onClick={() => setMenuAberto((prev) => !prev)}
+          aria-label="Abrir menu de navegação"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 text-[#0A2540] md:hidden"
         >
-          {isOpen ? <X size={24} /> : <Menu size={24} />}
+          {menuAberto ? <X size={20} /> : <Menu size={20} />}
         </button>
       </div>
 
-      {isOpen && (
-        <div className="border-t border-gray-100 bg-white md:hidden">
-          <nav className="flex flex-col space-y-1 px-4 pb-6 pt-4 shadow-lg">
-            {navLinks.map((link) => (
-              <Link
-                key={link.name}
-                href={link.href}
-                className="rounded-xl px-4 py-3 text-base font-medium text-gray-700 transition hover:bg-[#E8F1FB] hover:text-[#1565C0]"
-                onClick={() => setIsOpen(false)}
-              >
-                {link.name}
-              </Link>
-            ))}
-
-            <div className="mt-4 border-t border-gray-100 pt-4">
-              {usuario ? (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3 px-4 py-2">
-                    {usuario.foto_url ? (
-                      <img
-                        src={usuario.foto_url}
-                        alt={usuario.nome}
-                        className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-gray-200"
-                      />
-                    ) : (
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1565C0] text-base font-semibold text-white">
-                        {usuario.nome.trim().charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                    <div>
-                      <p className="text-sm font-semibold text-[#0A2540]">
-                        {usuario.nome}
-                      </p>
-                      <p className="text-xs text-gray-500">{usuario.email}</p>
-                    </div>
-                  </div>
-                  <Link
-                    href="/dashboard"
-                    onClick={() => setIsOpen(false)}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-4 py-3 text-sm font-semibold text-white shadow-sm"
-                  >
-                    <Activity size={18} />
-                    Acessar Painel
-                  </Link>
-                  <button
-                    onClick={handleLogout}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-rose-600"
-                  >
-                    <LogOut size={18} />
-                    Sair da Conta
-                  </button>
-                </div>
-              ) : (
+      {menuAberto && (
+        <div className="border-t border-gray-100 bg-white px-4 py-4 md:hidden">
+          <nav className="flex flex-col gap-2">
+            {LINKS_PUBLICOS.map((item) => {
+              const ativo = pathname === item.href;
+              return (
                 <Link
-                  href="/login"
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-4 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-[#0A2540]"
-                  onClick={() => setIsOpen(false)}
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMenuAberto(false)}
+                  className={`rounded-xl px-3.5 py-2.5 text-sm font-medium ${
+                    ativo
+                      ? "bg-[#E8F1FB] font-semibold text-[#1565C0]"
+                      : "text-gray-700 hover:bg-gray-50"
+                  }`}
                 >
-                  <User size={18} />
-                  Entrar no Sistema
+                  {item.label}
                 </Link>
-              )}
-            </div>
+              );
+            })}
           </nav>
+
+          <div className="mt-4 flex flex-col gap-2 border-t border-gray-100 pt-4">
+            {autenticado && usuario ? (
+              <>
+                <Link
+                  href="/dashboard"
+                  onClick={() => setMenuAberto(false)}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-4 py-2.5 text-sm font-semibold text-white"
+                >
+                  <LayoutDashboard size={16} />
+                  Acessar Painel ({usuario.nome.split(" ")[0]})
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600"
+                >
+                  <LogOut size={16} />
+                  Sair da Conta
+                </button>
+              </>
+            ) : (
+              <Link
+                href="/login"
+                onClick={() => setMenuAberto(false)}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-4 py-2.5 text-sm font-semibold text-white"
+              >
+                <LogIn size={16} />
+                Entrar no Sistema
+              </Link>
+            )}
+          </div>
         </div>
       )}
     </header>

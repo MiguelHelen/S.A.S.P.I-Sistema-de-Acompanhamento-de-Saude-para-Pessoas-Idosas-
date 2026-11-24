@@ -1,48 +1,116 @@
 import Link from "next/link";
-import { Heart, HeartHandshake } from "lucide-react";
-
-const links = [
-  { href: "/", label: "Início" },
-  { href: "/sobre", label: "Sobre" },
-  { href: "/termos", label: "Termos" },
-  { href: "/privacidade", label: "Privacidade" },
-  { href: "/ajuda", label: "Ajuda" },
-  { href: "/contato", label: "Contato" },
-];
+import { HeartPulse, ShieldCheck } from "lucide-react";
 
 export default function Footer() {
+  const anoAtual = new Date().getFullYear();
+
   return (
-    <footer className="bg-[#0c2741] text-slate-100">
-      <div className="mx-auto grid max-w-7xl gap-8 px-4 py-9 sm:px-6 md:grid-cols-[1.1fr_1.4fr_1fr] md:items-center lg:px-8">
-        <Link href="/" className="flex items-center gap-3" aria-label="S.A.S.P.I. — página inicial">
-          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-emerald-300">
-            <HeartHandshake size={30} strokeWidth={1.7} />
-          </span>
-          <span className="leading-tight">
-            <span className="block text-xl font-bold text-sky-300">S.A.S.P.I.</span>
-            <span className="block max-w-52 text-[10px] leading-4 text-slate-300">Sistema de Acompanhamento de Saúde para Pessoas Idosas</span>
-          </span>
-        </Link>
+    <footer className="border-t border-gray-200/80 bg-white">
+      <div className="mx-auto max-w-7xl px-4 py-12 md:px-8">
+        <div className="grid gap-10 md:grid-cols-4">
+          <div className="md:col-span-2">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1565C0] text-white">
+                <HeartPulse size={22} />
+              </div>
+              <div>
+                <span className="block text-lg font-bold text-[#0A2540]">
+                  S.A.S.P.I.
+                </span>
+                <span className="block text-xs text-gray-500">
+                  Sistema de Acompanhamento da Saúde da Pessoa Idosa
+                </span>
+              </div>
+            </div>
 
-        <nav aria-label="Navegação do rodapé" className="flex flex-wrap gap-x-4 gap-y-2 md:justify-center">
-          {links.map((link) => (
-            <Link key={link.href} href={link.href} className="text-xs text-slate-300 transition hover:text-white hover:underline">
-              {link.label}
-            </Link>
-          ))}
-        </nav>
+            <p className="mt-4 max-w-md text-sm leading-relaxed text-gray-600">
+              Plataforma institucional dedicada ao monitoramento contínuo de
+              sinais vitais, controle de prescrições medicamentosas, agenda de
+              consultas e integração segura entre equipes clínicas e
+              familiares.
+            </p>
 
-        <div className="rounded-xl border border-sky-300/15 bg-white/4 px-4 py-3 text-xs leading-5 text-slate-300">
-          <p className="font-semibold text-white">S.A.S.P.I.</p>
-          <p>Projeto acadêmico</p>
-          <p>Desenvolvimento de Sistemas</p>
-          <p>2026</p>
+            <div className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#E8F1FB] px-3.5 py-2 text-xs font-medium text-[#1565C0]">
+              <ShieldCheck size={15} />
+              Ambiente protegido com controle de acesso por perfil e clínica
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-[#0A2540]">
+              Navegação
+            </h3>
+            <ul className="mt-4 space-y-2.5 text-sm text-gray-600">
+              <li>
+                <Link href="/" className="transition hover:text-[#1565C0]">
+                  Início
+                </Link>
+              </li>
+              <li>
+                <Link href="/sobre" className="transition hover:text-[#1565C0]">
+                  Sobre o Sistema
+                </Link>
+              </li>
+              <li>
+                <Link href="/ajuda" className="transition hover:text-[#1565C0]">
+                  Central de Ajuda
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/contato"
+                  className="transition hover:text-[#1565C0]"
+                >
+                  Contato Institucional
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-[#0A2540]">
+              Acesso e Conformidade
+            </h3>
+            <ul className="mt-4 space-y-2.5 text-sm text-gray-600">
+              <li>
+                <Link href="/login" className="transition hover:text-[#1565C0]">
+                  Entrar no Painel
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/recuperar-senha"
+                  className="transition hover:text-[#1565C0]"
+                >
+                  Recuperar Senha
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/privacidade"
+                  className="transition hover:text-[#1565C0]"
+                >
+                  Política de Privacidade
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/termos"
+                  className="transition hover:text-[#1565C0]"
+                >
+                  Termos de Uso
+                </Link>
+              </li>
+            </ul>
+          </div>
         </div>
-      </div>
-      <div className="border-t border-white/10">
-        <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-4 text-xs text-slate-300 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
-          <p>© 2026 S.A.S.P.I. — Sistema de Acompanhamento de Saúde para Pessoas Idosas</p>
-          <p className="flex items-center gap-2 italic">Cuidar hoje é garantir o amanhã. <Heart size={15} className="text-sky-300" /></p>
+
+        <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-gray-100 pt-6 text-xs text-gray-500 sm:flex-row">
+          <p>
+            © {anoAtual} S.A.S.P.I. — Sistema de Acompanhamento da Saúde da
+            Pessoa Idosa. Todos os direitos reservados.
+          </p>
+          <p>Plataforma de Gestão Clínica e Monitoramento Remoto</p>
         </div>
       </div>
     </footer>
