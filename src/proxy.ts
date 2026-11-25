@@ -15,18 +15,25 @@ const CLINICAL_ROUTES = [
   "/dashboard/historico",
 ];
 
-function extrairPerfilCookie(rawCookie?: string): string {
-  if (!rawCookie) return "";
+function parseJsonResiliente(raw?: string): any {
+  if (!raw) return null;
   try {
-    const parsed = JSON.parse(decodeURIComponent(rawCookie));
-    const user = parsed?.user || parsed?.usuario || parsed;
-    const role = String(user?.perfil || user?.role || "")
-      .trim()
-      .toUpperCase();
-    return role === "ADMIN" ? "ADMINISTRADOR" : role;
-  } catch {
-    return "";
-  }
+    return JSON.parse(raw);
+  } catch {}
+  try {
+    return JSON.parse(decodeURIComponent(raw));
+  } catch {}
+  return null;
+}
+
+function extrairPerfilCookie(rawCookie?: string): string {
+  const parsed = parseJsonResiliente(rawCookie);
+  if (!parsed) return "";
+  const user = parsed?.user || parsed?.usuario || parsed;
+  const role = String(user?.perfil || user?.role || "")
+    .trim()
+    .toUpperCase();
+  return role === "ADMIN" ? "ADMINISTRADOR" : role;
 }
 
 export function proxy(req: NextRequest) {
@@ -40,15 +47,23 @@ export function proxy(req: NextRequest) {
   const userCookie = req.cookies.get("saspi_user")?.value;
   const role = extrairPerfilCookie(userCookie);
 
-  // Exige token, cookie de usuário e perfil válido; bloqueia perfil IDOSO no painel web
-  if (!token || !userCookie || !role || role === "IDOSO") {
-    const loginUrl = new URL("/login", req.url);
-    const res = NextResponse.redirect(loginUrl);
-    if (role === "IDOSO" || !role) {
-      res.cookies.delete("saspi_token");
-      res.cookies.delete("saspi_user");
-    }
+  // Sem token de autenticação, redireciona para login
+  if (!token) {
+    return NextResponse.redirect(new URL("/login", req.url));
+  }
+
+  // Bloqueia perfil exclusivo do aplicativo mobile
+  if (role === "IDOSO") {
+    const res = NextResponse.redirect(new URL("/login", req.url));
+    res.cookies.delete("saspi_token");
+    res.cookies.delete("saspi_user");
     return res;
+  }
+
+  // Se o cookie de usuário ainda não pôde ser lido mas o token existe,
+  // deixa a validação complementar de perfil ocorrer no cliente sem derrubar a sessão
+  if (!role) {
+    return NextResponse.next();
   }
 
   const isAdmin = role === "ADMINISTRADOR";
