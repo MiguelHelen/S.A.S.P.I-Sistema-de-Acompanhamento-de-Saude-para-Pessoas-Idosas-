@@ -5,7 +5,13 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import DashboardNavbar from "@/components/DashboardNavbar";
 import { type Idoso, formatarCpf } from "@/components/PatientSelector";
-import { getUsuarioSessao } from "@/lib/clinica";
+import {
+  API_URL,
+  getAuthHeaders,
+  getIdosoAtivoSessao,
+  getTokenSessao,
+  getUsuarioSessao,
+} from "@/lib/clinica";
 import {
   ArrowLeft,
   Pill,
@@ -16,6 +22,7 @@ import {
   ClipboardList,
   UserCheck,
   ShieldAlert,
+  Plus,
 } from "lucide-react";
 
 interface MedicamentoOption {
@@ -23,10 +30,6 @@ interface MedicamentoOption {
   nome: string;
   descricao?: string | null;
 }
-
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://perfect-bravery-production-5ce7.up.railway.app";
 
 function hojeIsoDate(): string {
   const agora = new Date();
@@ -44,6 +47,11 @@ export default function NovoMedicamentoPage() {
   const [medicamentos, setMedicamentos] = useState<MedicamentoOption[]>([]);
   const [carregandoMedicamentos, setCarregandoMedicamentos] = useState(true);
 
+  const [modoNovoMedicamento, setModoNovoMedicamento] = useState(false);
+  const [novoMedNome, setNovoMedNome] = useState("");
+  const [novoMedDescricao, setNovoMedDescricao] = useState("");
+  const [cadastrandoMed, setCadastrandoMed] = useState(false);
+
   const [medicamentoId, setMedicamentoId] = useState<string>("");
   const [dosagem, setDosagem] = useState<string>("");
   const [frequencia, setFrequencia] = useState<string>("A cada 8 horas (8h)");
@@ -52,6 +60,7 @@ export default function NovoMedicamentoPage() {
 
   const [salvando, setSalvando] = useState(false);
   const [sucesso, setSucesso] = useState(false);
+  const [mensagemInfo, setMensagemInfo] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
@@ -63,29 +72,18 @@ export default function NovoMedicamentoPage() {
 
     setAutorizado(true);
 
-    const activeElderly = localStorage.getItem("saspi_active_elderly");
-    if (activeElderly) {
-      try {
-        const parsed = JSON.parse(activeElderly);
-        if (parsed && parsed.id) {
-          setIdoso(parsed);
-        }
-      } catch {
-        // Ignora JSON inválido no localStorage
-      }
+    const ativo = getIdosoAtivoSessao<Idoso>();
+    if (ativo?.id) {
+      setIdoso(ativo);
     }
   }, []);
 
   const carregarMedicamentos = useCallback(async () => {
-    const token = localStorage.getItem("saspi_token");
     setCarregandoMedicamentos(true);
 
     try {
       const res = await fetch(`${API_URL}/medicamento`, {
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: getAuthHeaders(true),
       });
 
       const data = await res.json();
@@ -100,10 +98,15 @@ export default function NovoMedicamentoPage() {
         return;
       }
 
-      const lista: MedicamentoOption[] = Array.isArray(data) ? data : [];
+      const rawLista = Array.isArray(data) ? data : data?.data || [];
+      const lista: MedicamentoOption[] = Array.isArray(rawLista)
+        ? rawLista
+        : [];
       setMedicamentos(lista);
       if (lista.length > 0) {
-        setMedicamentoId(lista[0].id);
+        setMedicamentoId((prev) => prev || lista[0].id);
+      } else {
+        setModoNovoMedicamento(true);
       }
     } catch {
       setErro("Erro de conexão ao buscar os medicamentos cadastrados.");
@@ -119,6 +122,71 @@ export default function NovoMedicamentoPage() {
     }
   }, [autorizado, carregarMedicamentos]);
 
+  async function handleCadastrarNovoMedicamento() {
+    setErro(null);
+    setMensagemInfo(null);
+
+    const nomeLimpo = novoMedNome.trim();
+    if (!nomeLimpo) {
+      setErro("Informe o nome do medicamento para cadastrá-lo.");
+      return;
+    }
+
+    const token = getTokenSessao();
+    if (!token) {
+      setErro("Sessão expirada. Faça login novamente.");
+      return;
+    }
+
+    setCadastrandoMed(true);
+
+    try {
+      const res = await fetch(`${API_URL}/medicamento`, {
+        method: "POST",
+        headers: getAuthHeaders(true, token),
+        body: JSON.stringify({
+          nome: nomeLimpo,
+          ...(novoMedDescricao.trim()
+            ? { descricao: novoMedDescricao.trim() }
+            : {}),
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        const msg = Array.isArray(data?.message)
+          ? data.message.join(", ")
+          : data?.message || "Não foi possível cadastrar o medicamento.";
+        throw new Error(msg);
+      }
+
+      const criado = data?.data || data;
+      if (criado?.id) {
+        const novoItem: MedicamentoOption = {
+          id: String(criado.id),
+          nome: String(criado.nome || nomeLimpo),
+          descricao: criado.descricao || null,
+        };
+        setMedicamentos((prev) => [novoItem, ...prev]);
+        setMedicamentoId(novoItem.id);
+      } else {
+        await carregarMedicamentos();
+      }
+
+      setNovoMedNome("");
+      setNovoMedDescricao("");
+      setModoNovoMedicamento(false);
+      setMensagemInfo(
+        `Medicamento "${nomeLimpo}" adicionado ao catálogo e selecionado!`
+      );
+      setTimeout(() => setMensagemInfo(null), 4000);
+    } catch (err: any) {
+      setErro(err.message || "Falha ao cadastrar novo medicamento.");
+    } finally {
+      setCadastrandoMed(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErro(null);
@@ -132,7 +200,7 @@ export default function NovoMedicamentoPage() {
     }
 
     if (!medicamentoId) {
-      setErro("Selecione um medicamento válido.");
+      setErro("Selecione ou cadastre um medicamento válido.");
       return;
     }
 
@@ -151,7 +219,12 @@ export default function NovoMedicamentoPage() {
       return;
     }
 
-    const token = localStorage.getItem("saspi_token");
+    if (dataFim && dataFim < dataInicio) {
+      setErro("A data de término não pode ser anterior à data de início.");
+      return;
+    }
+
+    const token = getTokenSessao();
     if (!token) {
       setErro("Sessão expirada ou não autenticada. Faça login novamente.");
       return;
@@ -183,10 +256,7 @@ export default function NovoMedicamentoPage() {
     try {
       const res = await fetch(`${API_URL}/prescricao`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: getAuthHeaders(true, token),
         body: JSON.stringify(payload),
       });
 
@@ -278,6 +348,13 @@ export default function NovoMedicamentoPage() {
           </div>
         )}
 
+        {mensagemInfo && (
+          <div className="mt-6 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
+            <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
+            <p className="text-sm font-medium">{mensagemInfo}</p>
+          </div>
+        )}
+
         {erro && (
           <div className="mt-6 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">
             <AlertCircle size={20} className="shrink-0 text-red-600" />
@@ -323,21 +400,85 @@ export default function NovoMedicamentoPage() {
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-6">
           <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
-            <div className="flex items-center gap-3 border-b border-gray-100 pb-5">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#E8F1FB] text-[#1565C0]">
-                <Pill size={22} />
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#E8F1FB] text-[#1565C0]">
+                  <Pill size={22} />
+                </div>
+
+                <div>
+                  <h2 className="font-semibold text-[#0A2540]">
+                    Dados da prescrição
+                  </h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Escolha o medicamento ou cadastre um novo fármaco, informe a
+                    dosagem e a frequência.
+                  </p>
+                </div>
               </div>
 
-              <div>
-                <h2 className="font-semibold text-[#0A2540]">
-                  Dados da prescrição
-                </h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  Escolha o medicamento, informe a dosagem, a frequência e o
-                  período do tratamento.
-                </p>
-              </div>
+              <button
+                type="button"
+                onClick={() => setModoNovoMedicamento((prev) => !prev)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[#BFD8F2] bg-[#E8F1FB] px-3.5 py-2 text-xs font-semibold text-[#1565C0] transition hover:bg-[#d7e7f9]"
+              >
+                <Plus size={15} />
+                {modoNovoMedicamento
+                  ? "Usar catálogo existente"
+                  : "Novo Medicamento"}
+              </button>
             </div>
+
+            {modoNovoMedicamento && (
+              <div className="mt-6 rounded-2xl border border-[#DCEAF8] bg-[#F8FBFE] p-5">
+                <p className="text-xs font-bold uppercase tracking-wider text-[#1565C0]">
+                  Cadastrar Novo Medicamento no Catálogo
+                </p>
+                <div className="mt-3 grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-[#0A2540]">
+                      Nome do medicamento *
+                    </label>
+                    <input
+                      type="text"
+                      value={novoMedNome}
+                      onChange={(e) => setNovoMedNome(e.target.value)}
+                      placeholder="Ex.: Losartana Potássica 50mg"
+                      className="w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 outline-none focus:border-[#1565C0]"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-[#0A2540]">
+                      Descrição / Princípio ativo (opcional)
+                    </label>
+                    <input
+                      type="text"
+                      value={novoMedDescricao}
+                      onChange={(e) => setNovoMedDescricao(e.target.value)}
+                      placeholder="Ex.: Anti-hipertensivo oral"
+                      className="w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 outline-none focus:border-[#1565C0]"
+                    />
+                  </div>
+                </div>
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    disabled={cadastrandoMed}
+                    onClick={handleCadastrarNovoMedicamento}
+                    className="inline-flex items-center gap-2 rounded-xl bg-[#26A69A] px-4 py-2 text-xs font-semibold text-white shadow-xs transition hover:bg-[#1f8a80] disabled:opacity-60"
+                  >
+                    {cadastrandoMed ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Plus size={14} />
+                    )}
+                    {cadastrandoMed
+                      ? "Cadastrando..."
+                      : "Salvar Medicamento no Catálogo"}
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="mt-6 grid gap-5 md:grid-cols-2">
               <div className="md:col-span-2">
@@ -345,7 +486,7 @@ export default function NovoMedicamentoPage() {
                   htmlFor="medicamento"
                   className="mb-2 block text-sm font-medium text-[#0A2540]"
                 >
-                  Medicamento *
+                  Medicamento selecionado *
                 </label>
                 {carregandoMedicamentos ? (
                   <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
@@ -361,7 +502,9 @@ export default function NovoMedicamentoPage() {
                     className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10 disabled:bg-gray-100"
                   >
                     {medicamentos.length === 0 ? (
-                      <option value="">Nenhum medicamento disponível</option>
+                      <option value="">
+                        Nenhum medicamento cadastrado — use o botão acima
+                      </option>
                     ) : (
                       medicamentos.map((med) => (
                         <option key={med.id} value={med.id}>
@@ -449,6 +592,7 @@ export default function NovoMedicamentoPage() {
                 <input
                   id="data_fim"
                   type="date"
+                  min={dataInicio || undefined}
                   value={dataFim}
                   onChange={(e) => setDataFim(e.target.value)}
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
