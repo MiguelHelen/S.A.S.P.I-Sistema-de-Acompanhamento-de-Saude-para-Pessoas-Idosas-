@@ -43,13 +43,12 @@ export default function AlertasScreen({ navigation }: any) {
 
           const [resSaude, resMeds, resConsultas] = await Promise.allSettled([
             apiFetch(`/registro-saude/idoso/${idosoId}`, {}, token),
-            apiFetch(`/prescricao?idoso_id=${idosoId}`, {}, token),
-            apiFetch(`/consulta?idoso_id=${idosoId}`, {}, token),
+            apiFetch(`/prescricao/idoso/${idosoId}`, {}, token),
+            apiFetch(`/consulta/idoso/${idosoId}`, {}, token),
           ]);
 
           const lista: AlertaItem[] = [];
 
-          // 1. Alertas de Sinais Vitais
           if (resSaude.status === 'fulfilled' && resSaude.value.ok) {
             const raw = await resSaude.value.json();
             const registros = Array.isArray(raw) ? raw : raw.data || [];
@@ -92,7 +91,7 @@ export default function AlertasScreen({ navigation }: any) {
                     });
                   }
                 }
-              } else if (!isNaN(valorNum)) {
+              } else if (!Number.isNaN(valorNum)) {
                 if (nomeInd.includes('card') && valorNum > 100) {
                   lista.push({
                     id: `fc_alta_${reg.id}`,
@@ -138,10 +137,12 @@ export default function AlertasScreen({ navigation }: any) {
             });
           }
 
-          // 2. Medicamentos Ativos
           if (resMeds.status === 'fulfilled' && resMeds.value.ok) {
-            const meds = await resMeds.value.json();
-            const ativas = Array.isArray(meds) ? meds.filter((m: any) => m.status === 'ATIVA') : [];
+            const rawMeds = await resMeds.value.json();
+            const meds = Array.isArray(rawMeds) ? rawMeds : rawMeds?.data || [];
+            const ativas = meds.filter(
+              (m: any) => (m.status || 'ATIVA').toUpperCase() === 'ATIVA'
+            );
             ativas.slice(0, 3).forEach((m: any) => {
               lista.push({
                 id: `med_${m.id}`,
@@ -155,12 +156,13 @@ export default function AlertasScreen({ navigation }: any) {
             });
           }
 
-          // 3. Próximas Consultas
           if (resConsultas.status === 'fulfilled' && resConsultas.value.ok) {
-            const cons = await resConsultas.value.json();
-            const agendadas = Array.isArray(cons)
-              ? cons.filter((c: any) => c.status === 'Agendada')
-              : [];
+            const rawCons = await resConsultas.value.json();
+            const cons = Array.isArray(rawCons) ? rawCons : rawCons?.data || [];
+            const agendadas = cons.filter((c: any) => {
+              const st = (c.status || 'AGENDADA').toUpperCase();
+              return st === 'AGENDADA' || st === 'CONFIRMADA';
+            });
             agendadas.slice(0, 3).forEach((c: any) => {
               const dataBr = c.data
                 ? new Date(c.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' })

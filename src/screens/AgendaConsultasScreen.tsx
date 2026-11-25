@@ -1,194 +1,441 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  ScrollView,
   ActivityIndicator,
-  TouchableOpacity,
-  Alert,
+  RefreshControl,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  CalendarDays,
+  Clock,
+  MapPin,
+  Stethoscope,
+  Eye,
+  CheckCircle2,
+  XCircle,
+  Info,
+} from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
-import { apiFetch } from '../api/client';
-import { CalendarDays, MapPin, Stethoscope, ChevronRight, Plus } from 'lucide-react-native';
+import { useAccessibility } from '../contexts/AccessibilityContext';
+import { API_URL } from '../api/client';
 
-export default function AgendaConsultasScreen({ navigation }: any) {
+interface Consulta {
+  id: string;
+  idoso_id?: string;
+  especialidade?: string;
+  profissional?: string;
+  medico?: string;
+  data_hora?: string;
+  data?: string;
+  horario?: string;
+  localizacao?: string;
+  local?: string;
+  status?: string;
+  observacao?: string;
+  observacoes?: string;
+}
+
+export default function AgendaConsultasScreen() {
   const { usuario, token } = useAuth();
-  const [todasConsultas, setTodasConsultas] = useState<any[]>([]);
+  const { fontScale, highContrast, simplifiedMode } = useAccessibility();
+
+  const [idosoNome, setIdosoNome] = useState<string>('');
+  const [consultas, setConsultas] = useState<Consulta[]>([]);
   const [loading, setLoading] = useState(true);
-  const [abaAtiva, setAbaAtiva] = useState<'Próximas' | 'Histórico' | 'Exames'>('Próximas');
+  const [refreshing, setRefreshing] = useState(false);
+
+  const perfil = (usuario?.perfil || 'FAMILIAR').toUpperCase();
+  const isIdoso = perfil === 'IDOSO';
+
+  const escalaEfetiva = isIdoso && fontScale === 1 ? 1.15 : fontScale;
+  const textSize = (base: number) => Math.round(base * escalaEfetiva);
+
+  const carregarConsultas = useCallback(async () => {
+    try {
+      const storedElderly = await AsyncStorage.getItem('saspi_active_elderly');
+      if (!storedElderly || !token) {
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
+      const idosoObj = JSON.parse(storedElderly);
+      setIdosoNome(idosoObj.nome || '');
+      const headers = { Authorization: `Bearer ${token}` };
+
+      const res = await fetch(`${API_URL}/consulta/idoso/${idosoObj.id}`, { headers });
+
+      if (res.ok) {
+        const data = await res.json();
+        const lista = Array.isArray(data) ? data : data?.data || [];
+        setConsultas(lista.filter((c: any) => !c.idoso_id || c.idoso_id === idosoObj.id));
+      }
+    } catch (error) {
+      console.error('Erro ao carregar consultas:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [token]);
 
   useFocusEffect(
     useCallback(() => {
-      let isMounted = true;
-      async function fetchConsultas() {
-        try {
-          const storedElderly = await AsyncStorage.getItem('saspi_active_elderly');
-          const idosoId = storedElderly ? JSON.parse(storedElderly).id : usuario?.id;
-          if (!idosoId) return;
-
-          const res = await apiFetch(`/consulta?idoso_id=${idosoId}`, {}, token);
-          if (res.ok) {
-            const data = await res.json();
-            if (isMounted) setTodasConsultas(Array.isArray(data) ? data : []);
-          }
-        } catch (err) {
-          console.error('Erro ao buscar consultas:', err);
-        } finally {
-          if (isMounted) setLoading(false);
-        }
-      }
-      fetchConsultas();
-      return () => {
-        isMounted = false;
-      };
-    }, [token, usuario])
+      carregarConsultas();
+    }, [carregarConsultas])
   );
 
-  const consultasFiltradas = useMemo(() => {
-    if (abaAtiva === 'Próximas') {
-      return todasConsultas.filter((c) => c.status === 'Agendada');
+  const onRefresh = () => {
+    setRefreshing(true);
+    carregarConsultas();
+  };
+
+  const formatarDataHora = (c: Consulta) => {
+    if (c.data_hora) {
+      const dt = new Date(c.data_hora);
+      if (!Number.isNaN(dt.getTime())) {
+        return {
+          data: dt.toLocaleDateString('pt-BR', {
+            weekday: 'short',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+          }),
+          hora: dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        };
+      }
     }
-    if (abaAtiva === 'Histórico') {
-      return todasConsultas.filter((c) => c.status !== 'Agendada');
+    if (c.data) {
+      const dt = new Date(c.data);
+      if (!Number.isNaN(dt.getTime())) {
+        return {
+          data: dt.toLocaleDateString('pt-BR', {
+            timeZone: 'UTC',
+            weekday: 'short',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+          }),
+          hora: c.horario || '',
+        };
+      }
     }
-    return todasConsultas.filter((c) =>
-      `${c.especialidade || ''} ${c.observacao || ''}`.toLowerCase().includes('exame')
-    );
-  }, [todasConsultas, abaAtiva]);
+    return {
+      data: c.data || 'Data a confirmar',
+      hora: c.horario || '',
+    };
+  };
+
+  const consultasAgendadas = consultas.filter((c) => {
+    const st = (c.status || 'AGENDADA').toUpperCase();
+    return st !== 'REALIZADA' && st !== 'CANCELADA';
+  });
+
+  const consultasAnteriores = consultas.filter((c) => {
+    const st = (c.status || '').toUpperCase();
+    return st === 'REALIZADA' || st === 'CANCELADA';
+  });
+
+  const bgMain = highContrast ? '#000000' : '#F2F7FB';
+  const bgCard = highContrast ? '#111827' : '#FFFFFF';
+  const textPrimary = highContrast ? '#FFFFFF' : '#0A2540';
+  const textSecondary = highContrast ? '#E2E8F0' : '#64748B';
+  const borderCard = highContrast ? '#38BDF8' : '#E2E8F0';
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#00897B" />
+      <View style={[styles.center, { backgroundColor: bgMain }]}>
+        <ActivityIndicator size="large" color="#159B87" />
+        <Text style={{ marginTop: 12, color: textSecondary, fontSize: textSize(14) }}>
+          Carregando agenda de consultas...
+        </Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.blobTop} />
+    <ScrollView
+      style={[styles.container, { backgroundColor: bgMain }]}
+      contentContainerStyle={styles.content}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#159B87" />
+      }
+    >
+      <View style={styles.headerRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.title, { color: textPrimary, fontSize: textSize(24) }]}>
+            {isIdoso ? 'Minhas Consultas' : 'Agenda de Consultas'}
+          </Text>
+          <Text style={[styles.subtitle, { color: textSecondary, fontSize: textSize(13) }]}>
+            {idosoNome ? `Atendimentos de ${idosoNome}` : 'Cronograma médico'}
+          </Text>
+        </View>
 
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backButton}>← Voltar</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Consultas e exames</Text>
+        <View style={styles.readOnlyBadge}>
+          <Eye size={14} color="#0369A1" />
+          <Text style={styles.readOnlyText}>Consulta</Text>
+        </View>
       </View>
 
-      <View style={styles.tabsContainer}>
-        {(['Próximas', 'Histórico', 'Exames'] as const).map((aba) => (
-          <TouchableOpacity
-            key={aba}
-            onPress={() => setAbaAtiva(aba)}
-            style={[styles.tabBtn, abaAtiva === aba && styles.tabBtnActive]}
-          >
-            <Text style={[styles.tabText, abaAtiva === aba && styles.tabTextActive]}>{aba}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      {!simplifiedMode && (
+        <View style={[styles.infoBanner, { backgroundColor: bgCard, borderColor: borderCard }]}>
+          <Info size={18} color="#159B87" />
+          <Text style={[styles.infoBannerText, { color: textSecondary, fontSize: textSize(12) }]}>
+            Os agendamentos são gerenciados pela equipe clínica na Plataforma Web S.A.S.P.I.
+          </Text>
+        </View>
+      )}
 
-      <FlatList
-        data={consultasFiltradas}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.content}
-        renderItem={({ item }) => {
-          const dataBr = item.data
-            ? new Date(item.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
-            : '';
+      <Text style={[styles.sectionTitle, { color: textPrimary, fontSize: textSize(17) }]}>
+        Próximos Atendimentos ({consultasAgendadas.length})
+      </Text>
+
+      {consultasAgendadas.length === 0 ? (
+        <View style={[styles.emptyCard, { backgroundColor: bgCard, borderColor: borderCard }]}>
+          <CalendarDays size={38} color="#94A3B8" />
+          <Text style={[styles.emptyTitle, { color: textPrimary, fontSize: textSize(15) }]}>
+            Nenhuma consulta agendada
+          </Text>
+          <Text style={[styles.emptySub, { color: textSecondary, fontSize: textSize(13) }]}>
+            Quando a clínica marcar um retorno ou exame, os detalhes aparecerão aqui.
+          </Text>
+        </View>
+      ) : (
+        consultasAgendadas.map((item) => {
+          const { data, hora } = formatarDataHora(item);
+          const nomeMedico = item.profissional || item.medico;
+          const localConsulta = item.localizacao || item.local || 'Unidade Clínica S.A.S.P.I.';
+          const obsConsulta = item.observacao || item.observacoes;
+
           return (
-            <TouchableOpacity
-              style={styles.card}
-              onPress={() =>
-                Alert.alert(
-                  item.especialidade || 'Consulta',
-                  `Médico: Dr(a). ${item.medico}\nData: ${dataBr} às ${item.horario}\nLocal: ${item.localizacao}\nStatus: ${item.status}${
-                    item.observacao ? `\nObs: ${item.observacao}` : ''
-                  }`
-                )
-              }
+            <View
+              key={item.id}
+              style={[styles.card, { backgroundColor: bgCard, borderColor: borderCard }]}
             >
               <View style={styles.cardHeader}>
-                <View style={styles.iconCircle}>
-                  <Stethoscope color="#00897B" size={24} />
+                <View style={styles.iconBox}>
+                  <Stethoscope size={22} color="#0369A1" />
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.especialidade}>{item.especialidade}</Text>
-                  <Text style={styles.medico}>Dr(a). {item.medico}</Text>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={[styles.especialidade, { color: textPrimary, fontSize: textSize(17) }]}>
+                    {item.especialidade || 'Consulta Médica'}
+                  </Text>
+                  {nomeMedico ? (
+                    <Text style={[styles.medicoText, { fontSize: textSize(13) }]}>
+                      {nomeMedico}
+                    </Text>
+                  ) : null}
                 </View>
-                <ChevronRight color="#A0AEC0" size={20} />
+
+                <View style={styles.statusPillAgendada}>
+                  <Text style={styles.statusTextAgendada}>{item.status || 'Agendada'}</Text>
+                </View>
               </View>
 
-              <View style={styles.infoRow}>
-                <CalendarDays color="#718096" size={16} />
-                <Text style={styles.infoText}>
-                  {dataBr} às {item.horario}
-                </Text>
+              <View style={styles.detailsGrid}>
+                <View style={styles.detailRow}>
+                  <CalendarDays size={16} color="#159B87" />
+                  <Text style={[styles.detailText, { color: textPrimary, fontSize: textSize(14) }]}>
+                    {data}
+                  </Text>
+                </View>
+
+                {hora ? (
+                  <View style={styles.detailRow}>
+                    <Clock size={16} color="#159B87" />
+                    <Text
+                      style={[styles.detailText, { color: textPrimary, fontSize: textSize(14) }]}
+                    >
+                      Horário: {hora}
+                    </Text>
+                  </View>
+                ) : null}
+
+                <View style={styles.detailRow}>
+                  <MapPin size={16} color="#159B87" />
+                  <Text
+                    style={[styles.detailText, { color: textSecondary, fontSize: textSize(13) }]}
+                  >
+                    {localConsulta}
+                  </Text>
+                </View>
               </View>
 
-              <View style={styles.infoRow}>
-                <MapPin color="#718096" size={16} />
-                <Text style={styles.infoText}>{item.localizacao}</Text>
-              </View>
-
-              {item.observacao && (
+              {!simplifiedMode && obsConsulta ? (
                 <View style={styles.obsBox}>
-                  <Text style={styles.obsText}>{item.observacao}</Text>
+                  <Text style={[styles.obsText, { color: textSecondary, fontSize: textSize(12) }]}>
+                    Observações: {obsConsulta}
+                  </Text>
                 </View>
-              )}
-            </TouchableOpacity>
+              ) : null}
+            </View>
           );
-        }}
-        ListEmptyComponent={
-          <View style={styles.emptyBox}>
-            <CalendarDays color="#A0AEC0" size={40} />
-            <Text style={styles.emptyText}>Nenhum registro em "{abaAtiva}".</Text>
-          </View>
-        }
-      />
+        })
+      )}
 
-      <TouchableOpacity
-        style={styles.fabBtn}
-        onPress={() =>
-          Alert.alert(
-            'Agendamento Clínico',
-            'Novas consultas e exames são agendados diretamente pela equipe da clínica no painel Web.'
-          )
-        }
-      >
-        <Plus color="#FFF" size={20} />
-        <Text style={styles.fabText}>Solicitar agendamento</Text>
-      </TouchableOpacity>
-    </View>
+      {!simplifiedMode && consultasAnteriores.length > 0 && (
+        <View style={{ marginTop: 14 }}>
+          <Text style={[styles.sectionTitle, { color: textSecondary, fontSize: textSize(15) }]}>
+            Histórico de Atendimentos ({consultasAnteriores.length})
+          </Text>
+
+          {consultasAnteriores.map((item) => {
+            const { data, hora } = formatarDataHora(item);
+            const realizada = (item.status || '').toUpperCase() === 'REALIZADA';
+
+            return (
+              <View
+                key={item.id}
+                style={[styles.historyCard, { backgroundColor: bgCard, borderColor: borderCard }]}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={[styles.historyTitle, { color: textPrimary, fontSize: textSize(15) }]}
+                  >
+                    {item.especialidade || 'Consulta Médica'}
+                  </Text>
+                  <Text
+                    style={[styles.historySub, { color: textSecondary, fontSize: textSize(12) }]}
+                  >
+                    {data} {hora ? `• ${hora}` : ''}
+                  </Text>
+                </View>
+
+                <View
+                  style={[
+                    styles.historyPill,
+                    { backgroundColor: realizada ? '#DCFCE7' : '#FEE2E2' },
+                  ]}
+                >
+                  {realizada ? (
+                    <CheckCircle2 size={13} color="#15803D" />
+                  ) : (
+                    <XCircle size={13} color="#B91C1C" />
+                  )}
+                  <Text
+                    style={[
+                      styles.historyPillText,
+                      { color: realizada ? '#15803D' : '#B91C1C' },
+                    ]}
+                  >
+                    {realizada ? 'Realizada' : 'Cancelada'}
+                  </Text>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      )}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' },
-  blobTop: { position: 'absolute', top: -50, right: -50, width: 200, height: 200, borderRadius: 100, backgroundColor: '#E0F2F1', opacity: 0.8 },
-  header: { paddingTop: 60, paddingHorizontal: 24, zIndex: 10 },
-  backButton: { color: '#00897B', fontSize: 16, fontWeight: '600' },
-  title: { fontSize: 26, fontWeight: 'bold', color: '#0A2540', marginTop: 10, marginBottom: 20 },
-  tabsContainer: { flexDirection: 'row', paddingHorizontal: 24, marginBottom: 16, gap: 10, zIndex: 10 },
-  tabBtn: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, backgroundColor: '#F1F5F9' },
-  tabBtnActive: { backgroundColor: '#00897B' },
-  tabText: { color: '#718096', fontWeight: '600', fontSize: 14 },
-  tabTextActive: { color: '#FFF' },
-  content: { paddingHorizontal: 24, paddingBottom: 100 },
-  card: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOpacity: 0.05, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9', paddingBottom: 12 },
-  iconCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#E2F5F0', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  especialidade: { fontSize: 16, fontWeight: 'bold', color: '#0A2540' },
-  medico: { fontSize: 13, color: '#718096', marginTop: 2 },
-  infoRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
-  infoText: { fontSize: 14, color: '#4A5568', marginLeft: 8, flex: 1 },
-  obsBox: { backgroundColor: '#FFF8E1', padding: 10, borderRadius: 8, marginTop: 12 },
-  obsText: { fontSize: 12, color: '#D97706', fontWeight: '500' },
-  emptyBox: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40 },
-  emptyText: { marginTop: 12, color: '#718096', fontSize: 14 },
-  fabBtn: { position: 'absolute', bottom: 30, left: 24, right: 24, backgroundColor: '#00897B', borderRadius: 14, paddingVertical: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, elevation: 3 },
-  fabText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
+  container: { flex: 1 },
+  content: { paddingHorizontal: 20, paddingTop: 52, paddingBottom: 34 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  title: { fontWeight: 'bold' },
+  subtitle: { marginTop: 2 },
+  readOnlyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 5,
+  },
+  readOnlyText: { fontSize: 12, fontWeight: '700', color: '#0369A1' },
+  infoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: 10,
+    marginBottom: 18,
+  },
+  infoBannerText: { flex: 1, lineHeight: 17 },
+  sectionTitle: { fontWeight: 'bold', marginBottom: 12 },
+  emptyCard: {
+    borderRadius: 18,
+    padding: 28,
+    borderWidth: 1,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  emptyTitle: { fontWeight: 'bold', marginTop: 12 },
+  emptySub: { textAlign: 'center', marginTop: 4, lineHeight: 19 },
+  card: {
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    marginBottom: 14,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  iconBox: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: '#E0F2FE',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  especialidade: { fontWeight: 'bold' },
+  medicoText: { color: '#0369A1', fontWeight: '600', marginTop: 2 },
+  statusPillAgendada: {
+    backgroundColor: '#CCFBF1',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  statusTextAgendada: { color: '#0F766E', fontSize: 11, fontWeight: '700' },
+  detailsGrid: {
+    gap: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  detailRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  detailText: { fontWeight: '600' },
+  obsBox: {
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+  },
+  obsText: { lineHeight: 18 },
+  historyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  historyTitle: { fontWeight: '700' },
+  historySub: { marginTop: 2 },
+  historyPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  historyPillText: { fontSize: 11, fontWeight: '700' },
 });
