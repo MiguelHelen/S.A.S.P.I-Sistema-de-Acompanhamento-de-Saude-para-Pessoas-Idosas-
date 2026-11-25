@@ -22,6 +22,7 @@ import {
   getUsuarioSessao,
   getTokenSessao,
   getAuthHeaders,
+  isAdminPerfil,
 } from "@/lib/clinica";
 import {
   HeartPulse,
@@ -117,6 +118,8 @@ export default function Dashboard() {
       try {
         setIdosoAtivo(JSON.parse(savedElderly));
       } catch {}
+    } else {
+      setIdosoAtivo(null);
     }
     setCarregandoSessao(false);
   }, [router]);
@@ -150,7 +153,7 @@ export default function Dashboard() {
   }, [carregarUsuario]);
 
   const perfilUpper = user.perfil;
-  const isAdmin = perfilUpper === "ADMINISTRADOR" || perfilUpper === "ADMIN";
+  const isAdmin = isAdminPerfil(perfilUpper);
   const isMedico = perfilUpper === "MEDICO";
   const isLeituraSomente = perfilUpper === "FAMILIAR";
 
@@ -211,7 +214,7 @@ export default function Dashboard() {
           fetch(`${API_URL}/prescricao/idoso/${idosoId}`, {
             headers,
           }).catch(() => null),
-          fetch(`${API_URL}/consulta?idoso_id=${idosoId}`, {
+          fetch(`${API_URL}/consulta/idoso/${idosoId}`, {
             headers,
           }).catch(() => null),
         ]);
@@ -276,7 +279,10 @@ export default function Dashboard() {
         }
 
         if (resCons?.ok) {
-          const consultas = await resCons.json();
+          const consRaw = await resCons.json();
+          const consultas = Array.isArray(consRaw)
+            ? consRaw
+            : consRaw?.data || [];
           if (Array.isArray(consultas) && consultas.length > 0) {
             const ativas = consultas.filter(
               (c: any) =>
@@ -366,7 +372,7 @@ export default function Dashboard() {
         return novoResumo;
       });
 
-      window.dispatchEvent(new Event("saspi_elderly_updated"));
+      window.dispatchEvent(new Event("saspi_alerta_clinico"));
     });
 
     socket.on(
@@ -379,7 +385,7 @@ export default function Dashboard() {
           ...prev,
           { id: Date.now() + Math.random(), msg: textoAlerta },
         ]);
-        window.dispatchEvent(new Event("saspi_elderly_updated"));
+        window.dispatchEvent(new Event("saspi_alerta_clinico"));
       }
     );
 
@@ -734,7 +740,7 @@ export default function Dashboard() {
             {idosoAtivo ? (
               <>
                 {(alertasAtivos.length > 0 || alertasEmergencia.length > 0) && (
-                  <div className="rounded-2xl border border-red-200 bg-red-50/90 p-5 shadow-sm animate-pulse">
+                  <div className="rounded-2xl border border-red-300 bg-red-50 p-5 shadow-sm">
                     <div className="flex items-start gap-3">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
                         <AlertTriangle size={22} />
@@ -758,7 +764,7 @@ export default function Dashboard() {
                               <strong>• EVENTO CRÍTICO:</strong>
                               <span>{al.msg}</span>
                               <span className="text-xs text-red-600/80">
-                                (Acabou de ocorrer)
+                                (Tempo real)
                               </span>
                             </li>
                           ))}
@@ -874,7 +880,7 @@ export default function Dashboard() {
                       {alertasEmergencia.map((al) => (
                         <div
                           key={al.id}
-                          className="rounded-xl border border-red-300 bg-red-100 p-4 animate-bounce"
+                          className="rounded-xl border border-red-300 bg-red-100 p-4"
                         >
                           <div className="flex items-center gap-2 text-xs font-bold uppercase text-red-800">
                             <AlertTriangle size={15} />
