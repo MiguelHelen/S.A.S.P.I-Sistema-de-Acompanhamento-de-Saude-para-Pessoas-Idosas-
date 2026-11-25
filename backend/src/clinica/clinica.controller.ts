@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Body,
   Param,
   UseGuards,
@@ -34,7 +35,16 @@ export class ClinicaController {
   }
 
   @Put(':id')
-  update(
+  updatePut(
+    @Param('id') id: string,
+    @Body() body: UpdateClinicaDto,
+    @Request() req: any,
+  ) {
+    return this.clinicaService.update(id, body, req.user.id);
+  }
+
+  @Patch(':id')
+  updatePatch(
     @Param('id') id: string,
     @Body() body: UpdateClinicaDto,
     @Request() req: any,
