@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import PatientSelector, { Idoso } from "@/components/PatientSelector";
 import DashboardNavbar from "@/components/DashboardNavbar";
 import {
@@ -21,6 +22,21 @@ import {
   ShieldAlert,
 } from "lucide-react";
 
+function obterDataLocalIso(): string {
+  const agora = new Date();
+  const ano = agora.getFullYear();
+  const mes = String(agora.getMonth() + 1).padStart(2, "0");
+  const dia = String(agora.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+}
+
+function obterHoraLocalAtual(): string {
+  const agora = new Date();
+  const hh = String(agora.getHours()).padStart(2, "0");
+  const mm = String(agora.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
 export default function NovaConsultaPage() {
   const router = useRouter();
   const [idosoAtivo, setIdosoAtivo] = useState<Idoso | null>(null);
@@ -28,6 +44,8 @@ export default function NovaConsultaPage() {
   const [salvando, setSalvando] = useState(false);
   const [sucesso, setSucesso] = useState(false);
   const [erro, setErro] = useState("");
+
+  const dataMinimaHoje = obterDataLocalIso();
 
   const [formData, setFormData] = useState({
     especialidade: "",
@@ -89,15 +107,23 @@ export default function NovaConsultaPage() {
       return;
     }
 
-    const ano = Number(formData.data.split("-")[0]);
-    if (Number.isNaN(ano) || ano < 2000 || ano > 2100) {
-      setErro("Informe um ano válido para a consulta.");
+    const hojeIso = obterDataLocalIso();
+    if (formData.data < hojeIso) {
+      setErro("Não é permitido agendar consultas em datas passadas.");
       setSalvando(false);
       return;
     }
 
     if (!/^\d{2}:\d{2}$/.test(formData.horario)) {
       setErro("Informe um horário válido.");
+      setSalvando(false);
+      return;
+    }
+
+    if (formData.data === hojeIso && formData.horario < obterHoraLocalAtual()) {
+      setErro(
+        "Para consultas agendadas para hoje, informe um horário futuro."
+      );
       setSalvando(false);
       return;
     }
@@ -144,7 +170,7 @@ export default function NovaConsultaPage() {
     } catch (err: any) {
       setErro(
         err.message ||
-          "Erro de comunicação ao agendar consulta. Verifique a data e os campos.",
+          "Erro de comunicação ao agendar consulta. Verifique a data e os campos."
       );
     } finally {
       setSalvando(false);
@@ -166,13 +192,13 @@ export default function NovaConsultaPage() {
             Apenas profissionais da equipe clínica podem agendar novas consultas
             no S.A.S.P.I.
           </p>
-          <a
+          <Link
             href="/dashboard/consultas"
             className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#1565C0] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#0A2540]"
           >
             <ArrowLeft size={16} />
             Voltar para Consultas
-          </a>
+          </Link>
         </div>
       </main>
     );
@@ -183,13 +209,13 @@ export default function NovaConsultaPage() {
       <DashboardNavbar />
 
       <div className="mx-auto max-w-4xl px-4 py-8 md:px-8">
-        <a
+        <Link
           href="/dashboard/consultas"
           className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-[#1565C0]"
         >
           <ArrowLeft size={17} />
           Voltar para consultas
-        </a>
+        </Link>
 
         <div className="mt-8">
           <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
@@ -280,6 +306,7 @@ export default function NovaConsultaPage() {
                 <input
                   type="date"
                   required
+                  min={dataMinimaHoje}
                   value={formData.data}
                   onChange={(e) =>
                     setFormData({ ...formData, data: e.target.value })
@@ -295,6 +322,11 @@ export default function NovaConsultaPage() {
                 <input
                   type="time"
                   required
+                  min={
+                    formData.data === dataMinimaHoje
+                      ? obterHoraLocalAtual()
+                      : undefined
+                  }
                   value={formData.horario}
                   onChange={(e) =>
                     setFormData({ ...formData, horario: e.target.value })
@@ -337,12 +369,12 @@ export default function NovaConsultaPage() {
           </section>
 
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <a
+            <Link
               href="/dashboard/consultas"
               className="rounded-xl border border-gray-300 bg-white px-6 py-3 text-center font-medium text-gray-700 hover:bg-gray-50"
             >
               Cancelar
-            </a>
+            </Link>
             <button
               type="submit"
               disabled={salvando}
