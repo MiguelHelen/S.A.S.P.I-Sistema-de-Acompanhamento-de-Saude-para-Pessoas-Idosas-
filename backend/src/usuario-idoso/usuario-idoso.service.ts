@@ -72,10 +72,13 @@ export class UsuarioIdosoService {
     });
   }
 
-  findAll(usuarioId?: string, idosoId?: string) {
+  findAll(usuarioId?: string, idosoId?: string, clinicaId?: string) {
     const where: any = {};
     if (usuarioId) where.usuario_id = usuarioId;
     if (idosoId) where.idoso_id = idosoId;
+    if (clinicaId) {
+      where.idoso = { clinica_id: clinicaId };
+    }
 
     return this.prisma.usuario_idoso.findMany({
       where,

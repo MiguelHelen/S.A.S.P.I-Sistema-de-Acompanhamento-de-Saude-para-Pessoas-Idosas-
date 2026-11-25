@@ -27,8 +27,9 @@ export class UsuarioIdosoController {
   findAll(
     @Query('usuario_id') usuarioId?: string,
     @Query('idoso_id') idosoId?: string,
+    @Query('clinica_id') clinicaId?: string,
   ) {
-    return this.usuarioIdosoService.findAll(usuarioId, idosoId);
+    return this.usuarioIdosoService.findAll(usuarioId, idosoId, clinicaId);
   }
 
   @Get('usuario/:usuarioId')

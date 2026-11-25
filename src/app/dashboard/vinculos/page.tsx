@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import DashboardNavbar from "@/components/DashboardNavbar";
 import {
@@ -11,47 +11,51 @@ import {
   validarEObterClinicaId,
 } from "@/lib/clinica";
 import {
-  Link2,
+  UserCheck,
   Plus,
-  Loader2,
   Trash2,
+  Loader2,
   AlertCircle,
   CheckCircle2,
+  Users,
   ShieldAlert,
-  UserCheck,
-  HeartHandshake,
 } from "lucide-react";
 
-interface VinculoItem {
+interface VinculoApi {
   id: string;
-  papel?: string;
-  parentesco?: string;
+  usuario_id: string;
+  idoso_id: string;
+  tipo_vinculo: string;
   usuario?: {
-    id: string;
-    nome: string;
-    email: string;
-    perfil?: string;
-    clinica_id?: string;
-  };
+    id?: string;
+    nome?: string | null;
+    email?: string | null;
+    perfil?: string | null;
+  } | null;
   idoso?: {
-    id: string;
-    nome: string;
-    clinica_id?: string;
-  };
+    id?: string;
+    nome?: string | null;
+    clinica_id?: string | null;
+  } | null;
 }
+
+const LABELS_VINCULO: Record<string, string> = {
+  MEDICO_RESPONSAVEL: "Médico Responsável",
+  ENFERMEIRO: "Enfermeiro(a)",
+  CUIDADOR: "Cuidador(a)",
+  FAMILIAR: "Familiar",
+};
 
 export default function VinculosPage() {
   const [autorizado, setAutorizado] = useState<boolean | null>(null);
-  const [vinculos, setVinculos] = useState<VinculoItem[]>([]);
+  const [vinculos, setVinculos] = useState<VinculoApi[]>([]);
+  const [filtroTipo, setFiltroTipo] = useState<string>("TODOS");
   const [carregando, setCarregando] = useState(true);
   const [removendoId, setRemovendoId] = useState<string | null>(null);
-  const [mensagem, setMensagem] = useState("");
-  const [erro, setErro] = useState("");
+  const [erro, setErro] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
 
   const carregarVinculos = useCallback(async () => {
-    setCarregando(true);
-    setErro("");
-
     const sessao = getUsuarioSessao();
     if (!sessao || !isAdminPerfil(sessao.perfil)) {
       setAutorizado(false);
@@ -60,54 +64,40 @@ export default function VinculosPage() {
     }
 
     setAutorizado(true);
+    setCarregando(true);
+    setErro(null);
 
     try {
       const clinicaId = validarEObterClinicaId(sessao);
-      const headers = getAuthHeaders(false);
 
-      const [resVinculos, resIdosos] = await Promise.all([
-        fetch(`${API_URL}/usuario-idoso`, { headers }),
-        fetch(`${API_URL}/idoso?clinica_id=${clinicaId}`, { headers }).catch(
-          () => null
-        ),
-      ]);
-
-      if (!resVinculos.ok) {
-        throw new Error("Não foi possível carregar os vínculos de cuidado.");
-      }
-
-      const rawVinculos = await resVinculos.json();
-      const listaVinculos = Array.isArray(rawVinculos)
-        ? rawVinculos
-        : rawVinculos?.data || [];
-
-      const idsIdososClinica = new Set<string>();
-      if (resIdosos?.ok) {
-        const rawIdosos = await resIdosos.json();
-        const listaIdosos = Array.isArray(rawIdosos)
-          ? rawIdosos
-          : rawIdosos?.data || [];
-        listaIdosos
-          .filter((i: any) => !i.clinica_id || i.clinica_id === clinicaId)
-          .forEach((i: any) => idsIdososClinica.add(String(i.id)));
-      }
-
-      const filtrados: VinculoItem[] = listaVinculos.filter((v: any) => {
-        const idosoId = String(v.idoso?.id || v.idoso_id || "");
-        const clinicaDoIdoso = v.idoso?.clinica_id;
-        const clinicaDoUsuario = v.usuario?.clinica_id;
-
-        if (clinicaDoIdoso && clinicaDoIdoso !== clinicaId) return false;
-        if (clinicaDoUsuario && clinicaDoUsuario !== clinicaId) return false;
-        if (idsIdososClinica.size > 0 && idosoId) {
-          return idsIdososClinica.has(idosoId);
+      const res = await fetch(
+        `${API_URL}/usuario-idoso?clinica_id=${clinicaId}`,
+        {
+          headers: getAuthHeaders(false),
         }
-        return true;
-      });
+      );
 
-      setVinculos(filtrados);
+      const data = await res.json();
+
+      if (!res.ok) {
+        const msg = Array.isArray(data?.message)
+          ? data.message.join(", ")
+          : data?.message || "Não foi possível carregar os vínculos ativos.";
+        setErro(msg);
+        setVinculos([]);
+        return;
+      }
+
+      const lista = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.data)
+        ? data.data
+        : [];
+      setVinculos(lista);
     } catch (err: any) {
-      setErro(err.message || "Falha ao carregar vínculos.");
+      setErro(
+        err?.message || "Erro de conexão ao consultar os vínculos da instituição."
+      );
       setVinculos([]);
     } finally {
       setCarregando(false);
@@ -118,38 +108,39 @@ export default function VinculosPage() {
     carregarVinculos();
   }, [carregarVinculos]);
 
-  async function handleRemoverVinculo(v: VinculoItem) {
-    const confirmou = window.confirm(
-      `Desvincular "${v.usuario?.nome || "Usuário"}" de "${v.idoso?.nome || "Paciente"}"?`
-    );
-    if (!confirmou) return;
-
-    setRemovendoId(v.id);
-    setErro("");
-    setMensagem("");
+  async function handleRemoverVinculo(vinculoId: string) {
+    setErro(null);
+    setAviso(null);
+    setRemovendoId(vinculoId);
 
     try {
-      const res = await fetch(`${API_URL}/usuario-idoso/${v.id}`, {
+      const res = await fetch(`${API_URL}/usuario-idoso/${vinculoId}`, {
         method: "DELETE",
         headers: getAuthHeaders(false),
       });
 
       if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(
-          errData?.message || "Não foi possível remover o vínculo."
-        );
+        const data = await res.json().catch(() => ({}));
+        const msg = Array.isArray(data?.message)
+          ? data.message.join(", ")
+          : data?.message || "Não foi possível remover o vínculo.";
+        setErro(msg);
+        return;
       }
 
-      setVinculos((prev) => prev.filter((item) => item.id !== v.id));
-      setMensagem("Vínculo removido com sucesso!");
-      setTimeout(() => setMensagem(""), 4000);
-    } catch (err: any) {
-      setErro(err.message || "Erro ao desvincular.");
+      setAviso("Vínculo revogado com sucesso.");
+      await carregarVinculos();
+    } catch {
+      setErro("Erro de conexão ao tentar remover o vínculo.");
     } finally {
       setRemovendoId(null);
     }
   }
+
+  const vinculosFiltrados = vinculos.filter((item) => {
+    if (filtroTipo === "TODOS") return true;
+    return String(item.tipo_vinculo).toUpperCase() === filtroTipo;
+  });
 
   if (autorizado === false) {
     return (
@@ -163,8 +154,8 @@ export default function VinculosPage() {
             Acesso Restrito
           </h1>
           <p className="mt-2 text-sm text-gray-600">
-            Apenas Administradores podem gerenciar vínculos entre equipe,
-            familiares e pacientes.
+            Apenas Administradores podem gerenciar os vínculos assistenciais da
+            instituição.
           </p>
         </div>
       </main>
@@ -176,119 +167,139 @@ export default function VinculosPage() {
       <DashboardNavbar />
 
       <div className="mx-auto max-w-7xl px-4 py-8 md:px-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
-              Rede de Cuidados
+              Controle de Acesso & Rede de Apoio
             </span>
             <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0A2540] md:text-4xl">
-              Vínculos de Acompanhamento
+              Vínculos da Instituição
             </h1>
-            <p className="mt-2 text-gray-600">
-              Associe médicos, cuidadores e familiares aos pacientes da clínica.
+            <p className="mt-2 max-w-2xl text-gray-600">
+              Gerencie quais profissionais de saúde, cuidadores e familiares
+              possuem acesso autorizado ao prontuário de cada idoso.
             </p>
           </div>
 
           <Link
             href="/dashboard/vinculos/novo"
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3 font-medium text-white shadow-sm transition hover:bg-[#0A2540]"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0A2540] hover:shadow-md"
           >
             <Plus size={18} />
             Novo Vínculo
           </Link>
         </div>
 
-        {mensagem && (
-          <div className="mt-6 flex items-center gap-3 rounded-xl bg-emerald-50 p-4 text-emerald-800">
-            <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
-            <p className="text-sm font-medium">{mensagem}</p>
+        <div className="mt-6 flex flex-wrap gap-2">
+          {["TODOS", "MEDICO_RESPONSAVEL", "ENFERMEIRO", "CUIDADOR", "FAMILIAR"].map(
+            (tipo) => (
+              <button
+                key={tipo}
+                type="button"
+                onClick={() => setFiltroTipo(tipo)}
+                className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+                  filtroTipo === tipo
+                    ? "bg-[#1565C0] text-white shadow-sm"
+                    : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                {tipo === "TODOS" ? "Todos os Vínculos" : LABELS_VINCULO[tipo] || tipo}
+              </button>
+            )
+          )}
+        </div>
+
+        {aviso && (
+          <div className="mt-6 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800">
+            <CheckCircle2 size={18} className="shrink-0 text-emerald-600" />
+            <span>{aviso}</span>
           </div>
         )}
 
         {erro && (
-          <div className="mt-6 flex items-center gap-3 rounded-xl bg-red-50 p-4 text-red-700">
-            <AlertCircle size={20} className="shrink-0 text-red-600" />
-            <p className="text-sm font-medium">{erro}</p>
+          <div className="mt-6 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-800">
+            <AlertCircle size={18} className="shrink-0 text-red-600" />
+            <span>{erro}</span>
           </div>
         )}
 
-        <div className="mt-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between border-b border-gray-100 pb-4">
-            <div className="flex items-center gap-2.5">
-              <Link2 size={20} className="text-[#1565C0]" />
-              <h2 className="text-lg font-semibold text-[#0A2540]">
-                Vínculos Ativos ({vinculos.length})
-              </h2>
+        <section className="mt-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
+          <div className="flex items-center gap-2">
+            <Users size={19} className="text-[#1565C0]" />
+            <h2 className="text-lg font-semibold text-[#0A2540]">
+              Associações Autorizadas ({vinculosFiltrados.length})
+            </h2>
+          </div>
+
+          {carregando ? (
+            <div className="flex items-center justify-center gap-2 py-12 text-sm text-gray-500">
+              <Loader2 size={18} className="animate-spin text-[#1565C0]" />
+              Carregando vínculos...
             </div>
-          </div>
+          ) : vinculosFiltrados.length > 0 ? (
+            <div className="mt-5 overflow-x-auto">
+              <table className="w-full border-collapse text-left">
+                <thead>
+                  <tr className="border-b border-gray-100 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    <th className="py-3 pr-4">Usuário / Profissional</th>
+                    <th className="py-3 px-4">Paciente (Idoso)</th>
+                    <th className="py-3 px-4">Tipo de Vínculo</th>
+                    <th className="py-3 pl-4 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 text-sm text-gray-700">
+                  {vinculosFiltrados.map((item) => {
+                    const nomeUsuario =
+                      item.usuario?.nome || `Usuário (${item.usuario_id.slice(0, 8)})`;
+                    const nomeIdoso =
+                      item.idoso?.nome || `Paciente (${item.idoso_id.slice(0, 8)})`;
+                    const tipoFormatado =
+                      LABELS_VINCULO[item.tipo_vinculo] || item.tipo_vinculo;
 
-          <div className="mt-6">
-            {carregando ? (
-              <div className="flex items-center justify-center py-12 text-sm text-gray-500">
-                <Loader2 size={24} className="animate-spin text-[#1565C0]" />
-                <span className="ml-2">Carregando vínculos...</span>
-              </div>
-            ) : vinculos.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-gray-200 p-10 text-center">
-                <HeartHandshake size={36} className="mx-auto text-gray-300" />
-                <p className="mt-3 font-semibold text-[#0A2540]">
-                  Nenhum vínculo cadastrado
-                </p>
-                <p className="mt-1 text-sm text-gray-500">
-                  Crie vínculos para liberar o acompanhamento clínico ou familiar
-                  de cada paciente.
-                </p>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-100">
-                {vinculos.map((v) => (
-                  <div
-                    key={v.id}
-                    className="flex flex-col justify-between gap-4 py-4 sm:flex-row sm:items-center"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center gap-1.5 font-semibold text-[#0A2540]">
-                          <UserCheck size={16} className="text-[#1565C0]" />
-                          {v.usuario?.nome || "Usuário"}
-                        </span>
-                        <span className="rounded-full bg-[#E8F1FB] px-2.5 py-0.5 text-[11px] font-semibold text-[#1565C0]">
-                          {v.papel || v.usuario?.perfil || "VÍNCULO"}
-                        </span>
-                        {v.parentesco && (
-                          <span className="rounded-full bg-teal-50 px-2.5 py-0.5 text-[11px] font-medium text-teal-700">
-                            {v.parentesco}
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50/70">
+                        <td className="py-3.5 pr-4">
+                          <div className="font-semibold text-[#0A2540]">
+                            {nomeUsuario}
+                          </div>
+                          {item.usuario?.email && (
+                            <div className="text-xs text-gray-500">
+                              {item.usuario.email}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 font-medium text-[#0A2540]">
+                          {nomeIdoso}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E8F1FB] px-3 py-1 text-xs font-semibold text-[#1565C0]">
+                            <UserCheck size={13} />
+                            {tipoFormatado}
                           </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-500">
-                        Paciente acompanhado:{" "}
-                        <strong className="text-gray-700">
-                          {v.idoso?.nome || "Paciente"}
-                        </strong>
-                        {v.usuario?.email ? ` • ${v.usuario.email}` : ""}
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      disabled={removendoId === v.id}
-                      onClick={() => handleRemoverVinculo(v)}
-                      className="inline-flex items-center gap-1.5 self-start rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-100 disabled:opacity-50 sm:self-center"
-                    >
-                      {removendoId === v.id ? (
-                        <Loader2 size={14} className="animate-spin" />
-                      ) : (
-                        <Trash2 size={14} />
-                      )}
-                      Desvincular
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+                        </td>
+                        <td className="py-3.5 pl-4 text-right">
+                          <button
+                            type="button"
+                            disabled={removendoId === item.id}
+                            onClick={() => handleRemoverVinculo(item.id)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+                          >
+                            <Trash2 size={14} />
+                            Revogar
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="py-12 text-center text-sm text-gray-500">
+              Nenhum vínculo encontrado para o filtro selecionado.
+            </div>
+          )}
+        </section>
       </div>
     </main>
   );
