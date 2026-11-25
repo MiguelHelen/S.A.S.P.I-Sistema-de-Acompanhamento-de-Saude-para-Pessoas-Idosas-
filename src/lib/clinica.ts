@@ -11,6 +11,7 @@ export interface UsuarioSessao {
   perfil: string;
   clinica_id: string;
   clinica_nome: string;
+  cpf?: string;
   telefone?: string;
   especialidade?: string;
   registro_profissional?: string;
@@ -52,11 +53,16 @@ function gravarCookieSessao(
   maxAgeSegundos = COOKIE_MAX_AGE_SEGUNDOS
 ) {
   if (typeof document === "undefined") return;
-  const secure =
-    typeof window !== "undefined" && window.location.protocol === "https:"
-      ? "; Secure"
-      : "";
+  const isHttps =
+    typeof window !== "undefined" && window.location.protocol === "https:";
+  const secure = isHttps ? "; Secure" : "";
   document.cookie = `${nome}=${encodeURIComponent(valor)}; path=/; max-age=${maxAgeSegundos}; SameSite=Lax${secure}`;
+}
+
+function removerCookieSessao(nome: string) {
+  if (typeof document === "undefined") return;
+  document.cookie = `${nome}=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+  document.cookie = `${nome}=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure`;
 }
 
 function serializarUsuarioCompactoCookie(usuario: {
@@ -71,9 +77,41 @@ function serializarUsuarioCompactoCookie(usuario: {
   });
 }
 
+function decodificarPayloadJwt(token: string): Record<string, any> | null {
+  try {
+    const partes = token.split(".");
+    if (partes.length < 2) return null;
+    const base64 = partes[1].replace(/-/g, "+").replace(/_/g, "/");
+    const json = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
 export function getTokenSessao(): string | null {
   if (typeof window === "undefined") return null;
-  const token = localStorage.getItem("saspi_token");
+  let token = localStorage.getItem("saspi_token");
+
+  if (!token) {
+    const cookieToken = lerCookie("saspi_token");
+    if (cookieToken) {
+      try {
+        token = decodeURIComponent(cookieToken);
+      } catch {
+        token = cookieToken;
+      }
+      if (token) {
+        localStorage.setItem("saspi_token", token);
+      }
+    }
+  }
+
   if (token && !lerCookie("saspi_token")) {
     gravarCookieSessao("saspi_token", token);
   }
@@ -82,28 +120,56 @@ export function getTokenSessao(): string | null {
 
 export function getUsuarioSessao(): UsuarioSessao | null {
   if (typeof window === "undefined") return null;
-  const raw = localStorage.getItem("saspi_user");
-  if (!raw) return null;
+  let raw = localStorage.getItem("saspi_user");
+
+  if (!raw) {
+    const cookieUser = lerCookie("saspi_user");
+    if (cookieUser) {
+      try {
+        raw = decodeURIComponent(cookieUser);
+      } catch {
+        raw = cookieUser;
+      }
+    }
+  }
+
+  const token = getTokenSessao();
+  const jwtPayload = token ? decodificarPayloadJwt(token) : null;
+
+  if (!raw && !jwtPayload) return null;
 
   try {
-    const parsed = JSON.parse(raw);
-    const u = parsed?.user || parsed?.usuario || parsed;
-    if (!u || typeof u !== "object") return null;
+    const parsed = raw ? JSON.parse(raw) : {};
+    const u = parsed?.user || parsed?.usuario || parsed || {};
 
+    const idFinal = String(
+      u.id || jwtPayload?.sub || jwtPayload?.id || ""
+    ).trim();
+    const emailFinal = String(u.email || jwtPayload?.email || "").trim();
+    const perfilFinal = normalizarPerfil(
+      u.perfil || u.role || jwtPayload?.perfil || jwtPayload?.role || ""
+    );
     const clinicaId = String(
-      u.clinica_id || u.clinicaId || u.clinica?.id || ""
+      u.clinica_id ||
+        u.clinicaId ||
+        u.clinica?.id ||
+        jwtPayload?.clinica_id ||
+        ""
     ).trim();
     const clinicaNome = String(
       u.clinica_nome || u.clinicaNome || u.clinica?.nome || ""
     ).trim();
 
+    if (!idFinal && !emailFinal) return null;
+
     const sessao: UsuarioSessao = {
-      id: String(u.id || ""),
-      nome: String(u.nome || ""),
-      email: String(u.email || ""),
-      perfil: normalizarPerfil(u.perfil || u.role),
+      id: idFinal,
+      nome: String(u.nome || jwtPayload?.nome || ""),
+      email: emailFinal,
+      perfil: perfilFinal,
       clinica_id: clinicaId,
       clinica_nome: clinicaNome,
+      cpf: u.cpf ? String(u.cpf) : undefined,
       telefone: u.telefone ? String(u.telefone) : undefined,
       especialidade: u.especialidade ? String(u.especialidade) : undefined,
       registro_profissional: u.registro_profissional
@@ -112,7 +178,11 @@ export function getUsuarioSessao(): UsuarioSessao | null {
       foto_url: u.foto_url ? String(u.foto_url) : undefined,
     };
 
-    if (sessao.id && !lerCookie("saspi_user")) {
+    if (!localStorage.getItem("saspi_user") && sessao.id) {
+      localStorage.setItem("saspi_user", JSON.stringify(sessao));
+    }
+
+    if (sessao.id) {
       gravarCookieSessao("saspi_user", serializarUsuarioCompactoCookie(sessao));
     }
 
@@ -191,6 +261,9 @@ export function salvarUsuarioSessao(
     perfil: perfilFinal,
     clinica_id: clinicaId,
     clinica_nome: clinicaNome,
+    ...(origem.cpf !== undefined || atual?.cpf
+      ? { cpf: String(origem.cpf ?? atual?.cpf ?? "") }
+      : {}),
     ...(origem.telefone !== undefined || atual?.telefone
       ? { telefone: String(origem.telefone ?? atual?.telefone ?? "") }
       : {}),
@@ -233,10 +306,8 @@ export function limparSessao() {
   localStorage.removeItem("saspi_active_elderly");
   localStorage.removeItem("saspi_elderly_list");
 
-  if (typeof document !== "undefined") {
-    document.cookie = "saspi_token=; path=/; max-age=0; SameSite=Lax";
-    document.cookie = "saspi_user=; path=/; max-age=0; SameSite=Lax";
-  }
+  removerCookieSessao("saspi_token");
+  removerCookieSessao("saspi_user");
 
   window.dispatchEvent(new Event("saspi_user_updated"));
 }
@@ -284,13 +355,29 @@ export async function resolverESalvarSessao(params: {
 }): Promise<UsuarioSessao> {
   const { token, usuarioParcial, emailFallback } = params;
 
+  localStorage.removeItem("saspi_active_elderly");
+  localStorage.removeItem("saspi_elderly_list");
   localStorage.setItem("saspi_token", token);
   gravarCookieSessao("saspi_token", token);
 
-  let dadosUsuario: Record<string, any> =
-    usuarioParcial?.user || usuarioParcial?.usuario || usuarioParcial || {};
+  const jwtPayload = decodificarPayloadJwt(token) || {};
 
-  if ((!dadosUsuario.clinica_id || !dadosUsuario.perfil) && token) {
+  let dadosUsuario: Record<string, any> = {
+    ...jwtPayload,
+    ...(usuarioParcial?.user || usuarioParcial?.usuario || usuarioParcial || {}),
+  };
+
+  if (!dadosUsuario.id && jwtPayload.sub) {
+    dadosUsuario.id = jwtPayload.sub;
+  }
+
+  if (
+    (!dadosUsuario.id ||
+      !dadosUsuario.clinica_id ||
+      !dadosUsuario.perfil ||
+      !dadosUsuario.nome) &&
+    token
+  ) {
     try {
       if (dadosUsuario.id) {
         const resById = await fetch(`${API_URL}/usuario/${dadosUsuario.id}`, {
@@ -300,7 +387,12 @@ export async function resolverESalvarSessao(params: {
           const full = await resById.json();
           dadosUsuario = { ...dadosUsuario, ...(full?.data || full) };
         }
-      } else if (emailFallback) {
+      }
+
+      const emailBusca = String(
+        dadosUsuario.email || emailFallback || ""
+      ).trim();
+      if ((!dadosUsuario.id || !dadosUsuario.nome) && emailBusca) {
         const resLista = await fetch(`${API_URL}/usuario`, {
           headers: getAuthHeaders(false, token),
         });
@@ -312,7 +404,7 @@ export async function resolverESalvarSessao(params: {
           const encontrado = lista.find(
             (item: any) =>
               String(item.email || "").toLowerCase() ===
-              emailFallback.toLowerCase()
+              emailBusca.toLowerCase()
           );
           if (encontrado) {
             dadosUsuario = { ...dadosUsuario, ...encontrado };
