@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import DashboardNavbar from "@/components/DashboardNavbar";
-import type { Idoso } from "@/components/PatientSelector";
+import { type Idoso, formatarCpf } from "@/components/PatientSelector";
 import { getUsuarioSessao } from "@/lib/clinica";
 import {
   ArrowLeft,
@@ -93,7 +93,8 @@ export default function NovoMedicamentoPage() {
       if (!res.ok) {
         const msg = Array.isArray(data?.message)
           ? data.message.join(", ")
-          : data?.message || "Não foi possível carregar o catálogo de medicamentos.";
+          : data?.message ||
+            "Não foi possível carregar o catálogo de medicamentos.";
         setErro(msg);
         setMedicamentos([]);
         return;
@@ -294,8 +295,20 @@ export default function NovoMedicamentoPage() {
                 Prescrição vinculada ao paciente:
               </span>
               <p className="text-sm font-bold">
-                {idoso.nome} ({idoso.idade} anos)
+                {idoso.nome}
+                {typeof idoso.idade === "number" ? ` (${idoso.idade} anos)` : ""}
               </p>
+              {(idoso.cpf || idoso.telefone || idoso.endereco) && (
+                <p className="mt-0.5 text-xs text-gray-600">
+                  {[
+                    idoso.cpf ? `CPF: ${formatarCpf(idoso.cpf)}` : null,
+                    idoso.telefone ? `Tel: ${idoso.telefone}` : null,
+                    idoso.endereco ? idoso.endereco : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" • ")}
+                </p>
+              )}
             </div>
           </div>
         ) : (
@@ -391,11 +404,21 @@ export default function NovoMedicamentoPage() {
                   onChange={(e) => setFrequencia(e.target.value)}
                   className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 >
-                  <option value="Uma vez ao dia (24h)">Uma vez ao dia (24h)</option>
-                  <option value="A cada 12 horas (12h)">A cada 12 horas (12h)</option>
-                  <option value="A cada 8 horas (8h)">A cada 8 horas (8h)</option>
-                  <option value="A cada 6 horas (6h)">A cada 6 horas (6h)</option>
-                  <option value="Conforme necessidade">Conforme necessidade</option>
+                  <option value="Uma vez ao dia (24h)">
+                    Uma vez ao dia (24h)
+                  </option>
+                  <option value="A cada 12 horas (12h)">
+                    A cada 12 horas (12h)
+                  </option>
+                  <option value="A cada 8 horas (8h)">
+                    A cada 8 horas (8h)
+                  </option>
+                  <option value="A cada 6 horas (6h)">
+                    A cada 6 horas (6h)
+                  </option>
+                  <option value="Conforme necessidade">
+                    Conforme necessidade
+                  </option>
                 </select>
               </div>
 
