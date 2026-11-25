@@ -1,394 +1,509 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import DashboardNavbar from "@/components/DashboardNavbar";
 import PatientSelector, { Idoso } from "@/components/PatientSelector";
-import {
-  API_URL,
-  getAuthHeaders,
-  getIdosoAtivoSessao,
-  getUsuarioSessao,
-  isAdminPerfil,
-} from "@/lib/clinica";
+import { getUsuarioSessao, isAdminPerfil } from "@/lib/clinica";
 import {
   Pill,
   Plus,
-  Clock,
   CheckCircle2,
-  Loader2,
   XCircle,
+  Ban,
+  Loader2,
   AlertCircle,
-  Check,
-  Eye,
-  ShieldAlert,
+  Clock3,
 } from "lucide-react";
 
-interface Prescricao {
+interface PrescricaoApi {
   id: string;
+  idoso_id: string;
+  medicamento_id: string;
+  usuario_id?: string | null;
   dosagem: string;
   frequencia: string;
-  horarios?: string;
-  ativo: boolean;
-  data_inicio: string;
-  data_fim?: string;
+  status: "ATIVA" | "ENCERRADA" | string;
+  data_inicio?: string | null;
+  data_fim?: string | null;
   medicamento?: {
-    id: string;
-    nome: string;
-    descricao?: string;
-  };
-  medico?: {
-    nome: string;
-  };
+    id?: string;
+    nome?: string | null;
+    descricao?: string | null;
+  } | null;
+  usuario?: {
+    id?: string;
+    nome?: string | null;
+    perfil?: string | null;
+  } | null;
+}
+
+interface RegistroDoseApi {
+  id: string;
+  prescricao_id: string;
+  status: "CONFIRMADA" | "RECUSADA" | "ATRASADA" | string;
+  observacao?: string | null;
+  data_hora?: string | null;
+  prescricao?: {
+    dosagem?: string | null;
+    medicamento?: {
+      nome?: string | null;
+    } | null;
+  } | null;
+  usuario?: {
+    nome?: string | null;
+    perfil?: string | null;
+  } | null;
+}
+
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://perfect-bravery-production-5ce7.up.railway.app";
+
+function formatarData(dataIso?: string | null): string {
+  if (!dataIso) return "--";
+  const data = new Date(dataIso);
+  if (Number.isNaN(data.getTime())) return "--";
+  return data.toLocaleDateString("pt-BR", {
+    timeZone: "UTC",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function formatarDataHora(dataIso?: string | null): string {
+  if (!dataIso) return "--";
+  const data = new Date(dataIso);
+  if (Number.isNaN(data.getTime())) return "--";
+  return data.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export default function MedicamentosPage() {
-  const [autorizado, setAutorizado] = useState<boolean | null>(null);
   const [idosoAtivo, setIdosoAtivo] = useState<Idoso | null>(null);
-  const [prescricoes, setPrescricoes] = useState<Prescricao[]>([]);
-  const [dosesTomadasHoje, setDosesTomadasHoje] = useState<
-    Record<string, boolean>
-  >({});
-  const [carregando, setCarregando] = useState(true);
-  const [salvandoId, setSalvandoId] = useState<string | null>(null);
-  const [mensagem, setMensagem] = useState("");
-  const [userPerfil, setUserPerfil] = useState<string>("");
+  const [perfilUsuario, setPerfilUsuario] = useState<string>("");
+  const [prescricoes, setPrescricoes] = useState<PrescricaoApi[]>([]);
+  const [registrosDose, setRegistrosDose] = useState<RegistroDoseApi[]>([]);
+
+  const [carregando, setCarregando] = useState(false);
+  const [acaoEmAndamentoId, setAcaoEmAndamentoId] = useState<string | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
 
   useEffect(() => {
     const sessao = getUsuarioSessao();
-    if (!sessao || isAdminPerfil(sessao.perfil)) {
-      setAutorizado(false);
-      setCarregando(false);
-      return;
+    if (sessao?.perfil) {
+      setPerfilUsuario(sessao.perfil);
     }
 
-    setAutorizado(true);
-    setUserPerfil(sessao.perfil);
-
-    const ativo = getIdosoAtivoSessao<Idoso>();
-    if (ativo?.id) {
-      setIdosoAtivo(ativo);
-    } else {
-      setCarregando(false);
+    const saved = localStorage.getItem("saspi_active_elderly");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.id) {
+          setIdosoAtivo(parsed);
+        }
+      } catch {
+        // Ignora JSON inválido no localStorage
+      }
     }
   }, []);
 
-  const carregarPrescricoes = useCallback(async (pacienteId: string) => {
+  const carregarDadosPaciente = useCallback(async (idosoId: string) => {
+    const token = localStorage.getItem("saspi_token");
     setCarregando(true);
-    try {
-      const res = await fetch(`${API_URL}/prescricao/idoso/${pacienteId}`, {
-        headers: getAuthHeaders(false),
-      });
+    setErro(null);
 
-      if (res.ok) {
-        const raw = await res.json();
-        const lista = Array.isArray(raw) ? raw : raw?.data || [];
-        setPrescricoes(lista);
-      } else {
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+
+    try {
+      const [resPrescricoes, resDoses] = await Promise.all([
+        fetch(`${API_URL}/prescricao/idoso/${idosoId}`, { headers }),
+        fetch(`${API_URL}/registro-dose/idoso/${idosoId}`, { headers }),
+      ]);
+
+      const dataPrescricoes = await resPrescricoes.json();
+
+      if (!resPrescricoes.ok) {
+        const msg = Array.isArray(dataPrescricoes?.message)
+          ? dataPrescricoes.message.join(", ")
+          : dataPrescricoes?.message ||
+            "Não foi possível carregar as prescrições do paciente.";
+        setErro(msg);
         setPrescricoes([]);
+      } else {
+        setPrescricoes(Array.isArray(dataPrescricoes) ? dataPrescricoes : []);
+      }
+
+      if (resDoses.ok) {
+        const dataDoses = await resDoses.json();
+        setRegistrosDose(Array.isArray(dataDoses) ? dataDoses : []);
+      } else {
+        setRegistrosDose([]);
       }
     } catch {
+      setErro("Erro de conexão ao consultar prescrições e doses.");
       setPrescricoes([]);
+      setRegistrosDose([]);
     } finally {
       setCarregando(false);
     }
   }, []);
 
   useEffect(() => {
-    if (idosoAtivo?.id && autorizado === true) {
-      carregarPrescricoes(idosoAtivo.id);
+    if (!idosoAtivo?.id) {
+      setPrescricoes([]);
+      setRegistrosDose([]);
+      return;
     }
-  }, [idosoAtivo, autorizado, carregarPrescricoes]);
+    carregarDadosPaciente(idosoAtivo.id);
+  }, [idosoAtivo?.id, carregarDadosPaciente]);
 
-  async function registrarToma(prescricao: Prescricao) {
-    if (!idosoAtivo) return;
-    setSalvandoId(prescricao.id);
-    setMensagem("");
+  function handleSelectElderly(selectedIdoso: Idoso) {
+    setIdosoAtivo(selectedIdoso);
+    setAviso(null);
+    localStorage.setItem("saspi_active_elderly", JSON.stringify(selectedIdoso));
+    window.dispatchEvent(new Event("saspi_elderly_updated"));
+  }
+
+  async function handleRegistrarDose(
+    prescricaoId: string,
+    statusDose: "CONFIRMADA" | "RECUSADA"
+  ) {
+    const token = localStorage.getItem("saspi_token");
+    if (!token) {
+      setErro("Sessão expirada ou não autenticada. Faça login novamente.");
+      return;
+    }
+
+    setErro(null);
+    setAviso(null);
+    setAcaoEmAndamentoId(prescricaoId);
 
     try {
-      const res = await fetch(`${API_URL}/registro-saude`, {
+      const res = await fetch(`${API_URL}/registro-dose`, {
         method: "POST",
-        headers: getAuthHeaders(true),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
-          idoso_id: idosoAtivo.id,
-          tipo: "MEDICACAO",
-          valor_categorico: `Dose administrada: ${
-            prescricao.medicamento?.nome || "Medicamento"
-          } (${prescricao.dosagem})`,
-          data_registro: new Date().toISOString(),
+          prescricao_id: prescricaoId,
+          status: statusDose,
         }),
       });
 
-      if (res.ok) {
-        setDosesTomadasHoje((prev) => ({ ...prev, [prescricao.id]: true }));
-        setMensagem(
-          `Administração de ${prescricao.medicamento?.nome} registrada com sucesso!`
-        );
-        setTimeout(() => setMensagem(""), 4000);
+      const data = await res.json();
+
+      if (!res.ok) {
+        const msg = Array.isArray(data?.message)
+          ? data.message.join(", ")
+          : data?.message || "Não foi possível registrar a dose.";
+        setErro(msg);
+        return;
+      }
+
+      setAviso(
+        statusDose === "CONFIRMADA"
+          ? "Dose confirmada e registrada no histórico de adesão."
+          : "Dose marcada como recusada/pulada no histórico de adesão."
+      );
+
+      if (idosoAtivo?.id) {
+        await carregarDadosPaciente(idosoAtivo.id);
       }
     } catch {
-      // Falha silenciosa
+      setErro("Erro de conexão ao registrar a dose.");
     } finally {
-      setSalvandoId(null);
+      setAcaoEmAndamentoId(null);
     }
   }
 
-  async function encerrarPrescricao(prescricao: Prescricao) {
-    const confirmou = window.confirm(
-      `Deseja encerrar a prescrição de ${
-        prescricao.medicamento?.nome || "este medicamento"
-      }?`
-    );
-    if (!confirmou) return;
+  async function handleEncerrarPrescricao(prescricaoId: string) {
+    const token = localStorage.getItem("saspi_token");
+    if (!token) {
+      setErro("Sessão expirada ou não autenticada. Faça login novamente.");
+      return;
+    }
 
-    setSalvandoId(prescricao.id);
+    setErro(null);
+    setAviso(null);
+    setAcaoEmAndamentoId(prescricaoId);
+
     try {
-      const res = await fetch(`${API_URL}/prescricao/${prescricao.id}`, {
+      const res = await fetch(`${API_URL}/prescricao/${prescricaoId}/encerrar`, {
         method: "PATCH",
-        headers: getAuthHeaders(true),
-        body: JSON.stringify({ ativo: false }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
       });
 
-      if (res.ok) {
-        setPrescricoes((prev) =>
-          prev.map((p) => (p.id === prescricao.id ? { ...p, ativo: false } : p))
-        );
-        setMensagem("Prescrição encerrada com sucesso.");
-        setTimeout(() => setMensagem(""), 3000);
+      const data = await res.json();
+
+      if (!res.ok) {
+        const msg = Array.isArray(data?.message)
+          ? data.message.join(", ")
+          : data?.message || "Não foi possível encerrar a prescrição.";
+        setErro(msg);
+        return;
+      }
+
+      setAviso("Prescrição encerrada com sucesso.");
+      if (idosoAtivo?.id) {
+        await carregarDadosPaciente(idosoAtivo.id);
       }
     } catch {
-      // Falha silenciosa
+      setErro("Erro de conexão ao encerrar a prescrição.");
     } finally {
-      setSalvandoId(null);
+      setAcaoEmAndamentoId(null);
     }
   }
 
-  const podePrescrever = userPerfil === "MEDICO";
-  const podeConfirmarDose =
-    userPerfil !== "ADMINISTRADOR" && userPerfil !== "FAMILIAR";
-
-  const ativas = prescricoes.filter((p) => p.ativo !== false);
-  const encerradas = prescricoes.filter((p) => p.ativo === false);
-
-  if (autorizado === false) {
-    return (
-      <main className="min-h-screen bg-[#F2F7FB]">
-        <DashboardNavbar />
-        <div className="mx-auto max-w-xl px-4 py-16 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
-            <ShieldAlert size={32} />
-          </div>
-          <h1 className="mt-4 text-2xl font-bold text-[#0A2540]">
-            Acesso Restrito
-          </h1>
-          <p className="mt-2 text-sm text-gray-600">
-            O módulo de medicamentos e prescrições é exclusivo para a equipe
-            clínica e familiares vinculados.
-          </p>
-        </div>
-      </main>
-    );
-  }
+  const podePrescrever = perfilUsuario === "MEDICO";
+  const podeRegistrarDose =
+    !isAdminPerfil(perfilUsuario) &&
+    perfilUsuario !== "FAMILIAR" &&
+    perfilUsuario !== "";
 
   return (
     <main className="min-h-screen bg-[#F2F7FB]">
       <DashboardNavbar />
 
       <div className="mx-auto max-w-7xl px-4 py-8 md:px-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
-              Farmacoterapia & Adesão
+              Farmacoterapia e Adesão
             </span>
+
             <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0A2540] md:text-4xl">
-              Medicamentos & Prescrições
+              Medicamentos e Prescrições
             </h1>
-            <p className="mt-2 text-gray-600">
-              Controle de posologia, horários de administração e confirmação de
-              doses.
+
+            <p className="mt-2 max-w-2xl text-gray-600">
+              {idosoAtivo ? (
+                <>
+                  Prescrições e registro de doses de{" "}
+                  <strong className="text-[#0A2540]">{idosoAtivo.nome}</strong>.
+                </>
+              ) : (
+                "Selecione um paciente para visualizar prescrições e confirmações de dose."
+              )}
             </p>
           </div>
 
           {podePrescrever && (
-            <a
+            <Link
               href="/dashboard/medicamentos/novo"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3 font-medium text-white shadow-sm transition hover:bg-[#0A2540]"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0A2540] hover:shadow-md"
             >
               <Plus size={18} />
               Nova Prescrição
-            </a>
+            </Link>
           )}
         </div>
 
         <div className="mt-6">
           <PatientSelector
+            onSelect={handleSelectElderly}
             selectedId={idosoAtivo?.id}
-            onSelect={(p) => setIdosoAtivo(p)}
           />
         </div>
 
-        {userPerfil === "FAMILIAR" && (
-          <div className="mt-6 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-800">
-            <Eye size={18} className="shrink-0 text-amber-600" />
-            <p className="text-xs sm:text-sm">
-              <strong>Modo Acompanhamento Familiar:</strong> Você visualiza as
-              prescrições ativas do paciente. O registro de administração de
-              doses e novas prescrições são realizados pela equipe clínica.
-            </p>
+        {aviso && (
+          <div className="mt-6 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800">
+            <CheckCircle2 size={18} className="shrink-0 text-emerald-600" />
+            <span>{aviso}</span>
           </div>
         )}
 
-        {mensagem && (
-          <div className="mt-6 flex items-center gap-3 rounded-xl bg-emerald-50 p-4 text-emerald-800">
-            <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
-            <p className="text-sm font-medium">{mensagem}</p>
+        {erro && (
+          <div className="mt-6 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-800">
+            <AlertCircle size={18} className="shrink-0 text-red-600" />
+            <span>{erro}</span>
           </div>
         )}
 
-        <div className="mt-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between border-b border-gray-100 pb-4">
-            <div className="flex items-center gap-2.5">
-              <Pill size={20} className="text-[#1565C0]" />
-              <h2 className="text-lg font-semibold text-[#0A2540]">
-                Prescrições Ativas ({ativas.length})
-              </h2>
+        <section className="mt-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
+          <h2 className="text-lg font-semibold text-[#0A2540]">
+            Prescrições do Paciente
+          </h2>
+
+          {carregando ? (
+            <div className="flex items-center justify-center gap-2 py-12 text-sm text-gray-500">
+              <Loader2 size={18} className="animate-spin text-[#1565C0]" />
+              Carregando prescrições...
             </div>
-          </div>
+          ) : prescricoes.length > 0 ? (
+            <div className="mt-5 space-y-4">
+              {prescricoes.map((presc) => {
+                const isAtiva = presc.status === "ATIVA";
+                const nomeMedicamento =
+                  presc.medicamento?.nome || "Medicamento prescrito";
+                const ocupada = acaoEmAndamentoId === presc.id;
 
-          <div className="mt-6">
-            {carregando ? (
-              <div className="flex items-center justify-center py-10 text-sm text-gray-500">
-                <Loader2 size={22} className="animate-spin text-[#1565C0]" />
-                <span className="ml-2">Carregando prescrições...</span>
-              </div>
-            ) : ativas.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-gray-200 p-10 text-center">
-                <AlertCircle size={32} className="mx-auto text-gray-300" />
-                <p className="mt-3 font-medium text-[#0A2540]">
-                  Nenhuma prescrição ativa para este paciente
-                </p>
-                <p className="mt-1 text-sm text-gray-500">
-                  {podePrescrever
-                    ? "Clique em 'Nova Prescrição' para iniciar o plano terapêutico."
-                    : "Nenhuma medicação prescrita no momento."}
-                </p>
-              </div>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2">
-                {ativas.map((p) => {
-                  const tomado = Boolean(dosesTomadasHoje[p.id]);
-                  return (
-                    <div
-                      key={p.id}
-                      className="flex flex-col justify-between rounded-xl border border-gray-100 bg-[#FAFCFE] p-5 transition hover:border-[#BFD8F2] hover:bg-white"
-                    >
-                      <div>
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <h3 className="text-base font-bold text-[#0A2540]">
-                              {p.medicamento?.nome || "Medicamento"}
-                            </h3>
-                            <span className="mt-1 inline-block rounded-md bg-[#E8F1FB] px-2.5 py-0.5 text-xs font-semibold text-[#1565C0]">
-                              {p.dosagem}
-                            </span>
-                          </div>
-
-                          <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
-                            Ativo
-                          </span>
-                        </div>
-
-                        <div className="mt-4 space-y-1.5 text-sm text-gray-600">
-                          <p className="flex items-center gap-2">
-                            <Clock size={14} className="text-[#26A69A]" />
-                            <span>
-                              <strong>Frequência:</strong> {p.frequencia}
-                            </span>
-                          </p>
-                          {p.horarios && (
-                            <p className="text-xs text-gray-500">
-                              Horários programados: {p.horarios}
-                            </p>
-                          )}
-                          {p.medicamento?.descricao && (
-                            <p className="mt-2 rounded-lg bg-white p-2.5 text-xs text-gray-500 border border-gray-100">
-                              {p.medicamento.descricao}
-                            </p>
-                          )}
-                        </div>
+                return (
+                  <div
+                    key={presc.id}
+                    className="flex flex-col justify-between gap-4 rounded-xl border border-gray-100 bg-[#FAFCFE] p-4 lg:flex-row lg:items-center"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#E8F1FB] text-[#1565C0]">
+                        <Pill size={22} />
                       </div>
 
-                      <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-4">
-                        {podeConfirmarDose ? (
-                          <button
-                            type="button"
-                            disabled={tomado || salvandoId === p.id}
-                            onClick={() => registrarToma(p)}
-                            className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold transition ${
-                              tomado
-                                ? "bg-emerald-50 text-emerald-700 cursor-default"
-                                : "bg-[#26A69A] text-white hover:bg-[#1f8a80]"
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-semibold text-[#0A2540]">
+                            {nomeMedicamento} — {presc.dosagem}
+                          </h3>
+                          <span
+                            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                              isAtiva
+                                ? "bg-[#E6F4EF] text-[#26A69A]"
+                                : "bg-gray-200 text-gray-700"
                             }`}
                           >
-                            {salvandoId === p.id ? (
-                              <Loader2 size={14} className="animate-spin" />
-                            ) : tomado ? (
-                              <Check size={14} />
-                            ) : (
-                              <CheckCircle2 size={14} />
-                            )}
-                            {tomado ? "Dose Confirmada" : "Confirmar Dose"}
-                          </button>
-                        ) : (
-                          <span className="text-xs font-medium text-gray-400">
-                            Somente visualização
+                            {presc.status}
                           </span>
+                        </div>
+
+                        <p className="mt-1 text-sm text-gray-600">
+                          Frequência: <strong>{presc.frequencia}</strong> • Início:{" "}
+                          {formatarData(presc.data_inicio)}
+                          {presc.data_fim
+                            ? ` • Término: ${formatarData(presc.data_fim)}`
+                            : ""}
+                        </p>
+
+                        {presc.usuario?.nome && (
+                          <p className="mt-1 text-xs text-gray-400">
+                            Prescrito por: {presc.usuario.nome}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {isAtiva && (podeRegistrarDose || podePrescrever) && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        {podeRegistrarDose && (
+                          <>
+                            <button
+                              type="button"
+                              disabled={ocupada}
+                              onClick={() =>
+                                handleRegistrarDose(presc.id, "CONFIRMADA")
+                              }
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-[#26A69A] px-3.5 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+                            >
+                              <CheckCircle2 size={15} />
+                              Confirmar Dose
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={ocupada}
+                              onClick={() =>
+                                handleRegistrarDose(presc.id, "RECUSADA")
+                              }
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
+                            >
+                              <XCircle size={15} />
+                              Recusar
+                            </button>
+                          </>
                         )}
 
                         {podePrescrever && (
                           <button
                             type="button"
-                            disabled={salvandoId === p.id}
-                            onClick={() => encerrarPrescricao(p)}
-                            className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-400 transition hover:bg-red-50 hover:text-red-600"
+                            disabled={ocupada}
+                            onClick={() => handleEncerrarPrescricao(presc.id)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
                           >
-                            <XCircle size={14} />
+                            <Ban size={15} />
                             Encerrar
                           </button>
                         )}
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {encerradas.length > 0 && (
-          <div className="mt-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-            <h2 className="text-base font-semibold text-gray-500">
-              Prescrições Encerradas ({encerradas.length})
-            </h2>
-            <div className="mt-4 divide-y divide-gray-100">
-              {encerradas.map((p) => (
-                <div
-                  key={p.id}
-                  className="flex items-center justify-between py-3 text-sm text-gray-500"
-                >
-                  <div>
-                    <span className="font-medium text-gray-700">
-                      {p.medicamento?.nome || "Medicamento"}
-                    </span>{" "}
-                    — {p.dosagem} ({p.frequencia})
+                    )}
                   </div>
-                  <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs">
-                    Encerrado
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
+          ) : (
+            <div className="py-10 text-center text-sm text-gray-500">
+              {idosoAtivo
+                ? "Nenhuma prescrição cadastrada para este paciente."
+                : "Selecione um paciente para visualizar as prescrições."}
+            </div>
+          )}
+        </section>
+
+        <section className="mt-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
+          <div className="flex items-center gap-2">
+            <Clock3 size={19} className="text-[#1565C0]" />
+            <h2 className="text-lg font-semibold text-[#0A2540]">
+              Histórico de Doses Registradas
+            </h2>
           </div>
-        )}
+
+          {registrosDose.length > 0 ? (
+            <ul className="mt-5 space-y-3">
+              {registrosDose.map((dose) => {
+                const nomeRemedio =
+                  dose.prescricao?.medicamento?.nome || "Medicamento";
+                const responsavel = dose.usuario?.nome || "Usuário responsável";
+
+                return (
+                  <li
+                    key={dose.id}
+                    className="flex flex-col justify-between gap-1 rounded-xl border border-gray-100 bg-[#FAFCFE] p-4 sm:flex-row sm:items-center"
+                  >
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold text-[#0A2540]">
+                          {nomeRemedio}
+                        </span>
+                        <span
+                          className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                            dose.status === "CONFIRMADA"
+                              ? "bg-[#E6F4EF] text-[#26A69A]"
+                              : "bg-amber-100 text-amber-800"
+                          }`}
+                        >
+                          {dose.status}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Registrado por: {responsavel}
+                      </p>
+                    </div>
+
+                    <span className="text-xs font-medium text-gray-400">
+                      {formatarDataHora(dose.data_hora)}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="mt-4 text-sm text-gray-500">
+              Nenhuma confirmação ou ocorrência de dose registrada para este
+              paciente ainda.
+            </p>
+          )}
+        </section>
       </div>
     </main>
   );
