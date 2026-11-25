@@ -25,20 +25,17 @@ export default function NovaConsultaPage() {
   const router = useRouter();
   const [idosoAtivo, setIdosoAtivo] = useState<Idoso | null>(null);
   const [autorizado, setAutorizado] = useState<boolean | null>(null);
-  const [usuarioLogado, setUsuarioLogado] = useState<{
-    id: string;
-    perfil: string;
-  } | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [sucesso, setSucesso] = useState(false);
   const [erro, setErro] = useState("");
 
   const [formData, setFormData] = useState({
     especialidade: "",
+    medico: "",
     data: "",
-    hora: "09:00",
-    local: "",
-    observacoes: "",
+    horario: "09:00",
+    localizacao: "",
+    observacao: "",
   });
 
   useEffect(() => {
@@ -49,7 +46,9 @@ export default function NovaConsultaPage() {
     }
 
     setAutorizado(true);
-    setUsuarioLogado({ id: sessao.id, perfil: sessao.perfil });
+    if (sessao.perfil === "MEDICO" && sessao.nome) {
+      setFormData((prev) => ({ ...prev, medico: sessao.nome }));
+    }
 
     const ativo = getIdosoAtivoSessao<Idoso>();
     if (ativo?.id) {
@@ -68,6 +67,12 @@ export default function NovaConsultaPage() {
       return;
     }
 
+    if (!formData.medico.trim()) {
+      setErro("Informe o nome do médico ou profissional responsável.");
+      setSalvando(false);
+      return;
+    }
+
     if (!/^\d{4}-\d{2}-\d{2}$/.test(formData.data)) {
       setErro("Selecione uma data válida no calendário.");
       setSalvando(false);
@@ -81,29 +86,31 @@ export default function NovaConsultaPage() {
       return;
     }
 
-    if (!/^\d{2}:\d{2}$/.test(formData.hora)) {
+    if (!/^\d{2}:\d{2}$/.test(formData.horario)) {
       setErro("Informe um horário válido.");
       setSalvando(false);
       return;
     }
 
-    try {
-      const dataHoraIso = new Date(
-        `${formData.data}T${formData.hora}:00`
-      ).toISOString();
+    if (!formData.localizacao.trim()) {
+      setErro("Informe o local ou unidade de atendimento.");
+      setSalvando(false);
+      return;
+    }
 
-      const payload: Record<string, any> = {
+    try {
+      const payload = {
         idoso_id: idosoAtivo.id,
         especialidade: formData.especialidade.trim(),
-        data: dataHoraIso,
-        local: formData.local.trim() || undefined,
-        observacoes: formData.observacoes.trim() || undefined,
-        status: "AGENDADA",
+        medico: formData.medico.trim(),
+        data: formData.data,
+        horario: formData.horario.trim(),
+        localizacao: formData.localizacao.trim(),
+        ...(formData.observacao.trim()
+          ? { observacao: formData.observacao.trim() }
+          : {}),
+        status: "Agendada",
       };
-
-      if (usuarioLogado?.perfil === "MEDICO" && usuarioLogado?.id) {
-        payload.medico_id = usuarioLogado.id;
-      }
 
       const res = await fetch(`${API_URL}/consulta`, {
         method: "POST",
@@ -123,7 +130,7 @@ export default function NovaConsultaPage() {
       setSucesso(true);
       setTimeout(() => {
         router.push("/dashboard/consultas");
-      }, 1200);
+      }, 1000);
     } catch (err: any) {
       setErro(
         err.message ||
@@ -224,7 +231,7 @@ export default function NovaConsultaPage() {
             </div>
 
             <div className="mt-6 grid gap-5 md:grid-cols-2">
-              <div className="md:col-span-2">
+              <div>
                 <label className="mb-2 block text-sm font-medium text-[#0A2540]">
                   Especialidade ou Tipo de Consulta *
                 </label>
@@ -235,7 +242,23 @@ export default function NovaConsultaPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, especialidade: e.target.value })
                   }
-                  placeholder="Ex.: Cardiologia, Geriatria, Retorno de Exames"
+                  placeholder="Ex.: Cardiologia, Geriatria, Retorno"
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-[#0A2540]">
+                  Médico / Profissional *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.medico}
+                  onChange={(e) =>
+                    setFormData({ ...formData, medico: e.target.value })
+                  }
+                  placeholder="Ex.: Dr. Carlos Mendes"
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
               </div>
@@ -262,9 +285,9 @@ export default function NovaConsultaPage() {
                 <input
                   type="time"
                   required
-                  value={formData.hora}
+                  value={formData.horario}
                   onChange={(e) =>
-                    setFormData({ ...formData, hora: e.target.value })
+                    setFormData({ ...formData, horario: e.target.value })
                   }
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
@@ -272,13 +295,14 @@ export default function NovaConsultaPage() {
 
               <div className="md:col-span-2">
                 <label className="mb-2 block text-sm font-medium text-[#0A2540]">
-                  Local / Unidade de Atendimento
+                  Local / Unidade de Atendimento *
                 </label>
                 <input
                   type="text"
-                  value={formData.local}
+                  required
+                  value={formData.localizacao}
                   onChange={(e) =>
-                    setFormData({ ...formData, local: e.target.value })
+                    setFormData({ ...formData, localizacao: e.target.value })
                   }
                   placeholder="Ex.: Clínica Geriátrica Central - Sala 302 ou Teleconsulta"
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
@@ -291,9 +315,9 @@ export default function NovaConsultaPage() {
                 </label>
                 <textarea
                   rows={3}
-                  value={formData.observacoes}
+                  value={formData.observacao}
                   onChange={(e) =>
-                    setFormData({ ...formData, observacoes: e.target.value })
+                    setFormData({ ...formData, observacao: e.target.value })
                   }
                   placeholder="Ex.: Levar exames laboratoriais recentes e receituário em uso..."
                   className="w-full resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"

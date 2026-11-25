@@ -20,18 +20,18 @@ import {
   Loader2,
   Stethoscope,
   ShieldAlert,
+  User,
 } from "lucide-react";
 
 interface Consulta {
   id: string;
   especialidade: string;
+  medico: string;
   data: string;
-  local?: string;
+  horario: string;
+  localizacao?: string;
+  observacao?: string;
   status: string;
-  observacoes?: string;
-  medico?: {
-    nome: string;
-  };
 }
 
 export default function ConsultasPage() {
@@ -88,10 +88,13 @@ export default function ConsultasPage() {
     }
   }, [idosoAtivo, autorizado, carregarConsultas]);
 
-  async function alterarStatus(consultaId: string, novoStatus: string) {
+  async function alterarStatus(
+    consultaId: string,
+    novoStatus: "Agendada" | "Confirmada" | "Realizada" | "Cancelada"
+  ) {
     setAtualizandoId(consultaId);
     try {
-      const res = await fetch(`${API_URL}/consulta/${consultaId}`, {
+      const res = await fetch(`${API_URL}/consulta/${consultaId}/status`, {
         method: "PATCH",
         headers: getAuthHeaders(true),
         body: JSON.stringify({ status: novoStatus }),
@@ -114,6 +117,7 @@ export default function ConsultasPage() {
   function badgeStatus(status: string) {
     const s = (status || "").toUpperCase();
     if (s === "REALIZADA") return "bg-emerald-50 text-emerald-700";
+    if (s === "CONFIRMADA") return "bg-teal-50 text-teal-700";
     if (s === "CANCELADA") return "bg-red-50 text-red-700";
     return "bg-blue-50 text-[#1565C0]";
   }
@@ -209,16 +213,18 @@ export default function ConsultasPage() {
               <div className="space-y-4">
                 {consultas.map((c) => {
                   const dt = new Date(c.data);
-                  const dataFmt = dt.toLocaleDateString("pt-BR", {
-                    day: "2-digit",
-                    month: "long",
-                    year: "numeric",
-                  });
-                  const horaFmt = dt.toLocaleTimeString("pt-BR", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  });
-                  const statusUpper = (c.status || "AGENDADA").toUpperCase();
+                  const dataFmt = Number.isNaN(dt.getTime())
+                    ? c.data
+                    : dt.toLocaleDateString("pt-BR", {
+                        timeZone: "UTC",
+                        day: "2-digit",
+                        month: "long",
+                        year: "numeric",
+                      });
+                  const statusLabel = c.status || "Agendada";
+                  const statusUpper = statusLabel.toUpperCase();
+                  const emAberto =
+                    statusUpper === "AGENDADA" || statusUpper === "CONFIRMADA";
 
                   return (
                     <div
@@ -235,40 +241,48 @@ export default function ConsultasPage() {
                               statusUpper
                             )}`}
                           >
-                            {statusUpper}
+                            {statusLabel}
                           </span>
                         </div>
 
                         <div className="flex flex-wrap items-center gap-4 text-xs text-gray-600">
+                          {c.medico && (
+                            <span className="flex items-center gap-1 font-medium text-[#0A2540]">
+                              <User size={14} className="text-[#1565C0]" />
+                              {c.medico}
+                            </span>
+                          )}
                           <span className="flex items-center gap-1">
                             <Calendar size={14} className="text-[#1565C0]" />
                             {dataFmt}
                           </span>
-                          <span className="flex items-center gap-1">
-                            <Clock size={14} className="text-[#26A69A]" />
-                            {horaFmt}
-                          </span>
-                          {c.local && (
+                          {c.horario && (
+                            <span className="flex items-center gap-1">
+                              <Clock size={14} className="text-[#26A69A]" />
+                              {c.horario}
+                            </span>
+                          )}
+                          {c.localizacao && (
                             <span className="flex items-center gap-1">
                               <MapPin size={14} className="text-gray-400" />
-                              {c.local}
+                              {c.localizacao}
                             </span>
                           )}
                         </div>
 
-                        {c.observacoes && (
+                        {c.observacao && (
                           <p className="text-xs text-gray-500">
-                            Obs.: {c.observacoes}
+                            Obs.: {c.observacao}
                           </p>
                         )}
                       </div>
 
-                      {podeGerenciarConsultas && statusUpper === "AGENDADA" && (
+                      {podeGerenciarConsultas && emAberto && (
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
                             disabled={atualizandoId === c.id}
-                            onClick={() => alterarStatus(c.id, "REALIZADA")}
+                            onClick={() => alterarStatus(c.id, "Realizada")}
                             className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
                           >
                             <CheckCircle2 size={14} />
@@ -277,7 +291,7 @@ export default function ConsultasPage() {
                           <button
                             type="button"
                             disabled={atualizandoId === c.id}
-                            onClick={() => alterarStatus(c.id, "CANCELADA")}
+                            onClick={() => alterarStatus(c.id, "Cancelada")}
                             className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
                           >
                             <XCircle size={14} />
