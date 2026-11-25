@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { API_URL, limparSessao } from "@/lib/clinica";
 import {
   HeartPulse,
   Mail,
@@ -24,7 +25,10 @@ function traduzirErroRecuperacao(mensagem?: string): string {
     return "O limite de envio de e-mails do servidor de autenticação foi atingido temporariamente (máximo de 2 envios por hora no plano gratuito). Aguarde alguns minutos antes de solicitar novamente.";
   }
 
-  if (msg.includes("invalid email") || msg.includes("unable to validate email")) {
+  if (
+    msg.includes("invalid email") ||
+    msg.includes("unable to validate email")
+  ) {
     return "Informe um endereço de e-mail institucional válido.";
   }
 
@@ -32,6 +36,7 @@ function traduzirErroRecuperacao(mensagem?: string): string {
 }
 
 export default function RecuperarSenhaPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [sucesso, setSucesso] = useState(false);
@@ -45,6 +50,31 @@ export default function RecuperarSenhaPage() {
     }, 1000);
     return () => clearInterval(timer);
   }, [cooldown]);
+
+  function irParaLogin() {
+    limparSessao();
+    router.push("/login");
+  }
+
+  async function verificarEmailExisteNoSistema(
+    emailBusca: string
+  ): Promise<boolean | null> {
+    try {
+      const res = await fetch(`${API_URL}/usuario`);
+      if (!res.ok) return null;
+      const raw = await res.json();
+      const lista = Array.isArray(raw) ? raw : raw?.data || [];
+      if (!Array.isArray(lista)) return null;
+      return lista.some(
+        (u: any) =>
+          String(u.email || "")
+            .trim()
+            .toLowerCase() === emailBusca
+      );
+    } catch {
+      return null;
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -62,6 +92,15 @@ export default function RecuperarSenhaPage() {
     }
 
     try {
+      const existe = await verificarEmailExisteNoSistema(emailLimpo);
+      if (existe === false) {
+        setErro(
+          "Este e-mail não está cadastrado no S.A.S.P.I. Verifique o endereço digitado ou solicite o cadastro ao administrador da clínica."
+        );
+        setEnviando(false);
+        return;
+      }
+
       const origin =
         typeof window !== "undefined"
           ? window.location.origin
@@ -93,13 +132,14 @@ export default function RecuperarSenhaPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#F2F7FB] px-4 py-12">
       <div className="w-full max-w-md rounded-3xl border border-gray-100 bg-white p-8 shadow-sm">
-        <Link
-          href="/login"
+        <button
+          type="button"
+          onClick={irParaLogin}
           className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-[#1565C0]"
         >
           <ArrowLeft size={16} />
           Voltar para o login
-        </Link>
+        </button>
 
         <div className="mt-6 flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#1565C0] text-white">
@@ -139,12 +179,13 @@ export default function RecuperarSenhaPage() {
               senha.
             </p>
             <div className="mt-4 flex flex-col gap-2">
-              <Link
-                href="/login"
+              <button
+                type="button"
+                onClick={irParaLogin}
                 className="inline-flex w-full items-center justify-center rounded-xl bg-[#1565C0] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0A2540]"
               >
                 Retornar ao Login
-              </Link>
+              </button>
               <button
                 type="button"
                 disabled={cooldown > 0}
