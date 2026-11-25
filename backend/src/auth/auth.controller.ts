@@ -1,24 +1,48 @@
-import { Controller, Post, Body, UseGuards, Request } from '@nestjs/common';
-import { AuthService } from './auth.service';
-import { AuthGuard } from './auth.guard';
+import { Controller, Post, Body, UseGuards, Request } from "@nestjs/common";
+import { IsIn, IsNotEmpty, IsString, IsUUID, MinLength } from "class-validator";
+import { AuthService } from "./auth.service";
+import { AuthGuard } from "./auth.guard";
 
-@Controller('auth')
+export class SsoCallbackDto {
+  @IsString({ message: "O access_token deve ser uma string." })
+  @IsNotEmpty({ message: "O access_token é obrigatório." })
+  access_token: string;
+
+  @IsString({ message: "O provedor deve ser uma string." })
+  @IsIn(["GOOGLE", "MICROSOFT"], {
+    message: "O provedor deve ser GOOGLE ou MICROSOFT.",
+  })
+  provedor: "GOOGLE" | "MICROSOFT";
+}
+
+export class CriarAcessoIdosoDto {
+  @IsUUID("4", { message: "idoso_id deve ser um UUID válido." })
+  idoso_id: string;
+
+  @IsString()
+  @IsNotEmpty()
+  email: string;
+
+  @IsString()
+  @MinLength(6, { message: "A senha deve ter no mínimo 6 caracteres." })
+  senha: string;
+}
+
+@Controller("auth")
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post('login')
+  @Post("login")
   login(@Body() body: { email: string; senha: string }) {
     return this.authService.login(body.email, body.senha);
   }
 
-  @Post('sso-callback')
-  ssoCallback(
-    @Body() body: { access_token: string; provedor: 'GOOGLE' | 'MICROSOFT' },
-  ) {
+  @Post("sso-callback")
+  ssoCallback(@Body() body: SsoCallbackDto) {
     return this.authService.ssoCallback(body.access_token, body.provedor);
   }
 
-  @Post('convidar')
+  @Post("convidar")
   @UseGuards(AuthGuard)
   convidar(
     @Body()
@@ -43,23 +67,14 @@ export class AuthController {
     );
   }
 
-  @Post('criar-acesso-idoso')
+  @Post("acesso-idoso")
   @UseGuards(AuthGuard)
-  criarAcessoIdoso(
-    @Body()
-    body: {
-      idoso_id: string;
-      email: string;
-      senha: string;
-      clinica_id?: string;
-    },
-    @Request() req: any,
-  ) {
+  criarAcessoIdoso(@Body() body: CriarAcessoIdosoDto, @Request() req: any) {
     return this.authService.criarAcessoIdoso(
       body.idoso_id,
       body.email,
       body.senha,
-      body.clinica_id,
+      undefined,
       req.user.id,
     );
   }
