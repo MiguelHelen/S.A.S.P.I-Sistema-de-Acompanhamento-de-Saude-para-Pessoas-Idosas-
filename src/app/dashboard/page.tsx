@@ -42,13 +42,17 @@ export default function Dashboard() {
   const [user, setUser] = useState<{
     id: string;
     nome: string;
+    email: string;
     perfil: string;
     clinica_id: string;
+    foto_url?: string;
   }>({
     id: "",
     nome: "",
+    email: "",
     perfil: "",
     clinica_id: "",
+    foto_url: "",
   });
 
   const [contadoresAdmin, setContadoresAdmin] = useState({
@@ -74,6 +78,10 @@ export default function Dashboard() {
     proximaConsultaSub: "Consulte a agenda clínica",
   });
 
+  const handleSelectIdoso = useCallback((idoso: Idoso) => {
+    setIdosoAtivo((prev) => (prev?.id === idoso.id ? prev : idoso));
+  }, []);
+
   const carregarUsuario = useCallback(() => {
     const token = getTokenSessao();
     const sessao = getUsuarioSessao();
@@ -87,8 +95,10 @@ export default function Dashboard() {
     setUser({
       id: sessao.id,
       nome: sessao.nome || "Profissional",
+      email: sessao.email || "",
       perfil: sessao.perfil,
       clinica_id: sessao.clinica_id,
+      foto_url: sessao.foto_url || "",
     });
 
     setSemClinica(!sessao.clinica_id);
@@ -354,7 +364,8 @@ export default function Dashboard() {
       "alerta-saude",
       (data: { mensagem?: string; msg?: string; idoso_id?: string }) => {
         if (data?.idoso_id && data.idoso_id !== idosoAtivo.id) return;
-        const textoAlerta = data?.mensagem || data?.msg || "Alerta crítico de saúde.";
+        const textoAlerta =
+          data?.mensagem || data?.msg || "Alerta crítico de saúde.";
         setAlertasEmergencia((prev) => [
           ...prev,
           { id: Date.now() + Math.random(), msg: textoAlerta },
@@ -381,6 +392,12 @@ export default function Dashboard() {
     if (perfilUpper === "FAMILIAR") return `Olá, ${primeiroNome}!`;
     return `Olá, ${primeiroNome}!`;
   }
+
+  const avatarProfissional =
+    user.foto_url ||
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(
+      user.nome || "Profissional"
+    )}&background=1565C0&color=fff&size=96&bold=true`;
 
   const avaliacaoFc = avaliarIndicadorClinico("fc", resumoClinico.fc);
   const avaliacaoSpo2 = avaliarIndicadorClinico("spo2", resumoClinico.spo2);
@@ -458,13 +475,40 @@ export default function Dashboard() {
             </p>
           </div>
 
-          {isAdmin && (
+          {isAdmin ? (
             <Link
               href="/dashboard/usuarios/novo"
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0A2540] hover:shadow-md"
             >
               <UserPlus size={18} />
               Novo Usuário
+            </Link>
+          ) : (
+            <Link
+              href="/dashboard/perfil"
+              title="Visualizar ou editar meu perfil"
+              className="flex items-center gap-3 self-start rounded-2xl border border-gray-200/80 bg-white px-3.5 py-2.5 shadow-xs transition hover:border-[#BFD8F2] hover:shadow-sm sm:self-auto"
+            >
+              <img
+                src={avatarProfissional}
+                alt={user.nome}
+                className="h-11 w-11 shrink-0 rounded-full object-cover ring-2 ring-[#E8F1FB]"
+              />
+              <div className="min-w-0 leading-tight">
+                <div className="flex items-center gap-1.5">
+                  <p className="truncate text-sm font-bold text-[#0A2540]">
+                    {user.nome}
+                  </p>
+                  <span className="rounded-md bg-[#E8F1FB] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#1565C0]">
+                    {user.perfil}
+                  </span>
+                </div>
+                {user.email && (
+                  <p className="mt-0.5 truncate text-xs text-gray-500">
+                    {user.email}
+                  </p>
+                )}
+              </div>
             </Link>
           )}
         </div>
@@ -674,7 +718,7 @@ export default function Dashboard() {
         ) : (
           <div className="mt-8 space-y-8">
             <PatientSelector
-              onSelect={(idoso) => setIdosoAtivo(idoso)}
+              onSelect={handleSelectIdoso}
               selectedId={idosoAtivo?.id}
             />
 
