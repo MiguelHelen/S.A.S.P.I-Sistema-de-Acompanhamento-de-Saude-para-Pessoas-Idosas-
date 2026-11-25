@@ -10,7 +10,12 @@ import {
   Send,
   CheckCircle2,
   MessageSquare,
+  ExternalLink,
+  Copy,
+  Check,
 } from "lucide-react";
+
+const EMAIL_SUPORTE = "suporte.saspi@gmail.com";
 
 export default function ContatoPage() {
   const [nome, setNome] = useState("");
@@ -18,21 +23,32 @@ export default function ContatoPage() {
   const [instituicao, setInstituicao] = useState("");
   const [mensagem, setMensagem] = useState("");
   const [enviado, setEnviado] = useState(false);
+  const [copiado, setCopiado] = useState(false);
+
+  const assuntoEncoded = encodeURIComponent(
+    `[S.A.S.P.I.] Contato Institucional — ${instituicao || nome || "Suporte"}`
+  );
+  const corpoEncoded = encodeURIComponent(
+    `Nome: ${nome}\nE-mail: ${email}\nInstituição/Clínica: ${instituicao || "Não informada"}\n\nMensagem:\n${mensagem}`
+  );
+
+  const gmailComposeUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${EMAIL_SUPORTE}&su=${assuntoEncoded}&body=${corpoEncoded}`;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-
-    const assunto = encodeURIComponent(
-      `[S.A.S.P.I.] Contato Institucional — ${instituicao || nome}`
-    );
-    const corpo = encodeURIComponent(
-      `Nome: ${nome}\nE-mail: ${email}\nInstituição/Clínica: ${instituicao || "Não informada"}\n\nMensagem:\n${mensagem}`
-    );
-
     setEnviado(true);
+
     if (typeof window !== "undefined") {
-      window.location.href = `mailto:suporte@saspi.com.br?subject=${assunto}&body=${corpo}`;
+      window.open(gmailComposeUrl, "_blank", "noopener,noreferrer");
     }
+  }
+
+  async function handleCopiarEmail() {
+    try {
+      await navigator.clipboard.writeText(EMAIL_SUPORTE);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2500);
+    } catch {}
   }
 
   return (
@@ -65,9 +81,29 @@ export default function ContatoPage() {
                 <h2 className="mt-4 font-semibold text-[#0A2540]">
                   Suporte Técnico e Credenciamento
                 </h2>
-                <p className="mt-1 text-sm text-gray-600">
-                  suporte@saspi.com.br
-                </p>
+                <div className="mt-2 flex items-center justify-between gap-2 rounded-xl bg-[#F2F7FB] px-3 py-2">
+                  <span className="truncate text-sm font-medium text-[#1565C0]">
+                    {EMAIL_SUPORTE}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCopiarEmail}
+                    title="Copiar e-mail"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-medium text-gray-600 shadow-xs transition hover:text-[#1565C0]"
+                  >
+                    {copiado ? (
+                      <>
+                        <Check size={13} className="text-emerald-600" />
+                        Copiado
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={13} />
+                        Copiar
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
               <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
@@ -106,20 +142,32 @@ export default function ContatoPage() {
               </p>
 
               {enviado && (
-                <div className="mt-5 flex items-start gap-3 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">
-                  <CheckCircle2
-                    size={20}
-                    className="mt-0.5 shrink-0 text-emerald-600"
-                  />
-                  <div>
-                    <p className="font-semibold">
-                      Solicitação preparada com sucesso!
-                    </p>
-                    <p className="mt-0.5">
-                      Seu aplicativo de e-mail foi acionado para concluir o
-                      envio para <strong>suporte@saspi.com.br</strong>.
-                    </p>
+                <div className="mt-5 flex flex-col gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle2
+                      size={20}
+                      className="mt-0.5 shrink-0 text-emerald-600"
+                    />
+                    <div>
+                      <p className="font-semibold">
+                        Mensagem pronta para envio!
+                      </p>
+                      <p className="mt-0.5 text-emerald-800">
+                        Se a aba do Gmail não abriu automaticamente (bloqueio de
+                        pop-up), clique no botão ao lado ou envie para{" "}
+                        <strong>{EMAIL_SUPORTE}</strong>.
+                      </p>
+                    </div>
                   </div>
+                  <a
+                    href={gmailComposeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700"
+                  >
+                    Abrir no Gmail
+                    <ExternalLink size={14} />
+                  </a>
                 </div>
               )}
 
@@ -184,7 +232,7 @@ export default function ContatoPage() {
                 <div className="flex justify-end">
                   <button
                     type="submit"
-                    className="inline-flex items-center gap-2 rounded-xl bg-[#1565C0] px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0A2540]"
+                    className="inline-flex items-center gap-2 rounded-xl bg-[#1565C0] px-6 py-3 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0A2540] hover:shadow-md"
                   >
                     <Send size={16} />
                     Enviar Solicitação
