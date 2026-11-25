@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
+import { io, Socket } from "socket.io-client";
 import { gerarAlertasClinicos } from "@/components/MetricCard";
 import {
   API_URL,
@@ -96,7 +97,10 @@ export default function DashboardNavbar() {
 
     const token = getTokenSessao();
     const sessao = getUsuarioSessao();
-    if (!token || !sessao?.id) return;
+    if (!token || !sessao?.id) {
+      setNotificacoes([]);
+      return;
+    }
 
     const userId = sessao.id;
     const lidasStorage = localStorage.getItem(`saspi_notif_lidas_${userId}`);
@@ -343,6 +347,11 @@ export default function DashboardNavbar() {
     carregarUsuario();
     carregarNotificacoes();
 
+    function handleUserUpdated() {
+      carregarUsuario();
+      carregarNotificacoes();
+    }
+
     function handleStorageEntreAbas(event: StorageEvent) {
       if (event.key === "saspi_token" && !event.newValue) {
         setUsuario(null);
@@ -368,7 +377,7 @@ export default function DashboardNavbar() {
       }
     }
 
-    window.addEventListener("saspi_user_updated", carregarUsuario);
+    window.addEventListener("saspi_user_updated", handleUserUpdated);
     window.addEventListener("saspi_elderly_updated", carregarNotificacoes);
     window.addEventListener("saspi_notif_updated", carregarNotificacoes);
     window.addEventListener("saspi_alerta_clinico", carregarNotificacoes);
@@ -391,7 +400,7 @@ export default function DashboardNavbar() {
 
     document.addEventListener("mousedown", handleClickFora);
     return () => {
-      window.removeEventListener("saspi_user_updated", carregarUsuario);
+      window.removeEventListener("saspi_user_updated", handleUserUpdated);
       window.removeEventListener("saspi_elderly_updated", carregarNotificacoes);
       window.removeEventListener("saspi_notif_updated", carregarNotificacoes);
       window.removeEventListener("saspi_alerta_clinico", carregarNotificacoes);
@@ -400,9 +409,56 @@ export default function DashboardNavbar() {
     };
   }, [carregarUsuario, carregarNotificacoes, router]);
 
+  useEffect(() => {
+    const token = getTokenSessao();
+    const sessao = getUsuarioSessao();
+    if (!token || !sessao?.id || isAdminPerfil(sessao.perfil)) return;
+
+    const socket: Socket = io(API_URL, {
+      auth: { token },
+      transports: ["websocket", "polling"],
+    });
+
+    socket.on("connect", () => {
+      try {
+        const raw = localStorage.getItem("saspi_active_elderly");
+        const ativo = raw ? JSON.parse(raw) : null;
+        if (ativo?.id) {
+          socket.emit("entrar-sala-idoso", ativo.id);
+        }
+      } catch {}
+    });
+
+    socket.on("alerta-saude", (payload: any) => {
+      const texto =
+        payload?.mensagem ||
+        payload?.msg ||
+        "Indicador clínico fora do padrão seguro.";
+      const novoAlerta: NotificacaoSistema = {
+        id: `alerta-rt-${Date.now()}-${Math.random()}`,
+        tipo: "alerta_clinico",
+        titulo: "Alerta Clínico Crítico",
+        descricao: texto,
+        dataHora: new Date().toLocaleTimeString("pt-BR", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        href: "/dashboard/saude",
+        critico: true,
+      };
+      setNotificacoes((prev) => [novoAlerta, ...prev]);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [usuario?.id, usuario?.perfil, pathname]);
+
   function handleLogout() {
+    setDropdownAberto(false);
+    setMenuMobileAberto(false);
     limparSessao();
-    router.push("/login");
+    router.replace("/login");
   }
 
   function marcarComoLida(id: string, event: React.MouseEvent) {
