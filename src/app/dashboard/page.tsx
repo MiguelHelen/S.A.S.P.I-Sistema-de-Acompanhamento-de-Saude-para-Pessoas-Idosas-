@@ -11,7 +11,12 @@ import MetricCard, {
 } from "@/components/MetricCard";
 import InfoCard from "@/components/InfoCard";
 import HealthChart, { PontoGraficoSaude } from "@/components/HealthChart";
-import PatientSelector, { Idoso } from "@/components/PatientSelector";
+import PatientSelector, {
+  Idoso,
+  formatarCpf,
+  formatarDataBr,
+  formatarSexo,
+} from "@/components/PatientSelector";
 import {
   API_URL,
   getUsuarioSessao,
@@ -33,6 +38,10 @@ import {
   Loader2,
   Link2,
   AlertTriangle,
+  MapPin,
+  Phone,
+  Calendar,
+  FileText,
 } from "lucide-react";
 
 export default function Dashboard() {
@@ -622,8 +631,8 @@ export default function Dashboard() {
                     Gerenciar Pacientes (Idosos)
                   </h3>
                   <p className="mt-1 text-sm text-gray-500">
-                    Listar, admitir novos idosos, corrigir dados cadastrais e
-                    leitos.
+                    Listar, admitir novos idosos, atualizar dados cadastrais e
+                    acesso ao aplicativo.
                   </p>
                 </Link>
 
@@ -892,13 +901,71 @@ export default function Dashboard() {
                         </p>
                       </div>
 
-                      <div className="rounded-xl border border-gray-200 bg-[#FAFCFE] p-4">
+                      <div className="space-y-2.5 rounded-xl border border-gray-200 bg-[#FAFCFE] p-4">
                         <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-                          Acomodação / Leito
+                          Ficha Cadastral & Endereço
                         </p>
-                        <p className="mt-1 font-medium text-[#0A2540]">
-                          {idosoAtivo.quarto || "Leito não informado"}
-                        </p>
+
+                        <div className="space-y-1.5 text-xs text-gray-600">
+                          {idosoAtivo.data_nascimento && (
+                            <p className="flex items-center gap-2">
+                              <Calendar
+                                size={14}
+                                className="shrink-0 text-[#1565C0]"
+                              />
+                              <span>
+                                Nascimento:{" "}
+                                <strong className="font-semibold text-[#0A2540]">
+                                  {formatarDataBr(idosoAtivo.data_nascimento)}
+                                </strong>
+                                {idosoAtivo.sexo
+                                  ? ` (${formatarSexo(idosoAtivo.sexo)})`
+                                  : ""}
+                              </span>
+                            </p>
+                          )}
+
+                          {idosoAtivo.cpf && (
+                            <p className="flex items-center gap-2">
+                              <FileText
+                                size={14}
+                                className="shrink-0 text-[#1565C0]"
+                              />
+                              <span>
+                                CPF:{" "}
+                                <strong className="font-semibold text-[#0A2540]">
+                                  {formatarCpf(idosoAtivo.cpf)}
+                                </strong>
+                              </span>
+                            </p>
+                          )}
+
+                          <p className="flex items-center gap-2">
+                            <Phone
+                              size={14}
+                              className="shrink-0 text-[#26A69A]"
+                            />
+                            <span>
+                              Telefone:{" "}
+                              <strong className="font-semibold text-[#0A2540]">
+                                {idosoAtivo.telefone || "Não informado"}
+                              </strong>
+                            </span>
+                          </p>
+
+                          <p className="flex items-start gap-2">
+                            <MapPin
+                              size={14}
+                              className="mt-0.5 shrink-0 text-[#1565C0]"
+                            />
+                            <span className="wrap-break-word">
+                              Endereço:{" "}
+                              <strong className="font-semibold text-[#0A2540]">
+                                {idosoAtivo.endereco || "Não informado"}
+                              </strong>
+                            </span>
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </section>
