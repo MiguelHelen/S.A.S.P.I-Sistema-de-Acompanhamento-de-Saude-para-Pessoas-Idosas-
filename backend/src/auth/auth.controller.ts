@@ -28,6 +28,11 @@ export class CriarAcessoIdosoDto {
   senha: string;
 }
 
+export class ReenviarConviteDto {
+  @IsUUID("4", { message: "usuario_id deve ser um UUID válido." })
+  usuario_id: string;
+}
+
 @Controller("auth")
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -65,6 +70,12 @@ export class AuthController {
       body.telefone,
       req.user.id,
     );
+  }
+
+  @Post("reenviar-convite")
+  @UseGuards(AuthGuard)
+  reenviarConvite(@Body() body: ReenviarConviteDto, @Request() req: any) {
+    return this.authService.reenviarConvite(body.usuario_id, req.user.id);
   }
 
   @Post("acesso-idoso")

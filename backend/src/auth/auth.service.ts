@@ -154,7 +154,7 @@ export class AuthService {
 
     if (existente) {
       throw new ForbiddenException(
-        "Este e-mail já se encontra registado no sistema.",
+        "Este e-mail já possui um cadastro ou convite registrado no sistema.",
       );
     }
 
@@ -164,7 +164,7 @@ export class AuthService {
 
     const { data, error } =
       await this.supabase.client.auth.admin.inviteUserByEmail(emailLimpo, {
-        data: { nome, perfil },
+        data: { nome: nome.trim(), perfil },
         redirectTo: `${frontendUrl}/redefinir-senha`,
       });
 
@@ -189,8 +189,58 @@ export class AuthService {
     });
 
     return {
-      message: "Convite corporativo enviado com sucesso.",
+      message: "Convite institucional enviado com sucesso por e-mail.",
       usuario: novoUsuario,
+    };
+  }
+
+  /**
+   * 3.1 Reenvio de Convite Corporativo para usuários com status PENDENTE
+   */
+  async reenviarConvite(usuarioId: string, authIdSolicitante?: string) {
+    if (authIdSolicitante) {
+      const solicitante = await this.prisma.usuario.findUnique({
+        where: { auth_id: authIdSolicitante },
+      });
+      if (!solicitante || solicitante.perfil !== "ADMINISTRADOR") {
+        throw new ForbiddenException(
+          "Apenas Administradores podem reenviar convites de acesso.",
+        );
+      }
+    }
+
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { id: usuarioId },
+    });
+
+    if (!usuario) {
+      throw new NotFoundException("Usuário não encontrado.");
+    }
+
+    if (usuario.status === "ATIVO") {
+      throw new ForbiddenException(
+        "Esta conta já está ativa. Caso o usuário tenha esquecido a senha, ele deve usar 'Esqueci minha senha' na tela de login.",
+      );
+    }
+
+    const frontendUrl =
+      process.env.FRONTEND_URL ||
+      "https://s-a-s-p-i-sistema-de-acompanhamento.vercel.app";
+
+    const { error } =
+      await this.supabase.client.auth.admin.inviteUserByEmail(usuario.email, {
+        data: { nome: usuario.nome, perfil: usuario.perfil },
+        redirectTo: `${frontendUrl}/redefinir-senha`,
+      });
+
+    if (error) {
+      throw new UnauthorizedException(
+        `Não foi possível reenviar o convite: ${error.message}`,
+      );
+    }
+
+    return {
+      message: `Novo link de ativação enviado para ${usuario.email}.`,
     };
   }
 
@@ -221,7 +271,6 @@ export class AuthService {
       throw new ForbiddenException("A senha deve ter no mínimo 6 caracteres.");
     }
 
-    // 4.1 Busca os dados já cadastrados do idoso
     const idoso = await this.prisma.idoso.findUnique({
       where: { id: idosoId },
     });
@@ -234,7 +283,6 @@ export class AuthService {
       throw new ForbiddenException("Este idoso pertence a outra clínica.");
     }
 
-    // 4.2 Verifica se o idoso já possui conta própria vinculada
     const vinculoExistente = await this.prisma.usuario_idoso.findFirst({
       where: {
         idoso_id: idosoId,
@@ -248,7 +296,6 @@ export class AuthService {
       );
     }
 
-    // 4.3 Verifica se o e-mail já está em uso na tabela usuario
     const emailExistente = await this.prisma.usuario.findUnique({
       where: { email: emailLimpo },
     });
@@ -259,7 +306,6 @@ export class AuthService {
       );
     }
 
-    // 4.4 Cria o login já confirmado no Supabase Auth
     const { data: authData, error: authError } =
       await this.supabase.client.auth.admin.createUser({
         email: emailLimpo,
@@ -277,7 +323,6 @@ export class AuthService {
       );
     }
 
-    // 4.5 Cria o usuário e o vínculo no PostgreSQL dentro de uma transação
     try {
       const resultado = await this.prisma.$transaction(async (tx) => {
         const novoUsuario = await tx.usuario.create({
@@ -311,7 +356,6 @@ export class AuthService {
         ...resultado,
       };
     } catch (dbError: any) {
-      // Rollback no Supabase Auth caso a gravação no banco falhe
       await this.supabase.client.auth.admin.deleteUser(authData.user.id);
       throw new ForbiddenException(
         `Falha ao salvar dados no banco: ${dbError.message}`,
