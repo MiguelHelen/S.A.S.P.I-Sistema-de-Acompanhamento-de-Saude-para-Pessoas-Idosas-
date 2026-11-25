@@ -47,12 +47,10 @@ export function proxy(req: NextRequest) {
   const userCookie = req.cookies.get("saspi_user")?.value;
   const role = extrairPerfilCookie(userCookie);
 
-  // Sem token de autenticação, redireciona para login
   if (!token) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
-  // Bloqueia perfil exclusivo do aplicativo mobile
   if (role === "IDOSO") {
     const res = NextResponse.redirect(new URL("/login", req.url));
     res.cookies.delete("saspi_token");
@@ -60,8 +58,6 @@ export function proxy(req: NextRequest) {
     return res;
   }
 
-  // Se o cookie de usuário ainda não pôde ser lido mas o token existe,
-  // deixa a validação complementar de perfil ocorrer no cliente sem derrubar a sessão
   if (!role) {
     return NextResponse.next();
   }
@@ -90,6 +86,10 @@ export function proxy(req: NextRequest) {
     if (isCreateOrAccessRoute) {
       return NextResponse.redirect(new URL("/dashboard", req.url));
     }
+  }
+
+  if (pathname === "/dashboard/medicamentos/novo" && role !== "MEDICO") {
+    return NextResponse.redirect(new URL("/dashboard/medicamentos", req.url));
   }
 
   return NextResponse.next();

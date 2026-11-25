@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { supabase } from "@/lib/supabaseClient";
 import {
   Lock,
   Loader2,
@@ -11,11 +12,6 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 function traduzirErroSenha(mensagem?: string): string {
   const msg = String(mensagem || "").toLowerCase();
@@ -56,15 +52,35 @@ export default function RedefinirSenha() {
 
   useEffect(() => {
     const hash = window.location.hash;
+    const search = window.location.search;
+
     if (hash && hash.includes("error_description")) {
       const params = new URLSearchParams(hash.substring(1));
       const errMsg = params.get("error_description");
       if (errMsg) {
         setErro(
-          "Link inválido ou expirado. Por favor, solicite um novo e-mail de ativação ou recuperação.",
+          "Link inválido ou expirado. Por favor, solicite um novo e-mail de ativação ou recuperação."
+        );
+      }
+    } else if (search && search.includes("error_description")) {
+      const params = new URLSearchParams(search);
+      const errMsg = params.get("error_description");
+      if (errMsg) {
+        setErro(
+          "Link inválido ou expirado. Por favor, solicite um novo e-mail de ativação ou recuperação."
         );
       }
     }
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setErro("");
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
   async function handleReset(e: React.FormEvent) {
@@ -101,7 +117,7 @@ export default function RedefinirSenha() {
     } catch (err: any) {
       setErro(
         err?.message ||
-          "Erro ao atualizar a senha. O link pode ter expirado.",
+          "Erro ao atualizar a senha. O link pode ter expirado."
       );
     } finally {
       setLoading(false);

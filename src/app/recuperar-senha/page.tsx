@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -10,16 +10,46 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
+  Clock,
 } from "lucide-react";
+
+function traduzirErroRecuperacao(mensagem?: string): string {
+  const msg = String(mensagem || "").toLowerCase();
+
+  if (
+    msg.includes("rate limit") ||
+    msg.includes("too many requests") ||
+    msg.includes("429")
+  ) {
+    return "O limite de envio de e-mails do servidor de autenticação foi atingido temporariamente (máximo de 2 envios por hora no plano gratuito). Aguarde alguns minutos antes de solicitar novamente.";
+  }
+
+  if (msg.includes("invalid email") || msg.includes("unable to validate email")) {
+    return "Informe um endereço de e-mail institucional válido.";
+  }
+
+  return "Não foi possível enviar o link de redefinição de senha no momento. Tente novamente em instantes.";
+}
 
 export default function RecuperarSenhaPage() {
   const [email, setEmail] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [sucesso, setSucesso] = useState(false);
   const [erro, setErro] = useState("");
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setInterval(() => {
+      setCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [cooldown]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (cooldown > 0) return;
+
     setEnviando(true);
     setErro("");
     setSucesso(false);
@@ -44,15 +74,17 @@ export default function RecuperarSenhaPage() {
       });
 
       if (error) {
-        throw new Error(error.message);
+        throw new Error(traduzirErroRecuperacao(error.message));
       }
 
       setSucesso(true);
+      setCooldown(60);
     } catch (err: any) {
       setErro(
-        err.message ||
+        err?.message ||
           "Não foi possível enviar o link de redefinição de senha no momento."
       );
+      setCooldown(30);
     } finally {
       setEnviando(false);
     }
@@ -106,12 +138,29 @@ export default function RecuperarSenhaPage() {
               <strong>{email}</strong> e siga as instruções para criar sua nova
               senha.
             </p>
-            <Link
-              href="/login"
-              className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-[#1565C0] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0A2540]"
-            >
-              Retornar ao Login
-            </Link>
+            <div className="mt-4 flex flex-col gap-2">
+              <Link
+                href="/login"
+                className="inline-flex w-full items-center justify-center rounded-xl bg-[#1565C0] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0A2540]"
+              >
+                Retornar ao Login
+              </Link>
+              <button
+                type="button"
+                disabled={cooldown > 0}
+                onClick={() => setSucesso(false)}
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-emerald-300 bg-white px-4 py-2 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100/50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {cooldown > 0 ? (
+                  <>
+                    <Clock size={14} />
+                    Aguarde {cooldown}s para reenviar
+                  </>
+                ) : (
+                  "Enviar para outro e-mail ou reenviar"
+                )}
+              </button>
+            </div>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="mt-6 space-y-5">
@@ -137,11 +186,22 @@ export default function RecuperarSenhaPage() {
 
             <button
               type="submit"
-              disabled={enviando}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0A2540] disabled:opacity-70"
+              disabled={enviando || cooldown > 0}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0A2540] disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {enviando && <Loader2 size={18} className="animate-spin" />}
-              {enviando ? "Enviando instruções..." : "Enviar Link de Redefinição"}
+              {enviando ? (
+                <>
+                  <Loader2 size={18} className="animate-spin" />
+                  Enviando instruções...
+                </>
+              ) : cooldown > 0 ? (
+                <>
+                  <Clock size={17} />
+                  Aguarde {cooldown}s para tentar novamente
+                </>
+              ) : (
+                "Enviar Link de Redefinição"
+              )}
             </button>
           </form>
         )}
