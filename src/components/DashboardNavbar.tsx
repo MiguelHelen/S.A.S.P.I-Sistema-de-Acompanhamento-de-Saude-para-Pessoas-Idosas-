@@ -104,12 +104,13 @@ export default function DashboardNavbar() {
       try {
         setNotificacoesLidas(JSON.parse(lidasStorage));
       } catch {}
+    } else {
+      setNotificacoesLidas([]);
     }
 
     const headers = getAuthHeaders();
     const listaNotif: NotificacaoSistema[] = [];
 
-    // 1. Avisos institucionais locais da clínica (ex: atualização de cadastro, convites enviados)
     try {
       const avisosRaw = localStorage.getItem(
         `saspi_avisos_clinica_${sessao.clinica_id || "geral"}`
@@ -174,7 +175,6 @@ export default function DashboardNavbar() {
         return;
       }
 
-      // Perfil Clínico / Familiar: informa em qual clínica está atuando e vínculos ativos
       const dadosClinica = getClinicaDados();
       if (dadosClinica.nome) {
         listaNotif.push({
@@ -199,7 +199,7 @@ export default function DashboardNavbar() {
           fetch(`${API_URL}/registro-saude/idoso/${idosoAtivo.id}`, {
             headers,
           }).catch(() => null),
-          fetch(`${API_URL}/consulta?idoso_id=${idosoAtivo.id}`, {
+          fetch(`${API_URL}/consulta/idoso/${idosoAtivo.id}`, {
             headers,
           }).catch(() => null),
         ]);
@@ -249,7 +249,8 @@ export default function DashboardNavbar() {
         }
 
         if (resCons?.ok) {
-          const cons = await resCons.json();
+          const consRaw = await resCons.json();
+          const cons = Array.isArray(consRaw) ? consRaw : consRaw?.data || [];
           if (Array.isArray(cons)) {
             cons
               .filter(
@@ -305,8 +306,10 @@ export default function DashboardNavbar() {
   }, []);
 
   const carregarUsuario = useCallback(async () => {
+    const token = getTokenSessao();
     const sessao = getUsuarioSessao();
-    if (!sessao) {
+
+    if (!token || !sessao) {
       setUsuario(null);
       setNomeClinica("");
       return;
@@ -320,7 +323,7 @@ export default function DashboardNavbar() {
       return;
     }
 
-    if (sessao.clinica_id && getTokenSessao()) {
+    if (sessao.clinica_id) {
       setBuscandoClinica(true);
       try {
         const clinicaBackend = await buscarClinicaPorIdNoBackend(
@@ -340,10 +343,36 @@ export default function DashboardNavbar() {
     carregarUsuario();
     carregarNotificacoes();
 
+    function handleStorageEntreAbas(event: StorageEvent) {
+      if (event.key === "saspi_token" && !event.newValue) {
+        setUsuario(null);
+        router.push("/login");
+        return;
+      }
+
+      if (
+        !event.key ||
+        event.key === "saspi_user" ||
+        event.key === "saspi_token"
+      ) {
+        carregarUsuario();
+      }
+
+      if (
+        !event.key ||
+        event.key === "saspi_active_elderly" ||
+        event.key === "saspi_user" ||
+        event.key.startsWith("saspi_notif_lidas_")
+      ) {
+        carregarNotificacoes();
+      }
+    }
+
     window.addEventListener("saspi_user_updated", carregarUsuario);
     window.addEventListener("saspi_elderly_updated", carregarNotificacoes);
     window.addEventListener("saspi_notif_updated", carregarNotificacoes);
-    window.addEventListener("storage", carregarUsuario);
+    window.addEventListener("saspi_alerta_clinico", carregarNotificacoes);
+    window.addEventListener("storage", handleStorageEntreAbas);
 
     function handleClickFora(event: MouseEvent) {
       if (
@@ -365,10 +394,11 @@ export default function DashboardNavbar() {
       window.removeEventListener("saspi_user_updated", carregarUsuario);
       window.removeEventListener("saspi_elderly_updated", carregarNotificacoes);
       window.removeEventListener("saspi_notif_updated", carregarNotificacoes);
-      window.removeEventListener("storage", carregarUsuario);
+      window.removeEventListener("saspi_alerta_clinico", carregarNotificacoes);
+      window.removeEventListener("storage", handleStorageEntreAbas);
       document.removeEventListener("mousedown", handleClickFora);
     };
-  }, [carregarUsuario, carregarNotificacoes]);
+  }, [carregarUsuario, carregarNotificacoes, router]);
 
   function handleLogout() {
     limparSessao();

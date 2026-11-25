@@ -2,6 +2,8 @@ export const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   "https://perfect-bravery-production-5ce7.up.railway.app";
 
+const COOKIE_MAX_AGE_SEGUNDOS = 60 * 60 * 24 * 7; // 7 dias
+
 export interface UsuarioSessao {
   id: string;
   nome: string;
@@ -31,9 +33,51 @@ export function isPerfilClinico(perfil?: string | null): boolean {
   return p === "MEDICO" || p === "ENFERMEIRO" || p === "CUIDADOR";
 }
 
+function lerCookie(nome: string): string | null {
+  if (typeof document === "undefined") return null;
+  const prefixo = `${nome}=`;
+  const partes = document.cookie.split(";");
+  for (const parte of partes) {
+    const limpa = parte.trim();
+    if (limpa.startsWith(prefixo)) {
+      return limpa.substring(prefixo.length);
+    }
+  }
+  return null;
+}
+
+function gravarCookieSessao(
+  nome: string,
+  valor: string,
+  maxAgeSegundos = COOKIE_MAX_AGE_SEGUNDOS
+) {
+  if (typeof document === "undefined") return;
+  const secure =
+    typeof window !== "undefined" && window.location.protocol === "https:"
+      ? "; Secure"
+      : "";
+  document.cookie = `${nome}=${encodeURIComponent(valor)}; path=/; max-age=${maxAgeSegundos}; SameSite=Lax${secure}`;
+}
+
+function serializarUsuarioCompactoCookie(usuario: {
+  id?: string;
+  perfil?: string;
+  clinica_id?: string;
+}): string {
+  return JSON.stringify({
+    id: String(usuario.id || ""),
+    perfil: normalizarPerfil(usuario.perfil),
+    clinica_id: String(usuario.clinica_id || ""),
+  });
+}
+
 export function getTokenSessao(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem("saspi_token");
+  const token = localStorage.getItem("saspi_token");
+  if (token && !lerCookie("saspi_token")) {
+    gravarCookieSessao("saspi_token", token);
+  }
+  return token;
 }
 
 export function getUsuarioSessao(): UsuarioSessao | null {
@@ -53,7 +97,7 @@ export function getUsuarioSessao(): UsuarioSessao | null {
       u.clinica_nome || u.clinicaNome || u.clinica?.nome || ""
     ).trim();
 
-    return {
+    const sessao: UsuarioSessao = {
       id: String(u.id || ""),
       nome: String(u.nome || ""),
       email: String(u.email || ""),
@@ -67,6 +111,12 @@ export function getUsuarioSessao(): UsuarioSessao | null {
         : undefined,
       foto_url: u.foto_url ? String(u.foto_url) : undefined,
     };
+
+    if (sessao.id && !lerCookie("saspi_user")) {
+      gravarCookieSessao("saspi_user", serializarUsuarioCompactoCookie(sessao));
+    }
+
+    return sessao;
   } catch {
     return null;
   }
@@ -104,15 +154,6 @@ export function getIdosoAtivoSessao<T = any>(): T | null {
   } catch {
     return null;
   }
-}
-
-function gravarCookieSessao(nome: string, valor: string, maxAgeSegundos = 86400) {
-  if (typeof document === "undefined") return;
-  const secure =
-    typeof window !== "undefined" && window.location.protocol === "https:"
-      ? "; Secure"
-      : "";
-  document.cookie = `${nome}=${encodeURIComponent(valor)}; path=/; max-age=${maxAgeSegundos}; SameSite=Lax${secure}`;
 }
 
 export function salvarUsuarioSessao(
@@ -174,17 +215,12 @@ export function salvarUsuarioSessao(
   };
 
   localStorage.setItem("saspi_user", JSON.stringify(normalizado));
-  gravarCookieSessao(
-    "saspi_user",
-    JSON.stringify({
-      id: normalizado.id,
-      nome: normalizado.nome,
-      email: normalizado.email,
-      perfil: normalizado.perfil,
-      clinica_id: normalizado.clinica_id,
-      clinica_nome: normalizado.clinica_nome,
-    })
-  );
+  gravarCookieSessao("saspi_user", serializarUsuarioCompactoCookie(normalizado));
+
+  const tokenAtual = localStorage.getItem("saspi_token");
+  if (tokenAtual) {
+    gravarCookieSessao("saspi_token", tokenAtual);
+  }
 
   window.dispatchEvent(new Event("saspi_user_updated"));
   return normalizado;
@@ -254,7 +290,6 @@ export async function resolverESalvarSessao(params: {
   let dadosUsuario: Record<string, any> =
     usuarioParcial?.user || usuarioParcial?.usuario || usuarioParcial || {};
 
-  // Se vier incompleto no login/SSO, tenta enriquecer pelo GET /usuario/:id ou GET /usuario
   if ((!dadosUsuario.clinica_id || !dadosUsuario.perfil) && token) {
     try {
       if (dadosUsuario.id) {

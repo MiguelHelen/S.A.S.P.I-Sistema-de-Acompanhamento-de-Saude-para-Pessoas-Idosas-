@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import DashboardNavbar from "@/components/DashboardNavbar";
+import ImageCropModal from "@/components/ImageCropModal";
 import {
   API_URL,
   getAuthHeaders,
@@ -31,6 +32,9 @@ export default function PerfilPage() {
   const [perfil, setPerfil] = useState("");
   const [clinicaNome, setClinicaNome] = useState("");
   const [fotoUrl, setFotoUrl] = useState("");
+
+  const [cropImageSrc, setCropImageSrc] = useState<string>("");
+  const [cropModalAberto, setCropModalAberto] = useState(false);
 
   const [formData, setFormData] = useState({
     nome: "",
@@ -140,9 +144,28 @@ export default function PerfilPage() {
     }
   }
 
-  async function handleUploadFoto(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleSelecionarArquivoFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !userId) return;
+
+    const objectUrl = URL.createObjectURL(file);
+    setCropImageSrc(objectUrl);
+    setCropModalAberto(true);
+
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function fecharModalCrop() {
+    if (cropImageSrc) {
+      URL.revokeObjectURL(cropImageSrc);
+    }
+    setCropImageSrc("");
+    setCropModalAberto(false);
+  }
+
+  async function handleCropConcluido(croppedBlob: Blob) {
+    fecharModalCrop();
+    if (!userId) return;
 
     setEnviandoFoto(true);
     setErro("");
@@ -150,22 +173,26 @@ export default function PerfilPage() {
 
     try {
       const fd = new FormData();
-      fd.append("file", file);
+      fd.append("file", croppedBlob, `perfil-${userId}.jpg`);
 
       const token = getTokenSessao();
-      const res = await fetch(`${API_URL}/storage/usuario/${userId}/foto-perfil`, {
-        method: "POST",
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: fd,
-      });
+      const res = await fetch(
+        `${API_URL}/storage/usuario/${userId}/foto-perfil`,
+        {
+          method: "POST",
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: fd,
+        }
+      );
 
       const data = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error(
-          data?.message || "Não foi possível enviar a foto de perfil."
-        );
+        const msg = Array.isArray(data?.message)
+          ? data.message.join(", ")
+          : data?.message;
+        throw new Error(msg || "Não foi possível enviar a foto de perfil.");
       }
 
       const novaUrl =
@@ -181,13 +208,19 @@ export default function PerfilPage() {
       setErro(err.message || "Erro ao enviar foto de perfil.");
     } finally {
       setEnviandoFoto(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 
   return (
     <main className="min-h-screen bg-[#F2F7FB]">
       <DashboardNavbar />
+
+      <ImageCropModal
+        imageSrc={cropImageSrc}
+        isOpen={cropModalAberto}
+        onClose={fecharModalCrop}
+        onCropComplete={handleCropConcluido}
+      />
 
       <div className="mx-auto max-w-4xl px-4 py-8 md:px-8">
         <div>
@@ -229,10 +262,10 @@ export default function PerfilPage() {
                   <img
                     src={fotoUrl}
                     alt={formData.nome}
-                    className="h-16 w-16 rounded-2xl object-cover shadow-xs"
+                    className="h-16 w-16 rounded-full object-cover shadow-xs ring-2 ring-[#E8F1FB]"
                   />
                 ) : (
-                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#E8F1FB] text-[#1565C0]">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#E8F1FB] text-[#1565C0]">
                     <UserCircle2 size={34} />
                   </div>
                 )}
@@ -261,7 +294,7 @@ export default function PerfilPage() {
                   ref={fileInputRef}
                   type="file"
                   accept="image/*"
-                  onChange={handleUploadFoto}
+                  onChange={handleSelecionarArquivoFoto}
                   className="hidden"
                 />
                 <button
