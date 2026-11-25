@@ -1,288 +1,408 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  ScrollView,
+  RefreshControl,
   Dimensions,
-} from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { LineChart } from "react-native-chart-kit";
-import { useAuth } from "../contexts/AuthContext";
-import { apiFetch } from "../api/client";
-import { HeartPulse, Activity, Plus, Clock } from "lucide-react-native";
+  DeviceEventEmitter,
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
+import { LineChart } from 'react-native-chart-kit';
+import { useAuth } from '../contexts/AuthContext';
+import { apiFetch } from '../api/client';
+import {
+  HeartPulse,
+  Activity,
+  Plus,
+  Watch,
+  Edit3,
+  Droplets,
+  Thermometer,
+  TrendingUp,
+} from 'lucide-react-native';
 
-const screenWidth = Dimensions.get("window").width;
+const SCREEN_WIDTH = Dimensions.get('window').width;
+
+type AbaGrafico = 'fc' | 'spo2' | 'temp';
+
+const CONFIG_GRAFICO: Record<
+  AbaGrafico,
+  {
+    titulo: string;
+    labelCurto: string;
+    unidade: string;
+    cor: string;
+    corClara: string;
+    referencia: string;
+    filtro: (nome: string) => boolean;
+  }
+> = {
+  fc: {
+    titulo: 'Frequência Cardíaca',
+    labelCurto: 'Batimentos',
+    unidade: 'bpm',
+    cor: '#E11D48',
+    corClara: 'rgba(225, 29, 72, 0.16)',
+    referencia: 'Ref. repouso: 60 – 100 bpm',
+    filtro: (n) => n.includes('card') || n.includes('batimento') || n.includes('fc'),
+  },
+  spo2: {
+    titulo: 'Saturação de Oxigênio',
+    labelCurto: 'SpO₂',
+    unidade: '%',
+    cor: '#0D9488',
+    corClara: 'rgba(13, 148, 136, 0.16)',
+    referencia: 'Ref. normal: 95% – 100%',
+    filtro: (n) => n.includes('satur') || n.includes('spo2') || n.includes('oxig'),
+  },
+  temp: {
+    titulo: 'Temperatura Corporal',
+    labelCurto: 'Temperatura',
+    unidade: '°C',
+    cor: '#D97706',
+    corClara: 'rgba(217, 119, 6, 0.16)',
+    referencia: 'Ref. normal: 36,0 – 37,4 °C',
+    filtro: (n) => n.includes('temp'),
+  },
+};
 
 export default function SinaisVitaisScreen({ navigation }: any) {
-  const { usuario, token } = useAuth();
-  const [loading, setLoading] = useState(true);
+  const { token } = useAuth();
   const [registros, setRegistros] = useState<any[]>([]);
-  const [filtro, setFiltro] = useState<"Hoje" | "7 dias" | "30 dias">("30 dias");
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [abaAtiva, setAbaAtiva] = useState<AbaGrafico>('fc');
+  const [pontoSelecionado, setPontoSelecionado] = useState<{ valor: number; hora: string } | null>(null);
 
-  const podeAdicionar = usuario?.perfil === "CUIDADOR" || usuario?.perfil === "IDOSO";
+  const carregarRegistros = useCallback(async () => {
+    try {
+      const stored = await AsyncStorage.getItem('saspi_active_elderly');
+      if (!stored) {
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
+      const idoso = JSON.parse(stored);
+      const res = await apiFetch(`/registro-saude/idoso/${idoso.id}`, {}, token);
+      if (res.ok) {
+        const data = await res.json();
+        const lista = Array.isArray(data) ? data : data?.data || [];
+        lista.sort(
+          (a: any, b: any) =>
+            new Date(b.data_hora || b.criado_em).getTime() -
+            new Date(a.data_hora || a.criado_em).getTime()
+        );
+        setRegistros(lista);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar sinais vitais:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [token]);
 
   useFocusEffect(
     useCallback(() => {
-      let isMounted = true;
-      async function fetchHistorico() {
-        try {
-          const storedElderly = await AsyncStorage.getItem("saspi_active_elderly");
-          const idosoId = storedElderly ? JSON.parse(storedElderly).id : usuario?.id;
-          if (!idosoId) return;
+      carregarRegistros();
+      const sub = DeviceEventEmitter.addListener('saspi_realtime_update', () => {
+        carregarRegistros();
+      });
+      return () => sub.remove();
+    }, [carregarRegistros])
+  );
 
-          const res = await apiFetch(`/registro-saude/idoso/${idosoId}`, {}, token);
-          if (res.ok) {
-            const data = await res.json();
-            const arrayDados = Array.isArray(data) ? data : data.data || [];
-            if (isMounted) setRegistros(arrayDados);
-          }
-        } catch (err) {
-          console.error(err);
-        } finally {
-          if (isMounted) setLoading(false);
-        }
-      }
-      fetchHistorico();
-      return () => {
-        isMounted = false;
+  const onRefresh = () => {
+    setRefreshing(true);
+    carregarRegistros();
+  };
+
+  const formatarHora = (isoDate: string) => {
+    if (!isoDate) return '';
+    const dt = new Date(isoDate);
+    return dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const formatarDataHora = (isoDate: string) => {
+    if (!isoDate) return 'Data não informada';
+    const dt = new Date(isoDate);
+    return (
+      dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) +
+      ' às ' +
+      dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    );
+  };
+
+  const dadosGrafico = useMemo(() => {
+    const cfg = CONFIG_GRAFICO[abaAtiva];
+    const filtrados = registros
+      .filter((r) => {
+        const nome = (r.indicador?.nome || r.nome_indicador || '').toLowerCase();
+        return cfg.filtro(nome) && r.valor_numerico != null && !Number.isNaN(Number(r.valor_numerico));
+      })
+      .slice(0, 8)
+      .reverse();
+
+    if (filtrados.length === 0) {
+      return {
+        vazio: true,
+        labels: [],
+        valores: [],
+        horasCompletas: [],
+        ultimoValor: null as number | null,
+        variacao: null as number | null,
       };
-    }, [token, usuario])
-  );
+    }
 
-  const filtrados = useMemo(() => {
-    const agora = Date.now();
-    const limiteMs =
-      filtro === "Hoje"
-        ? 24 * 60 * 60 * 1000
-        : filtro === "7 dias"
-          ? 7 * 24 * 60 * 60 * 1000
-          : 30 * 24 * 60 * 60 * 1000;
+    const valores = filtrados.map((r) => Number(r.valor_numerico));
+    const labels = filtrados.map((r) => formatarHora(r.data_hora || r.criado_em));
+    const horasCompletas = filtrados.map((r) => formatarDataHora(r.data_hora || r.criado_em));
+    const ultimoValor = valores[valores.length - 1];
+    const penultimoValor = valores.length > 1 ? valores[valores.length - 2] : null;
+    const variacao = penultimoValor !== null ? Number((ultimoValor - penultimoValor).toFixed(1)) : null;
 
-    return registros.filter((r) => {
-      if (!r.data_hora) return true;
-      return agora - new Date(r.data_hora).getTime() <= limiteMs;
-    });
-  }, [registros, filtro]);
+    return {
+      vazio: false,
+      labels,
+      valores,
+      horasCompletas,
+      ultimoValor,
+      variacao,
+    };
+  }, [registros, abaAtiva]);
 
-  const ultimoFC = filtrados.find((r) =>
-    String(r.indicador_saude?.nome || "").toLowerCase().includes("card")
-  );
-  const ultimoSpo2 = filtrados.find((r) => {
-    const nome = String(r.indicador_saude?.nome || "").toLowerCase();
-    return nome.includes("oxig") || nome.includes("spo");
-  });
-
-  const fcVal = ultimoFC?.valor_numerico ?? "--";
-  const spo2Val = ultimoSpo2?.valor_numerico ?? "--";
-  const fcNum = Number(fcVal);
-  const spo2Num = Number(spo2Val);
-  const fcAlerta = fcVal !== "--" && !Number.isNaN(fcNum) && (fcNum > 100 || fcNum < 60);
-  const spo2Alerta = spo2Val !== "--" && !Number.isNaN(spo2Num) && spo2Num < 95;
-
-  const registrosFC = [...filtrados]
-    .filter((r) => String(r.indicador_saude?.nome || "").toLowerCase().includes("card"))
-    .sort((a, b) => new Date(a.data_hora || 0).getTime() - new Date(b.data_hora || 0).getTime())
-    .slice(-6);
-
-  const dadosFC =
-    registrosFC.length > 0
-      ? registrosFC.map((r) => {
-          const n = Number(r.valor_numerico);
-          return Number.isNaN(n) ? 0 : n;
-        })
-      : [0];
-  const labelsFC =
-    registrosFC.length > 0
-      ? registrosFC.map((r) => {
-          const d = new Date(r.data_hora);
-          return `${d.getHours()}h`;
-        })
-      : ["--"];
-
-  const registrosSpo2 = [...filtrados]
-    .filter((r) => {
-      const nome = String(r.indicador_saude?.nome || "").toLowerCase();
-      return nome.includes("oxig") || nome.includes("spo");
-    })
-    .sort((a, b) => new Date(a.data_hora || 0).getTime() - new Date(b.data_hora || 0).getTime())
-    .slice(-6);
-
-  const dadosSpo2 =
-    registrosSpo2.length > 0
-      ? registrosSpo2.map((r) => {
-          const n = Number(r.valor_numerico);
-          return Number.isNaN(n) ? 0 : n;
-        })
-      : [0];
-  const labelsSpo2 =
-    registrosSpo2.length > 0
-      ? registrosSpo2.map((r) => {
-          const d = new Date(r.data_hora);
-          return `${d.getHours()}h`;
-        })
-      : ["--"];
+  const cfgAtual = CONFIG_GRAFICO[abaAtiva];
 
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#00897B" />
+        <ActivityIndicator size="large" color="#159B87" />
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <View style={styles.blobTop} />
-
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backButton}>← Voltar</Text>
+        <View>
+          <Text style={styles.title}>Sinais Vitais</Text>
+          <Text style={styles.subtitle}>Histórico clínico e leitura via Smartband</Text>
+        </View>
+        <TouchableOpacity
+          style={styles.addBtn}
+          onPress={() => navigation.navigate('NovoRegistroSinal')}
+        >
+          <Plus color="#FFFFFF" size={20} />
+          <Text style={styles.addBtnText}>Novo</Text>
         </TouchableOpacity>
-        <View style={styles.titleRow}>
-          <Text style={styles.title}>Sinais vitais</Text>
-          {podeAdicionar && (
-            <TouchableOpacity
-              style={styles.addBtn}
-              onPress={() => navigation.navigate("NovoRegistroSinal")}
-            >
-              <Plus color="#FFF" size={22} />
-            </TouchableOpacity>
-          )}
-        </View>
       </View>
 
-      <View style={styles.tabsContainer}>
-        {(["Hoje", "7 dias", "30 dias"] as const).map((aba) => (
-          <TouchableOpacity
-            key={aba}
-            onPress={() => setFiltro(aba)}
-            style={[styles.tabBtn, filtro === aba && styles.tabBtnActive]}
-          >
-            <Text style={[styles.tabText, filtro === aba && styles.tabTextActive]}>{aba}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.cardsRow}>
-          <View style={styles.kpiCard}>
-            <View style={styles.kpiHeader}>
-              <HeartPulse size={16} color="#00897B" />
-              <Text style={styles.kpiLabel}> Freq. Cardíaca</Text>
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#159B87']} />}
+      >
+        {/* Card do Gráfico de Evolução */}
+        <View style={styles.chartCard}>
+          <View style={styles.chartTopRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <TrendingUp size={18} color={cfgAtual.cor} />
+              <Text style={styles.chartTitle}>Evolução Clínica</Text>
             </View>
-            <Text style={styles.kpiValue}>
-              {fcVal} <Text style={styles.kpiUnit}>bpm</Text>
-            </Text>
-            <Text style={[styles.kpiStatus, fcAlerta && { color: "#D32F2F" }]}>
-              {fcVal === "--" ? "Sem dado" : fcAlerta ? "Atenção" : "Normal"}
-            </Text>
+            <Text style={styles.refText}>{cfgAtual.referencia}</Text>
           </View>
 
-          <View style={styles.kpiCard}>
-            <View style={styles.kpiHeader}>
-              <Activity size={16} color="#00897B" />
-              <Text style={styles.kpiLabel}> SpO₂</Text>
-            </View>
-            <Text style={styles.kpiValue}>
-              {spo2Val} <Text style={styles.kpiUnit}>%</Text>
-            </Text>
-            <Text style={[styles.kpiStatus, spo2Alerta && { color: "#D32F2F" }]}>
-              {spo2Val === "--" ? "Sem dado" : spo2Alerta ? "Atenção" : "Normal"}
-            </Text>
+          {/* Seletor de Indicador */}
+          <View style={styles.tabsRow}>
+            {(Object.keys(CONFIG_GRAFICO) as AbaGrafico[]).map((key) => {
+              const item = CONFIG_GRAFICO[key];
+              const ativo = abaAtiva === key;
+              return (
+                <TouchableOpacity
+                  key={key}
+                  style={[
+                    styles.tabChip,
+                    ativo && { backgroundColor: item.cor, borderColor: item.cor },
+                  ]}
+                  onPress={() => {
+                    setAbaAtiva(key);
+                    setPontoSelecionado(null);
+                  }}
+                >
+                  <Text style={[styles.tabChipText, ativo && { color: '#FFFFFF' }]}>
+                    {item.labelCurto}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
-        </View>
 
-        <Text style={styles.sectionTitle}>Evolução dos sinais vitais</Text>
-        <Text style={styles.chartTitle}>Frequência Cardíaca (bpm)</Text>
+          {!dadosGrafico.vazio ? (
+            <>
+              <View style={styles.metricSummary}>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+                  <Text style={[styles.bigMetric, { color: cfgAtual.cor }]}>
+                    {pontoSelecionado ? pontoSelecionado.valor : dadosGrafico.ultimoValor}
+                  </Text>
+                  <Text style={styles.bigMetricUnit}>{cfgAtual.unidade}</Text>
+                </View>
 
-        <View style={styles.chartContainer}>
-          <LineChart
-            data={{
-              labels: labelsFC,
-              datasets: [{ data: dadosFC }],
-            }}
-            width={screenWidth - 48}
-            height={210}
-            chartConfig={{
-              backgroundColor: "#FFF",
-              backgroundGradientFrom: "#FFF",
-              backgroundGradientTo: "#FFF",
-              decimalPlaces: 0,
-              color: (opacity = 1) => `rgba(0, 137, 123, ${opacity})`,
-              labelColor: (opacity = 1) => `rgba(113, 128, 150, ${opacity})`,
-              style: { borderRadius: 16 },
-              propsForDots: { r: "4", strokeWidth: "2", stroke: "#00897B" },
-            }}
-            bezier
-            style={{ borderRadius: 16 }}
-          />
-          {registrosFC.length === 0 && (
-            <Text style={styles.emptyText}>Nenhuma medição de FC no período.</Text>
+                {pontoSelecionado ? (
+                  <Text style={styles.pointHint}>Leitura de {pontoSelecionado.hora}</Text>
+                ) : dadosGrafico.variacao !== null ? (
+                  <Text style={styles.pointHint}>
+                    {dadosGrafico.variacao > 0
+                      ? `+${dadosGrafico.variacao} ${cfgAtual.unidade} vs. anterior`
+                      : dadosGrafico.variacao < 0
+                      ? `${dadosGrafico.variacao} ${cfgAtual.unidade} vs. anterior`
+                      : 'Estável em relação à última leitura'}
+                  </Text>
+                ) : (
+                  <Text style={styles.pointHint}>Toque nos pontos para inspecionar</Text>
+                )}
+              </View>
+
+              <LineChart
+                data={{
+                  labels: dadosGrafico.labels,
+                  datasets: [
+                    {
+                      data:
+                        dadosGrafico.valores.length === 1
+                          ? [dadosGrafico.valores[0], dadosGrafico.valores[0]]
+                          : dadosGrafico.valores,
+                      color: () => cfgAtual.cor,
+                      strokeWidth: 3,
+                    },
+                  ],
+                }}
+                width={SCREEN_WIDTH - 68}
+                height={185}
+                withInnerLines={true}
+                withOuterLines={false}
+                withVerticalLines={false}
+                bezier
+                fromZero={false}
+                segments={4}
+                onDataPointClick={({ value, index }) => {
+                  const hora = dadosGrafico.horasCompletas[index] || '';
+                  setPontoSelecionado({ valor: value, hora });
+                }}
+                chartConfig={{
+                  backgroundColor: '#FFFFFF',
+                  backgroundGradientFrom: '#FFFFFF',
+                  backgroundGradientTo: '#FFFFFF',
+                  decimalPlaces: abaAtiva === 'temp' ? 1 : 0,
+                  color: () => cfgAtual.cor,
+                  labelColor: () => '#64748B',
+                  propsForDots: {
+                    r: '5',
+                    strokeWidth: '2',
+                    stroke: '#FFFFFF',
+                  },
+                  propsForBackgroundLines: {
+                    strokeDasharray: '4 4',
+                    stroke: '#E2E8F0',
+                  },
+                }}
+                style={{ marginLeft: -12, borderRadius: 12 }}
+              />
+            </>
+          ) : (
+            <View style={styles.emptyChartBox}>
+              <Text style={styles.emptyChartText}>
+                Nenhuma leitura numérica de {cfgAtual.titulo.toLowerCase()} registrada ainda.
+              </Text>
+            </View>
           )}
         </View>
 
-        <Text style={[styles.chartTitle, { marginTop: 16 }]}>Oxigenação — SpO₂ (%)</Text>
+        <Text style={styles.sectionTitle}>Últimas Aferições ({registros.length})</Text>
 
-        <View style={styles.chartContainer}>
-          <LineChart
-            data={{
-              labels: labelsSpo2,
-              datasets: [{ data: dadosSpo2 }],
-            }}
-            width={screenWidth - 48}
-            height={210}
-            chartConfig={{
-              backgroundColor: "#FFF",
-              backgroundGradientFrom: "#FFF",
-              backgroundGradientTo: "#FFF",
-              decimalPlaces: 0,
-              color: (opacity = 1) => `rgba(2, 132, 199, ${opacity})`,
-              labelColor: (opacity = 1) => `rgba(113, 128, 150, ${opacity})`,
-              style: { borderRadius: 16 },
-              propsForDots: { r: "4", strokeWidth: "2", stroke: "#0284C7" },
-            }}
-            bezier
-            style={{ borderRadius: 16 }}
-          />
-          {registrosSpo2.length === 0 && (
-            <Text style={styles.emptyText}>
-              Sem medições de SpO₂ no período (a Mi Band 4 não mede SpO₂ automaticamente).
+        {registros.length === 0 ? (
+          <View style={styles.emptyBox}>
+            <Activity color="#94A3B8" size={40} />
+            <Text style={styles.emptyTitle}>Nenhum registro encontrado</Text>
+            <Text style={styles.emptySub}>
+              Toque em "+ Novo" para registrar manualmente ou puxar da Smartband.
             </Text>
-          )}
-        </View>
-
-        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Histórico recente</Text>
-        {filtrados.length === 0 ? (
-          <Text style={styles.emptyText}>Nenhuma aferição registrada neste período.</Text>
+          </View>
         ) : (
-          filtrados.slice(0, 15).map((item) => {
-            const nomeInd = item.indicador_saude?.nome || "Indicador";
-            const unidade = item.indicador_saude?.unidade_padrao || "";
-            const valorFinal =
-              item.valor_numerico !== null && item.valor_numerico !== undefined
-                ? `${item.valor_numerico} ${unidade}`
-                : item.valor_categorico;
-            const dataFmt = item.data_hora
-              ? new Date(item.data_hora).toLocaleString("pt-BR")
-              : "Recente";
+          registros.map((item) => {
+            const nomeInd = item.indicador?.nome || item.nome_indicador || 'Indicador Vital';
+            const nomeLower = nomeInd.toLowerCase();
+            const unidade = item.indicador?.unidade || item.unidade || '';
+
+            // Prioriza valor_numerico para evitar exibir texto antigo no lugar do número
+            const temNumero = item.valor_numerico !== null && item.valor_numerico !== undefined;
+            const valorExibido = temNumero
+              ? `${item.valor_numerico} ${unidade}`.trim()
+              : `${item.valor_categorico || '-'} ${unidade}`.trim();
+
+            const isDispositivo =
+              item.origem_dado === 'DISPOSITIVO' ||
+              (item.observacao || '').toLowerCase().includes('smartband');
+
+            let IconComp = HeartPulse;
+            let iconColor = '#E11D48';
+            let iconBg = '#FFF1F2';
+
+            if (nomeLower.includes('satur') || nomeLower.includes('spo2')) {
+              IconComp = Droplets;
+              iconColor = '#0D9488';
+              iconBg = '#F0FDFA';
+            } else if (nomeLower.includes('temp')) {
+              IconComp = Thermometer;
+              iconColor = '#D97706';
+              iconBg = '#FFFBEB';
+            } else if (nomeLower.includes('press')) {
+              IconComp = Activity;
+              iconColor = '#2563EB';
+              iconBg = '#EFF6FF';
+            }
 
             return (
-              <View key={item.id} style={styles.histCard}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.histTitle}>{nomeInd}</Text>
-                  <Text style={styles.histValue}>{valorFinal}</Text>
-                  <View style={styles.histRow}>
-                    <Clock size={12} color="#A0AEC0" />
-                    <Text style={styles.histDate}>{dataFmt}</Text>
+              <View key={item.id} style={styles.card}>
+                <View style={[styles.iconBox, { backgroundColor: iconBg }]}>
+                  <IconComp color={iconColor} size={22} />
+                </View>
+
+                <View style={styles.cardInfo}>
+                  <Text style={styles.cardTitle}>{nomeInd}</Text>
+                  <Text style={styles.cardDate}>
+                    {formatarDataHora(item.data_hora || item.criado_em)}
+                  </Text>
+
+                  <View style={styles.badgeRow}>
+                    <View
+                      style={[
+                        styles.badge,
+                        isDispositivo ? styles.badgeDevice : styles.badgeManual,
+                      ]}
+                    >
+                      {isDispositivo ? (
+                        <Watch color="#0F766E" size={12} />
+                      ) : (
+                        <Edit3 color="#475569" size={12} />
+                      )}
+                      <Text
+                        style={[
+                          styles.badgeText,
+                          isDispositivo ? styles.badgeTextDevice : styles.badgeTextManual,
+                        ]}
+                      >
+                        {isDispositivo ? 'Smartband IoT' : 'Aferição Manual'}
+                      </Text>
+                    </View>
                   </View>
                 </View>
-                <View style={styles.originBadge}>
-                  <Text style={styles.originText}>{item.origem || "MANUAL"}</Text>
-                </View>
+
+                <Text style={styles.valorText}>{valorExibido}</Text>
               </View>
             );
           })
@@ -293,36 +413,149 @@ export default function SinaisVitaisScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#FFFFFF" },
-  center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#FFFFFF" },
-  blobTop: { position: "absolute", top: -50, right: -50, width: 200, height: 200, borderRadius: 100, backgroundColor: "#E0F2F1", opacity: 0.8 },
-  header: { paddingTop: 60, paddingHorizontal: 24, paddingBottom: 10, zIndex: 10 },
-  backButton: { color: "#00897B", fontSize: 16, fontWeight: "600" },
-  titleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 10 },
-  title: { fontSize: 26, fontWeight: "bold", color: "#0A2540" },
-  addBtn: { width: 42, height: 42, borderRadius: 12, backgroundColor: "#00897B", justifyContent: "center", alignItems: "center" },
-  tabsContainer: { flexDirection: "row", paddingHorizontal: 24, marginBottom: 20, gap: 10, zIndex: 10 },
-  tabBtn: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, backgroundColor: "#F1F5F9" },
-  tabBtnActive: { backgroundColor: "#00897B" },
-  tabText: { color: "#718096", fontWeight: "600", fontSize: 14 },
-  tabTextActive: { color: "#FFF" },
-  content: { paddingHorizontal: 24, paddingBottom: 40 },
-  cardsRow: { flexDirection: "row", gap: 12, marginBottom: 24 },
-  kpiCard: { flex: 1, backgroundColor: "#FFF", borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "#E2E8F0", shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, elevation: 2 },
-  kpiHeader: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
-  kpiLabel: { fontSize: 12, color: "#718096", fontWeight: "600" },
-  kpiValue: { fontSize: 24, fontWeight: "bold", color: "#0A2540" },
-  kpiUnit: { fontSize: 14, fontWeight: "normal", color: "#718096" },
-  kpiStatus: { fontSize: 12, color: "#00897B", fontWeight: "bold", marginTop: 4 },
-  sectionTitle: { fontSize: 18, fontWeight: "bold", color: "#0A2540", marginBottom: 12 },
-  chartTitle: { fontSize: 14, color: "#718096", marginBottom: 8 },
-  chartContainer: { alignItems: "center", backgroundColor: "#FFF", borderRadius: 16, paddingVertical: 10, borderWidth: 1, borderColor: "#E2E8F0" },
-  histCard: { flexDirection: "row", alignItems: "center", backgroundColor: "#FFF", borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: "#E2E8F0" },
-  histTitle: { fontSize: 13, color: "#718096", fontWeight: "600" },
-  histValue: { fontSize: 18, fontWeight: "bold", color: "#0A2540", marginVertical: 2 },
-  histRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  histDate: { fontSize: 12, color: "#A0AEC0" },
-  originBadge: { backgroundColor: "#E2F5F0", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  originText: { color: "#00897B", fontSize: 11, fontWeight: "bold" },
-  emptyText: { textAlign: "center", color: "#718096", marginTop: 10 },
+  container: { flex: 1, backgroundColor: '#F2F7FB' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F2F7FB' },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 58,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  title: { fontSize: 24, fontWeight: 'bold', color: '#0A2540' },
+  subtitle: { fontSize: 13, color: '#64748B', marginTop: 2 },
+  addBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#159B87',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 4,
+  },
+  addBtnText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 14 },
+  chartCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0A2540',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  chartTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  chartTitle: { fontSize: 15, fontWeight: '700', color: '#0A2540' },
+  refText: { fontSize: 11, color: '#64748B', fontWeight: '500' },
+  tabsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  tabChip: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+  },
+  tabChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  metricSummary: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 8,
+  },
+  bigMetric: {
+    fontSize: 28,
+    fontWeight: '800',
+  },
+  bigMetricUnit: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  pointHint: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  emptyChartBox: {
+    paddingVertical: 28,
+    alignItems: 'center',
+  },
+  emptyChartText: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#0A2540',
+    marginBottom: 12,
+  },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 15,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  iconBox: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  cardInfo: { flex: 1 },
+  cardTitle: { fontSize: 15, fontWeight: 'bold', color: '#0A2540' },
+  cardDate: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  badgeRow: { flexDirection: 'row', marginTop: 6 },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    gap: 4,
+  },
+  badgeDevice: { backgroundColor: '#CCFBF1' },
+  badgeManual: { backgroundColor: '#F1F5F9' },
+  badgeText: { fontSize: 11, fontWeight: '600' },
+  badgeTextDevice: { color: '#0F766E' },
+  badgeTextManual: { color: '#475569' },
+  valorText: { fontSize: 17, fontWeight: 'bold', color: '#0A2540', marginLeft: 8 },
+  emptyBox: {
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 36,
+    marginTop: 8,
+  },
+  emptyTitle: { fontSize: 16, fontWeight: 'bold', color: '#0A2540', marginTop: 12 },
+  emptySub: { fontSize: 13, color: '#64748B', textAlign: 'center', marginTop: 4 },
 });
