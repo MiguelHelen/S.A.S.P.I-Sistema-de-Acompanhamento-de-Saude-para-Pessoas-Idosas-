@@ -195,7 +195,7 @@ export class AuthService {
   }
 
   /**
-   * 3.1 Reenvio de Convite Corporativo para usuários com status PENDENTE
+   * 3.1 Reenvio de Convite / Link de Ativação para usuários com status PENDENTE
    */
   async reenviarConvite(usuarioId: string, authIdSolicitante?: string) {
     if (authIdSolicitante) {
@@ -226,21 +226,45 @@ export class AuthService {
     const frontendUrl =
       process.env.FRONTEND_URL ||
       "https://s-a-s-p-i-sistema-de-acompanhamento.vercel.app";
+    const redirectUrl = `${frontendUrl}/redefinir-senha`;
 
-    const { error } =
+    // Tenta primeiro o convite padrão (caso ainda não tenha sido criado no Auth)
+    const { error: inviteError } =
       await this.supabase.client.auth.admin.inviteUserByEmail(usuario.email, {
         data: { nome: usuario.nome, perfil: usuario.perfil },
-        redirectTo: `${frontendUrl}/redefinir-senha`,
+        redirectTo: redirectUrl,
       });
 
-    if (error) {
+    if (inviteError) {
+      const msgLower = inviteError.message.toLowerCase();
+      // Se já existir em auth.users, envia e-mail oficial de definição/ativação de senha
+      if (
+        msgLower.includes("already been registered") ||
+        msgLower.includes("already registered")
+      ) {
+        const { error: resetError } =
+          await this.supabase.client.auth.resetPasswordForEmail(usuario.email, {
+            redirectTo: redirectUrl,
+          });
+
+        if (resetError) {
+          throw new UnauthorizedException(
+            `Não foi possível enviar o link de ativação: ${resetError.message}`,
+          );
+        }
+
+        return {
+          message: `Link de definição de senha e ativação enviado para ${usuario.email}.`,
+        };
+      }
+
       throw new UnauthorizedException(
-        `Não foi possível reenviar o convite: ${error.message}`,
+        `Não foi possível reenviar o convite: ${inviteError.message}`,
       );
     }
 
     return {
-      message: `Novo link de ativação enviado para ${usuario.email}.`,
+      message: `Novo convite de ativação enviado para ${usuario.email}.`,
     };
   }
 
