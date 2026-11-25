@@ -1,246 +1,429 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Switch,
+  Image,
+  ActivityIndicator,
   Alert,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAuth } from '../contexts/AuthContext';
 import {
   User,
-  Lock,
+  LogOut,
   Accessibility,
-  Shield,
   HelpCircle,
-  UserCog,
+  ShieldCheck,
+  Building2,
+  Camera,
+  Lock,
+  Mail,
+  ChevronRight,
+  Users,
 } from 'lucide-react-native';
-import InfoModals from '../components/InfoModals';
+import { useAuth } from '../contexts/AuthContext';
+import { useAccessibility } from '../contexts/AccessibilityContext';
+import { API_URL } from '../api/client';
 
 export default function PerfilConfigScreen({ navigation }: any) {
-  const { usuario, logout } = useAuth();
-  const [mostrarAcessibilidade, setMostrarAcessibilidade] = useState(false);
-  const [altoContraste, setAltoContraste] = useState(false);
-  const [fonteGrande, setFonteGrande] = useState(false);
-  const [modalTipo, setModalTipo] = useState<'PRIVACIDADE' | 'SUPORTE' | null>(null);
+  const { usuario, token, logout } = useAuth();
+  const { fontScale, highContrast } = useAccessibility();
 
-  useEffect(() => {
-    async function carregarPrefs() {
-      const contraste = await AsyncStorage.getItem('saspi_pref_contraste');
-      const fonte = await AsyncStorage.getItem('saspi_pref_fonte');
-      if (contraste === 'true') setAltoContraste(true);
-      if (fonte === 'true') setFonteGrande(true);
+  const [fotoUrl, setFotoUrl] = useState<string | null>((usuario as any)?.foto_url || null);
+  const [enviandoFoto, setEnviandoFoto] = useState(false);
+
+  const perfil = (usuario?.perfil || 'FAMILIAR').toUpperCase();
+  const isIdoso = perfil === 'IDOSO';
+
+  const escalaEfetiva = isIdoso && fontScale === 1 ? 1.15 : fontScale;
+  const textSize = (base: number) => Math.round(base * escalaEfetiva);
+
+  async function handleAlterarFoto() {
+    if (!usuario?.id || !token) return;
+
+    const permissao = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissao.granted) {
+      Alert.alert(
+        'Permissão necessária',
+        'Autorize o acesso à galeria de fotos para atualizar sua imagem de perfil.'
+      );
+      return;
     }
-    carregarPrefs();
-  }, []);
 
-  const toggleContraste = async (value: boolean) => {
-    setAltoContraste(value);
-    await AsyncStorage.setItem('saspi_pref_contraste', String(value));
-  };
+    const resultado = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
 
-  const toggleFonte = async (value: boolean) => {
-    setFonteGrande(value);
-    await AsyncStorage.setItem('saspi_pref_fonte', String(value));
-  };
+    if (resultado.canceled || !resultado.assets?.length) return;
 
-  const bgPrincipal = altoContraste ? '#000000' : '#FFFFFF';
-  const bgCard = altoContraste ? '#1A1A1A' : '#FFFFFF';
-  const textoForte = altoContraste ? '#FFFFFF' : '#0A2540';
-  const textoSuave = altoContraste ? '#CBD5E1' : '#718096';
-  const borderColor = altoContraste ? '#334155' : '#E2E8F0';
-  const titleSize = fonteGrande ? 18 : 15;
-  const subSize = fonteGrande ? 15 : 13;
+    const uri = resultado.assets[0].uri;
+    const fileName = uri.split('/').pop() || `avatar-${Date.now()}.jpg`;
+    const match = /\.(\w+)$/.exec(fileName);
+    const ext = match ? match[1].toLowerCase() : 'jpg';
+    const mimeType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+
+    setEnviandoFoto(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', {
+        uri,
+        name: fileName,
+        type: mimeType,
+      } as any);
+
+      const response = await fetch(`${API_URL}/storage/usuario/${usuario.id}/foto-perfil`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok || !data?.url) {
+        throw new Error(data?.message || 'Não foi possível enviar a foto de perfil.');
+      }
+
+      setFotoUrl(data.url);
+      const atualizado = { ...usuario, foto_url: data.url };
+      await AsyncStorage.setItem('saspi_user', JSON.stringify(atualizado));
+      Alert.alert('Sucesso', 'Foto de perfil atualizada com sucesso!');
+    } catch (error: any) {
+      Alert.alert('Erro no envio', error?.message || 'Falha de conexão ao atualizar a foto.');
+    } finally {
+      setEnviandoFoto(false);
+    }
+  }
+
+  function confirmarLogout() {
+    Alert.alert('Encerrar Sessão', 'Deseja sair da sua conta no S.A.S.P.I.?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Sair', style: 'destructive', onPress: logout },
+    ]);
+  }
+
+  const bgMain = highContrast ? '#000000' : '#F2F7FB';
+  const bgCard = highContrast ? '#111827' : '#FFFFFF';
+  const textPrimary = highContrast ? '#FFFFFF' : '#0A2540';
+  const textSecondary = highContrast ? '#E2E8F0' : '#64748B';
+  const borderCard = highContrast ? '#38BDF8' : '#E2E8F0';
+
+  const labelPerfil =
+    perfil === 'IDOSO'
+      ? 'Paciente Idoso'
+      : perfil === 'CUIDADOR'
+      ? 'Cuidador(a)'
+      : perfil === 'FAMILIAR'
+      ? 'Familiar Responsável'
+      : perfil;
 
   return (
-    <View style={[styles.container, { backgroundColor: bgPrincipal }]}>
-      {!altoContraste && (
-        <>
-          <View style={styles.bgDecoration} />
-          <View style={styles.bgDecorationSmall} />
-        </>
-      )}
+    <ScrollView
+      style={[styles.container, { backgroundColor: bgMain }]}
+      contentContainerStyle={styles.content}
+    >
+      <Text style={[styles.pageTitle, { color: textPrimary, fontSize: textSize(24) }]}>
+        Perfil e Ajustes
+      </Text>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.avatarSection}>
-          <View style={styles.avatarCircle}>
-            <User size={45} color="#00897B" />
-          </View>
-          <Text style={[styles.userName, { color: textoForte, fontSize: fonteGrande ? 24 : 20 }]}>
-            {usuario?.nome || 'Usuário'}
-          </Text>
-          <Text style={[styles.userRole, { color: textoSuave, fontSize: subSize }]}>
-            {usuario?.perfil || 'CONTA'}
-            {usuario?.nomeClinica ? ` • ${usuario.nomeClinica}` : ' • Conta ativa'}
-          </Text>
-        </View>
-
-        <View style={[styles.menuSection, { backgroundColor: bgCard, borderColor }]}>
-          <MenuOption
-            icon={<User size={22} color="#00897B" />}
-            title="Dados pessoais"
-            subtitle={usuario?.email || 'Nome e e-mail'}
-            textoForte={textoForte}
-            textoSuave={textoSuave}
-            titleSize={titleSize}
-            subSize={subSize}
-            onPress={() =>
-              Alert.alert(
-                'Dados Pessoais',
-                `Nome: ${usuario?.nome}\nE-mail: ${usuario?.email}\nPerfil: ${usuario?.perfil}${
-                  usuario?.nomeClinica ? `\nInstituição: ${usuario.nomeClinica}` : ''
-                }`
-              )
-            }
-          />
-
-          {usuario?.perfil !== 'IDOSO' && (
-            <MenuOption
-              icon={<UserCog size={22} color="#00897B" />}
-              title="Trocar paciente acompanhado"
-              subtitle="Alternar prontuário ativo"
-              textoForte={textoForte}
-              textoSuave={textoSuave}
-              titleSize={titleSize}
-              subSize={subSize}
-              onPress={() => navigation.navigate('SelectElderly')}
-            />
-          )}
-
-          <MenuOption
-            icon={<Lock size={22} color="#00897B" />}
-            title="Segurança da conta"
-            subtitle="Redefinir senha de acesso"
-            textoForte={textoForte}
-            textoSuave={textoSuave}
-            titleSize={titleSize}
-            subSize={subSize}
-            onPress={() => navigation.navigate('RecuperarSenha')}
-          />
-
-          <MenuOption
-            icon={<Accessibility size={22} color="#00897B" />}
-            title="Acessibilidade"
-            subtitle="Tamanho do texto e alto contraste"
-            textoForte={textoForte}
-            textoSuave={textoSuave}
-            titleSize={titleSize}
-            subSize={subSize}
-            onPress={() => setMostrarAcessibilidade((prev) => !prev)}
-          />
-
-          {mostrarAcessibilidade && (
-            <View style={[styles.accessBox, { borderBottomColor: borderColor }]}>
-              <View style={styles.switchRow}>
-                <Text style={{ color: textoForte, fontSize: titleSize, fontWeight: '600' }}>
-                  Texto maior
-                </Text>
-                <Switch
-                  value={fonteGrande}
-                  onValueChange={toggleFonte}
-                  trackColor={{ true: '#00897B' }}
-                />
-              </View>
-              <View style={styles.switchRow}>
-                <Text style={{ color: textoForte, fontSize: titleSize, fontWeight: '600' }}>
-                  Alto contraste
-                </Text>
-                <Switch
-                  value={altoContraste}
-                  onValueChange={toggleContraste}
-                  trackColor={{ true: '#00897B' }}
-                />
-              </View>
+      {/* CARTÃO DE AVATAR E IDENTIFICAÇÃO */}
+      <View style={[styles.profileCard, { backgroundColor: bgCard, borderColor: borderCard }]}>
+        <TouchableOpacity
+          style={styles.avatarWrapper}
+          onPress={handleAlterarFoto}
+          disabled={enviandoFoto}
+          accessibilityRole="button"
+          accessibilityLabel="Alterar foto de perfil"
+        >
+          {fotoUrl ? (
+            <Image source={{ uri: fotoUrl }} style={styles.avatarImage} />
+          ) : (
+            <View style={styles.avatarCircle}>
+              <User size={40} color="#159B87" />
             </View>
           )}
+          <View style={styles.cameraBadge}>
+            {enviandoFoto ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Camera size={14} color="#FFFFFF" />
+            )}
+          </View>
+        </TouchableOpacity>
 
-          <MenuOption
-            icon={<Shield size={22} color="#00897B" />}
-            title="Privacidade e LGPD"
-            subtitle="Permissões e proteção de dados"
-            textoForte={textoForte}
-            textoSuave={textoSuave}
-            titleSize={titleSize}
-            subSize={subSize}
-            onPress={() => setModalTipo('PRIVACIDADE')}
-          />
+        <Text style={[styles.photoHint, { fontSize: textSize(12) }]}>
+          Toque na foto para alterar
+        </Text>
 
-          <MenuOption
-            icon={<HelpCircle size={22} color="#00897B" />}
-            title="Ajuda e suporte"
-            subtitle="Dúvidas sobre o aplicativo"
-            textoForte={textoForte}
-            textoSuave={textoSuave}
-            titleSize={titleSize}
-            subSize={subSize}
-            noBorder
-            onPress={() => setModalTipo('SUPORTE')}
-          />
+        <Text style={[styles.nameText, { color: textPrimary, fontSize: textSize(20) }]}>
+          {usuario?.nome || 'Usuário S.A.S.P.I.'}
+        </Text>
+
+        <View style={styles.rolePill}>
+          <Text style={[styles.rolePillText, { fontSize: textSize(12) }]}>{labelPerfil}</Text>
+        </View>
+      </View>
+
+      {/* DADOS CADASTRAIS BLOQUEADOS PARA EDIÇÃO */}
+      <View style={[styles.sectionCard, { backgroundColor: bgCard, borderColor: borderCard }]}>
+        <View style={styles.lockedHeader}>
+          <Text style={[styles.sectionTitle, { color: textPrimary, fontSize: textSize(16) }]}>
+            Dados Cadastrais
+          </Text>
+          <View style={styles.lockBadge}>
+            <Lock size={12} color="#64748B" />
+            <Text style={styles.lockBadgeText}>Somente leitura</Text>
+          </View>
         </View>
 
-        <Text style={styles.versionText}>Versão 1.0.0</Text>
+        <View style={styles.readOnlyField}>
+          <User size={18} color="#64748B" />
+          <View style={styles.fieldContent}>
+            <Text style={[styles.fieldLabel, { fontSize: textSize(11) }]}>NOME COMPLETO</Text>
+            <Text style={[styles.fieldValue, { color: textPrimary, fontSize: textSize(14) }]}>
+              {usuario?.nome || '--'}
+            </Text>
+          </View>
+          <Lock size={15} color="#94A3B8" />
+        </View>
 
-        <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
-          <Text style={styles.logoutText}>Sair da conta</Text>
+        <View style={styles.readOnlyField}>
+          <Mail size={18} color="#64748B" />
+          <View style={styles.fieldContent}>
+            <Text style={[styles.fieldLabel, { fontSize: textSize(11) }]}>E-MAIL DE ACESSO</Text>
+            <Text style={[styles.fieldValue, { color: textPrimary, fontSize: textSize(14) }]}>
+              {usuario?.email || '--'}
+            </Text>
+          </View>
+          <Lock size={15} color="#94A3B8" />
+        </View>
+
+        <View style={[styles.readOnlyField, { borderBottomWidth: 0 }]}>
+          <Building2 size={18} color="#64748B" />
+          <View style={styles.fieldContent}>
+            <Text style={[styles.fieldLabel, { fontSize: textSize(11) }]}>
+              VÍNCULO INSTITUCIONAL
+            </Text>
+            <Text style={[styles.fieldValue, { color: textPrimary, fontSize: textSize(14) }]}>
+              S.A.S.P.I. — Unidade Clínica
+            </Text>
+          </View>
+          <Lock size={15} color="#94A3B8" />
+        </View>
+
+        <Text style={[styles.lockedNote, { color: textSecondary, fontSize: textSize(12) }]}>
+          Por segurança clínica e rastreabilidade, alterações cadastrais são realizadas pela equipe administrativa da clínica.
+        </Text>
+      </View>
+
+      {/* PREFERÊNCIAS E SUPORTE */}
+      <View style={[styles.sectionCard, { backgroundColor: bgCard, borderColor: borderCard }]}>
+        <Text
+          style={[
+            styles.sectionTitle,
+            { color: textPrimary, fontSize: textSize(16), marginBottom: 8 },
+          ]}
+        >
+          Preferências e Suporte
+        </Text>
+
+        {!isIdoso && (
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => navigation.navigate('SelectElderly')}
+          >
+            <View style={[styles.menuIconBox, { backgroundColor: '#CCFBF1' }]}>
+              <Users size={20} color="#0F766E" />
+            </View>
+            <View style={styles.fieldContent}>
+              <Text style={[styles.menuTitle, { color: textPrimary, fontSize: textSize(15) }]}>
+                Trocar Paciente Acompanhado
+              </Text>
+              <Text style={[styles.menuSub, { color: textSecondary, fontSize: textSize(12) }]}>
+                Selecionar outro idoso vinculado
+              </Text>
+            </View>
+            <ChevronRight size={20} color="#94A3B8" />
+          </TouchableOpacity>
+        )}
+
+        <TouchableOpacity
+          style={styles.menuRow}
+          onPress={() => navigation.navigate('Acessibilidade')}
+        >
+          <View style={[styles.menuIconBox, { backgroundColor: '#E0F2FE' }]}>
+            <Accessibility size={20} color="#0369A1" />
+          </View>
+          <View style={styles.fieldContent}>
+            <Text style={[styles.menuTitle, { color: textPrimary, fontSize: textSize(15) }]}>
+              Acessibilidade e Leitura
+            </Text>
+            <Text style={[styles.menuSub, { color: textSecondary, fontSize: textSize(12) }]}>
+              Tamanho da letra, alto contraste e modo simples
+            </Text>
+          </View>
+          <ChevronRight size={20} color="#94A3B8" />
         </TouchableOpacity>
-      </ScrollView>
 
-      <InfoModals
-        tipo={modalTipo}
-        onClose={() => setModalTipo(null)}
-        nomeClinica={usuario?.nomeClinica}
-      />
-    </View>
+        <TouchableOpacity style={styles.menuRow} onPress={() => navigation.navigate('Ajuda')}>
+          <View style={[styles.menuIconBox, { backgroundColor: '#FEF3C7' }]}>
+            <HelpCircle size={20} color="#B45309" />
+          </View>
+          <View style={styles.fieldContent}>
+            <Text style={[styles.menuTitle, { color: textPrimary, fontSize: textSize(15) }]}>
+              Central de Ajuda
+            </Text>
+            <Text style={[styles.menuSub, { color: textSecondary, fontSize: textSize(12) }]}>
+              Guia rápido de uso e suporte da clínica
+            </Text>
+          </View>
+          <ChevronRight size={20} color="#94A3B8" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.menuRow, { borderBottomWidth: 0 }]}
+          onPress={() => navigation.navigate('TermosPrivacidade')}
+        >
+          <View style={[styles.menuIconBox, { backgroundColor: '#F3E8FF' }]}>
+            <ShieldCheck size={20} color="#7E22CE" />
+          </View>
+          <View style={styles.fieldContent}>
+            <Text style={[styles.menuTitle, { color: textPrimary, fontSize: textSize(15) }]}>
+              Termos e Privacidade (LGPD)
+            </Text>
+            <Text style={[styles.menuSub, { color: textSecondary, fontSize: textSize(12) }]}>
+              Proteção de dados clínicos e auditoria
+            </Text>
+          </View>
+          <ChevronRight size={20} color="#94A3B8" />
+        </TouchableOpacity>
+      </View>
+
+      {/* BOTÃO DE LOGOUT */}
+      <TouchableOpacity style={styles.logoutButton} onPress={confirmarLogout}>
+        <LogOut size={20} color="#DC2626" />
+        <Text style={[styles.logoutText, { fontSize: textSize(16) }]}>Encerrar Sessão</Text>
+      </TouchableOpacity>
+
+      <Text style={styles.versionText}>S.A.S.P.I. Mobile • Versão 1.0.0</Text>
+    </ScrollView>
   );
 }
 
-const MenuOption = ({
-  icon,
-  title,
-  subtitle,
-  onPress,
-  textoForte,
-  textoSuave,
-  titleSize,
-  subSize,
-  noBorder = false,
-}: any) => (
-  <TouchableOpacity
-    style={[styles.menuOption, !noBorder && styles.borderBottom]}
-    onPress={onPress}
-  >
-    <View style={styles.menuIconBox}>{icon}</View>
-    <View style={styles.menuTextCol}>
-      <Text style={[styles.menuTitle, { color: textoForte, fontSize: titleSize }]}>{title}</Text>
-      <Text style={[styles.menuSubtitle, { color: textoSuave, fontSize: subSize }]}>{subtitle}</Text>
-    </View>
-    <Text style={styles.arrowIcon}>›</Text>
-  </TouchableOpacity>
-);
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  bgDecoration: { position: 'absolute', top: -50, right: -50, width: 200, height: 200, borderRadius: 100, backgroundColor: '#E0F2F1', opacity: 0.8 },
-  bgDecorationSmall: { position: 'absolute', top: 20, right: -20, width: 100, height: 100, borderRadius: 50, backgroundColor: '#00897B', opacity: 0.8 },
-  content: { paddingTop: 70, paddingHorizontal: 24, paddingBottom: 40 },
-  avatarSection: { alignItems: 'center', marginBottom: 30 },
-  avatarCircle: { width: 85, height: 85, borderRadius: 42.5, backgroundColor: '#E2F5F0', justifyContent: 'center', alignItems: 'center' },
-  userName: { fontWeight: 'bold', marginTop: 16 },
-  userRole: { marginTop: 4 },
-  menuSection: { borderRadius: 20, borderWidth: 1, overflow: 'hidden', marginBottom: 24 },
-  menuOption: { flexDirection: 'row', alignItems: 'center', padding: 16 },
-  borderBottom: { borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  menuIconBox: { width: 40, alignItems: 'center' },
-  menuTextCol: { flex: 1, paddingLeft: 8 },
-  menuTitle: { fontWeight: 'bold' },
-  menuSubtitle: { marginTop: 2 },
-  arrowIcon: { fontSize: 24, color: '#A0AEC0', paddingRight: 8 },
-  accessBox: { paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, gap: 12 },
-  switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  versionText: { textAlign: 'center', color: '#A0AEC0', fontSize: 12, marginBottom: 16 },
-  logoutBtn: { borderWidth: 1.5, borderColor: '#00897B', borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
-  logoutText: { color: '#00897B', fontSize: 16, fontWeight: 'bold' },
+  content: { paddingHorizontal: 20, paddingTop: 52, paddingBottom: 36 },
+  pageTitle: { fontWeight: 'bold', marginBottom: 18 },
+  profileCard: {
+    borderRadius: 20,
+    padding: 22,
+    alignItems: 'center',
+    borderWidth: 1,
+    marginBottom: 18,
+  },
+  avatarWrapper: { position: 'relative', marginBottom: 8 },
+  avatarCircle: {
+    width: 92,
+    height: 92,
+    borderRadius: 46,
+    backgroundColor: '#CCFBF1',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarImage: { width: 92, height: 92, borderRadius: 46 },
+  cameraBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#159B87',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  photoHint: { color: '#159B87', fontWeight: '600', marginBottom: 8 },
+  nameText: { fontWeight: 'bold', textAlign: 'center' },
+  rolePill: {
+    backgroundColor: '#CCFBF1',
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: 20,
+    marginTop: 8,
+  },
+  rolePillText: { color: '#0F766E', fontWeight: 'bold' },
+  sectionCard: {
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    marginBottom: 18,
+  },
+  lockedHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  sectionTitle: { fontWeight: 'bold' },
+  lockBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+  },
+  lockBadgeText: { fontSize: 11, color: '#64748B', fontWeight: '600' },
+  readOnlyField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  fieldContent: { flex: 1, marginLeft: 12 },
+  fieldLabel: { color: '#94A3B8', fontWeight: '700', letterSpacing: 0.4 },
+  fieldValue: { fontWeight: '600', marginTop: 2 },
+  lockedNote: { marginTop: 12, lineHeight: 18, fontStyle: 'italic' },
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 13,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  menuIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  menuTitle: { fontWeight: '700' },
+  menuSub: { marginTop: 2 },
+  logoutButton: {
+    flexDirection: 'row',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    padding: 16,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 8,
+  },
+  logoutText: { color: '#DC2626', fontWeight: 'bold' },
+  versionText: { textAlign: 'center', fontSize: 12, color: '#94A3B8' },
 });
