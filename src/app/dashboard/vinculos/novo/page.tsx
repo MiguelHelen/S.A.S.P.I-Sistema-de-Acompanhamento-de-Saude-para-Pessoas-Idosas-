@@ -9,6 +9,7 @@ import {
   getAuthHeaders,
   getUsuarioSessao,
   isAdminPerfil,
+  normalizarPerfil,
   validarEObterClinicaId,
 } from "@/lib/clinica";
 import {
@@ -20,6 +21,7 @@ import {
   AlertCircle,
   ShieldCheck,
   ShieldAlert,
+  Lock,
 } from "lucide-react";
 
 interface UsuarioOption {
@@ -34,12 +36,40 @@ interface IdosoOption {
   nome: string;
 }
 
-function mapearTipoVinculoPorPerfil(perfil?: string): string {
-  const p = String(perfil || "").toUpperCase();
-  if (p === "MEDICO") return "MEDICO_RESPONSAVEL";
-  if (p === "ENFERMEIRO") return "ENFERMEIRO";
-  if (p === "FAMILIAR") return "FAMILIAR";
-  return "CUIDADOR";
+const PERFIS_ELEGIVEIS_VINCULO = [
+  "MEDICO",
+  "ENFERMEIRO",
+  "CUIDADOR",
+  "FAMILIAR",
+];
+
+function mapearTipoVinculoPorPerfil(perfil?: string): {
+  codigo: string;
+  rotulo: string;
+} {
+  const p = normalizarPerfil(perfil);
+  if (p === "MEDICO") {
+    return {
+      codigo: "MEDICO_RESPONSAVEL",
+      rotulo: "Médico Responsável (Acompanhamento clínico e prescrições)",
+    };
+  }
+  if (p === "ENFERMEIRO") {
+    return {
+      codigo: "ENFERMEIRO",
+      rotulo: "Enfermeiro(a) (Triagem, sinais vitais e cuidados)",
+    };
+  }
+  if (p === "FAMILIAR") {
+    return {
+      codigo: "FAMILIAR",
+      rotulo: "Familiar (Acompanhamento remoto em modo leitura)",
+    };
+  }
+  return {
+    codigo: "CUIDADOR",
+    rotulo: "Cuidador(a) (Apoio na rotina diária e sinais vitais)",
+  };
 }
 
 export default function NovoVinculoPage() {
@@ -52,7 +82,6 @@ export default function NovoVinculoPage() {
 
   const [usuarioId, setUsuarioId] = useState("");
   const [idosoId, setIdosoId] = useState("");
-  const [tipoVinculo, setTipoVinculo] = useState("MEDICO_RESPONSAVEL");
 
   const [salvando, setSalvando] = useState(false);
   const [sucesso, setSucesso] = useState(false);
@@ -91,12 +120,19 @@ export default function NovoVinculoPage() {
         return;
       }
 
+      // Filtra estritamente perfis elegíveis (exclui ADMINISTRADOR e IDOSO)
       const listaUsuarios: UsuarioOption[] = (
         Array.isArray(dataUsuarios) ? dataUsuarios : []
-      ).filter(
-        (u: UsuarioOption) =>
-          String(u.perfil).toUpperCase() !== "ADMINISTRADOR"
-      );
+      )
+        .map((u: any) => ({
+          id: String(u.id),
+          nome: String(u.nome || ""),
+          email: u.email,
+          perfil: normalizarPerfil(u.perfil || u.role),
+        }))
+        .filter((u: UsuarioOption) =>
+          PERFIS_ELEGIVEIS_VINCULO.includes(u.perfil)
+        );
 
       const listaIdosos: IdosoOption[] = Array.isArray(dataIdosos)
         ? dataIdosos
@@ -107,7 +143,6 @@ export default function NovoVinculoPage() {
 
       if (listaUsuarios.length > 0) {
         setUsuarioId(listaUsuarios[0].id);
-        setTipoVinculo(mapearTipoVinculoPorPerfil(listaUsuarios[0].perfil));
       }
 
       if (listaIdosos.length > 0) {
@@ -126,21 +161,18 @@ export default function NovoVinculoPage() {
     carregarOpcoes();
   }, [carregarOpcoes]);
 
-  function handleUsuarioChange(novoUsuarioId: string) {
-    setUsuarioId(novoUsuarioId);
-    const selecionado = usuarios.find((u) => u.id === novoUsuarioId);
-    if (selecionado) {
-      setTipoVinculo(mapearTipoVinculoPorPerfil(selecionado.perfil));
-    }
-  }
+  const usuarioSelecionado = usuarios.find((u) => u.id === usuarioId);
+  const vinculoDerivado = mapearTipoVinculoPorPerfil(
+    usuarioSelecionado?.perfil
+  );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErro(null);
     setSucesso(false);
 
-    if (!usuarioId || !idosoId || !tipoVinculo) {
-      setErro("Selecione o usuário, o paciente e o tipo de vínculo.");
+    if (!usuarioId || !idosoId || !usuarioSelecionado) {
+      setErro("Selecione um profissional/familiar elegível e um paciente.");
       return;
     }
 
@@ -153,7 +185,7 @@ export default function NovoVinculoPage() {
         body: JSON.stringify({
           usuario_id: usuarioId,
           idoso_id: idosoId,
-          tipo_vinculo: tipoVinculo,
+          tipo_vinculo: vinculoDerivado.codigo,
         }),
       });
 
@@ -218,8 +250,8 @@ export default function NovoVinculoPage() {
             Novo Vínculo Assistencial
           </h1>
           <p className="mt-2 max-w-2xl text-gray-600">
-            Associe um profissional de saúde, cuidador ou familiar ao paciente
-            para liberar o acompanhamento autorizado.
+            Associe um médico, enfermeiro, cuidador ou familiar ao paciente para
+            liberar o acompanhamento autorizado.
           </p>
         </div>
 
@@ -250,7 +282,8 @@ export default function NovoVinculoPage() {
                   Dados da Associação
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Defina quem acompanhará o idoso e qual será o papel exercido.
+                  O tipo de vínculo é atribuído automaticamente conforme o
+                  perfil cadastrado do usuário.
                 </p>
               </div>
             </div>
@@ -262,7 +295,7 @@ export default function NovoVinculoPage() {
               </div>
             ) : (
               <div className="mt-6 grid gap-5 md:grid-cols-2">
-                <div className="md:col-span-2">
+                <div>
                   <label
                     htmlFor="usuario_id"
                     className="mb-2 block text-sm font-medium text-[#0A2540]"
@@ -272,12 +305,14 @@ export default function NovoVinculoPage() {
                   <select
                     id="usuario_id"
                     value={usuarioId}
-                    onChange={(e) => handleUsuarioChange(e.target.value)}
+                    onChange={(e) => setUsuarioId(e.target.value)}
                     disabled={usuarios.length === 0}
                     className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   >
                     {usuarios.length === 0 ? (
-                      <option value="">Nenhum usuário elegível cadastrado</option>
+                      <option value="">
+                        Nenhum profissional ou familiar cadastrado
+                      </option>
                     ) : (
                       usuarios.map((u) => (
                         <option key={u.id} value={u.id}>
@@ -314,24 +349,21 @@ export default function NovoVinculoPage() {
                   </select>
                 </div>
 
-                <div>
-                  <label
-                    htmlFor="tipo_vinculo"
-                    className="mb-2 block text-sm font-medium text-[#0A2540]"
-                  >
-                    Tipo de Vínculo *
+                <div className="md:col-span-2">
+                  <label className="mb-2 block text-sm font-medium text-[#0A2540]">
+                    Papel Assistencial (Definido automaticamente pelo perfil)
                   </label>
-                  <select
-                    id="tipo_vinculo"
-                    value={tipoVinculo}
-                    onChange={(e) => setTipoVinculo(e.target.value)}
-                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
-                  >
-                    <option value="MEDICO_RESPONSAVEL">Médico Responsável</option>
-                    <option value="ENFERMEIRO">Enfermeiro(a)</option>
-                    <option value="CUIDADOR">Cuidador(a)</option>
-                    <option value="FAMILIAR">Familiar</option>
-                  </select>
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-[#F8FBFE] px-4 py-3 text-sm text-[#0A2540]">
+                    <span className="font-medium">
+                      {usuarioSelecionado
+                        ? vinculoDerivado.rotulo
+                        : "Selecione um usuário acima"}
+                    </span>
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-[#E8F1FB] px-2.5 py-1 text-xs font-semibold text-[#1565C0]">
+                      <Lock size={12} />
+                      {usuarioSelecionado ? vinculoDerivado.codigo : "—"}
+                    </span>
+                  </div>
                 </div>
               </div>
             )}
