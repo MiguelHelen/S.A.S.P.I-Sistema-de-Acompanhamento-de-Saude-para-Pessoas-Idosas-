@@ -34,9 +34,8 @@ export default function NovoUsuarioPage() {
     email: "",
     senha: "",
     perfil: "CUIDADOR",
+    cpf: "",
     telefone: "",
-    especialidade: "",
-    registro_profissional: "",
   });
 
   useEffect(() => {
@@ -73,6 +72,13 @@ export default function NovoUsuarioPage() {
       return;
     }
 
+    const cpfDigitos = formData.cpf.replace(/\D/g, "");
+    if (cpfDigitos && cpfDigitos.length !== 11) {
+      setErro("O CPF informado deve conter 11 dígitos numéricos.");
+      setSalvando(false);
+      return;
+    }
+
     try {
       const payload = {
         nome: formData.nome.trim(),
@@ -80,10 +86,10 @@ export default function NovoUsuarioPage() {
         senha: formData.senha,
         perfil: formData.perfil,
         clinica_id: clinicaId,
-        telefone: formData.telefone.trim() || undefined,
-        especialidade: formData.especialidade.trim() || undefined,
-        registro_profissional:
-          formData.registro_profissional.trim() || undefined,
+        ...(cpfDigitos ? { cpf: cpfDigitos } : {}),
+        ...(formData.telefone.trim()
+          ? { telefone: formData.telefone.trim() }
+          : {}),
       };
 
       const res = await fetch(`${API_URL}/usuario`, {
@@ -273,35 +279,22 @@ export default function NovoUsuarioPage() {
                 />
               </div>
 
-              <div>
+              <div className="md:col-span-2">
                 <label className="mb-2 block text-sm font-medium text-[#0A2540]">
-                  Especialidade (opcional)
+                  CPF (opcional)
                 </label>
                 <input
                   type="text"
-                  value={formData.especialidade}
-                  onChange={(e) =>
-                    setFormData({ ...formData, especialidade: e.target.value })
-                  }
-                  placeholder="Ex.: Geriatria, Cardiologia"
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-[#0A2540]">
-                  Registro Profissional (opcional)
-                </label>
-                <input
-                  type="text"
-                  value={formData.registro_profissional}
+                  inputMode="numeric"
+                  maxLength={14}
+                  value={formData.cpf}
                   onChange={(e) =>
                     setFormData({
                       ...formData,
-                      registro_profissional: e.target.value,
+                      cpf: e.target.value.replace(/\D/g, "").slice(0, 11),
                     })
                   }
-                  placeholder="Ex.: CRM / COREN"
+                  placeholder="11 dígitos numéricos"
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
               </div>

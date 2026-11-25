@@ -35,9 +35,8 @@ export default function PerfilPage() {
   const [formData, setFormData] = useState({
     nome: "",
     email: "",
+    cpf: "",
     telefone: "",
-    especialidade: "",
-    registro_profissional: "",
   });
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -58,9 +57,8 @@ export default function PerfilPage() {
       setFormData({
         nome: sessao.nome || "",
         email: sessao.email || "",
+        cpf: "",
         telefone: sessao.telefone || "",
-        especialidade: sessao.especialidade || "",
-        registro_profissional: sessao.registro_profissional || "",
       });
 
       try {
@@ -73,9 +71,8 @@ export default function PerfilPage() {
           setFormData({
             nome: String(u.nome || sessao.nome || ""),
             email: String(u.email || sessao.email || ""),
+            cpf: String(u.cpf || ""),
             telefone: String(u.telefone || ""),
-            especialidade: String(u.especialidade || ""),
-            registro_profissional: String(u.registro_profissional || ""),
           });
           if (u.foto_url) setFotoUrl(String(u.foto_url));
           if (u.clinica?.nome) setClinicaNome(String(u.clinica.nome));
@@ -101,13 +98,18 @@ export default function PerfilPage() {
       return;
     }
 
+    const cpfDigitos = formData.cpf.replace(/\D/g, "");
+    if (cpfDigitos && cpfDigitos.length !== 11) {
+      setErro("O CPF deve conter 11 dígitos numéricos.");
+      setSalvando(false);
+      return;
+    }
+
     try {
       const payload = {
         nome: formData.nome.trim(),
-        telefone: formData.telefone.trim() || undefined,
-        especialidade: formData.especialidade.trim() || undefined,
-        registro_profissional:
-          formData.registro_profissional.trim() || undefined,
+        cpf: cpfDigitos,
+        telefone: formData.telefone.trim(),
       };
 
       const res = await fetch(`${API_URL}/usuario/${userId}`, {
@@ -126,9 +128,7 @@ export default function PerfilPage() {
 
       salvarUsuarioSessao({
         nome: payload.nome,
-        telefone: payload.telefone || "",
-        especialidade: payload.especialidade || "",
-        registro_profissional: payload.registro_profissional || "",
+        telefone: payload.telefone,
       });
 
       setMensagem("Perfil atualizado com sucesso!");
@@ -198,7 +198,7 @@ export default function PerfilPage() {
             Meu Perfil
           </h1>
           <p className="mt-2 text-gray-600">
-            Atualize seus dados pessoais e profissionais exibidos na plataforma.
+            Atualize seus dados pessoais e de contato exibidos na plataforma.
           </p>
         </div>
 
@@ -314,6 +314,26 @@ export default function PerfilPage() {
 
                 <div>
                   <label className="mb-2 block text-sm font-medium text-[#0A2540]">
+                    CPF
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={14}
+                    value={formData.cpf}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        cpf: e.target.value.replace(/\D/g, "").slice(0, 11),
+                      })
+                    }
+                    placeholder="11 dígitos numéricos"
+                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="mb-2 block text-sm font-medium text-[#0A2540]">
                     Telefone
                   </label>
                   <input
@@ -323,42 +343,6 @@ export default function PerfilPage() {
                       setFormData({ ...formData, telefone: e.target.value })
                     }
                     placeholder="(11) 99999-9999"
-                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-[#0A2540]">
-                    Especialidade / Área
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.especialidade}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        especialidade: e.target.value,
-                      })
-                    }
-                    placeholder="Ex.: Geriatria, Enfermagem, Cuidador"
-                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-[#0A2540]">
-                    Registro Profissional (CRM / COREN)
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.registro_profissional}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        registro_profissional: e.target.value,
-                      })
-                    }
-                    placeholder="Ex.: CRM-SP 123456"
                     className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   />
                 </div>

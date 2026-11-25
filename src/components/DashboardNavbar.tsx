@@ -8,12 +8,14 @@ import { gerarAlertasClinicos } from "@/components/MetricCard";
 import {
   API_URL,
   UsuarioSessao,
+  buscarClinicaPorIdNoBackend,
   getAuthHeaders,
   getClinicaDados,
   getTokenSessao,
   getUsuarioSessao,
   isAdminPerfil,
   limparSessao,
+  salvarUsuarioSessao,
 } from "@/lib/clinica";
 import {
   Activity,
@@ -262,16 +264,21 @@ export default function DashboardNavbar() {
 
     setUsuario(sessao);
 
-    if (sessao.clinica_nome) {
-      setNomeClinica(sessao.clinica_nome);
+    const dadosLocais = getClinicaDados();
+    if (dadosLocais.nome) {
+      setNomeClinica(dadosLocais.nome);
+      return;
     }
 
-    if (sessao.clinica_id || getTokenSessao()) {
+    if (sessao.clinica_id && getTokenSessao()) {
       setBuscandoClinica(true);
       try {
-        const dadosClinica = await getClinicaDados();
-        if (dadosClinica?.nome) {
-          setNomeClinica(dadosClinica.nome);
+        const clinicaBackend = await buscarClinicaPorIdNoBackend(
+          sessao.clinica_id
+        );
+        if (clinicaBackend?.nome) {
+          setNomeClinica(clinicaBackend.nome);
+          salvarUsuarioSessao({ clinica_nome: clinicaBackend.nome });
         }
       } finally {
         setBuscandoClinica(false);
@@ -414,7 +421,6 @@ export default function DashboardNavbar() {
         </nav>
 
         <div className="flex items-center gap-2">
-          {/* SINO DE NOTIFICAÇÕES */}
           <div className="relative" ref={notifRef}>
             <button
               type="button"
@@ -547,7 +553,6 @@ export default function DashboardNavbar() {
             )}
           </div>
 
-          {/* MENU DO USUÁRIO */}
           <div className="relative" ref={dropdownRef}>
             <button
               type="button"
