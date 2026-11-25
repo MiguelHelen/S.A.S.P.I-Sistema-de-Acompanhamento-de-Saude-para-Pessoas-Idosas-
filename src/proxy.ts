@@ -26,14 +26,35 @@ function parseJsonResiliente(raw?: string): any {
   return null;
 }
 
-function extrairPerfilCookie(rawCookie?: string): string {
+function decodificarJwtPerfil(token?: string): string {
+  if (!token) return "";
+  try {
+    const partes = token.split(".");
+    if (partes.length < 2) return "";
+    const base64 = partes[1].replace(/-/g, "+").replace(/_/g, "/");
+    const json = Buffer.from(base64, "base64").toString("utf-8");
+    const payload = JSON.parse(json);
+    const role = String(payload?.perfil || payload?.role || "")
+      .trim()
+      .toUpperCase();
+    return role === "ADMIN" ? "ADMINISTRADOR" : role;
+  } catch {
+    return "";
+  }
+}
+
+function extrairPerfilCookie(rawCookie?: string, token?: string): string {
   const parsed = parseJsonResiliente(rawCookie);
-  if (!parsed) return "";
-  const user = parsed?.user || parsed?.usuario || parsed;
-  const role = String(user?.perfil || user?.role || "")
-    .trim()
-    .toUpperCase();
-  return role === "ADMIN" ? "ADMINISTRADOR" : role;
+  if (parsed) {
+    const user = parsed?.user || parsed?.usuario || parsed;
+    const role = String(user?.perfil || user?.role || "")
+      .trim()
+      .toUpperCase();
+    if (role) {
+      return role === "ADMIN" ? "ADMINISTRADOR" : role;
+    }
+  }
+  return decodificarJwtPerfil(token);
 }
 
 export function proxy(req: NextRequest) {
@@ -45,7 +66,7 @@ export function proxy(req: NextRequest) {
 
   const token = req.cookies.get("saspi_token")?.value;
   const userCookie = req.cookies.get("saspi_user")?.value;
-  const role = extrairPerfilCookie(userCookie);
+  const role = extrairPerfilCookie(userCookie, token);
 
   if (!token) {
     return NextResponse.redirect(new URL("/login", req.url));
