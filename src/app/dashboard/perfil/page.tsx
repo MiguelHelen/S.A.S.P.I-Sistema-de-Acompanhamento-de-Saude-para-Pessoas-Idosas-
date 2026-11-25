@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import DashboardNavbar from "@/components/DashboardNavbar";
 import ImageCropModal from "@/components/ImageCropModal";
 import {
@@ -22,6 +23,7 @@ import {
 } from "lucide-react";
 
 export default function PerfilPage() {
+  const router = useRouter();
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [enviandoFoto, setEnviandoFoto] = useState(false);
@@ -45,50 +47,102 @@ export default function PerfilPage() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
-    async function carregarPerfil() {
-      const sessao = getUsuarioSessao();
-      if (!sessao?.id) {
-        setErro("Sessão de usuário não encontrada.");
-        setCarregando(false);
-        return;
-      }
+  const carregarPerfil = useCallback(async () => {
+    const token = getTokenSessao();
+    const sessao = getUsuarioSessao();
 
-      setUserId(sessao.id);
-      setPerfil(sessao.perfil);
-      setClinicaNome(sessao.clinica_nome);
-      setFotoUrl(sessao.foto_url || "");
-      setFormData({
-        nome: sessao.nome || "",
-        email: sessao.email || "",
-        cpf: "",
-        telefone: sessao.telefone || "",
-      });
+    if (!token) {
+      router.push("/login");
+      return;
+    }
 
-      try {
+    if (sessao) {
+      setErro("");
+      if (sessao.id) setUserId(sessao.id);
+      if (sessao.perfil) setPerfil(sessao.perfil);
+      if (sessao.clinica_nome) setClinicaNome(sessao.clinica_nome);
+      if (sessao.foto_url) setFotoUrl(sessao.foto_url);
+      setFormData((prev) => ({
+        nome: sessao.nome || prev.nome,
+        email: sessao.email || prev.email,
+        cpf: sessao.cpf || prev.cpf,
+        telefone: sessao.telefone || prev.telefone,
+      }));
+    }
+
+    try {
+      let dadosApi: any = null;
+
+      if (sessao?.id) {
         const res = await fetch(`${API_URL}/usuario/${sessao.id}`, {
-          headers: getAuthHeaders(false),
+          headers: getAuthHeaders(false, token),
         });
         if (res.ok) {
           const raw = await res.json();
-          const u = raw?.data || raw;
-          setFormData({
-            nome: String(u.nome || sessao.nome || ""),
-            email: String(u.email || sessao.email || ""),
-            cpf: String(u.cpf || ""),
-            telefone: String(u.telefone || ""),
-          });
-          if (u.foto_url) setFotoUrl(String(u.foto_url));
-          if (u.clinica?.nome) setClinicaNome(String(u.clinica.nome));
+          dadosApi = raw?.data || raw;
         }
-      } catch {
-      } finally {
-        setCarregando(false);
       }
-    }
 
+      if (!dadosApi) {
+        const resLista = await fetch(`${API_URL}/usuario`, {
+          headers: getAuthHeaders(false, token),
+        });
+        if (resLista.ok) {
+          const rawLista = await resLista.json();
+          const lista = Array.isArray(rawLista)
+            ? rawLista
+            : rawLista?.data || [];
+          dadosApi = lista.find(
+            (u: any) =>
+              (sessao?.id && String(u.id) === String(sessao.id)) ||
+              (sessao?.email &&
+                String(u.email || "").toLowerCase() ===
+                  sessao.email.toLowerCase())
+          );
+        }
+      }
+
+      if (dadosApi) {
+        setErro("");
+        setUserId(String(dadosApi.id || sessao?.id || ""));
+        setPerfil(String(dadosApi.perfil || sessao?.perfil || ""));
+        setClinicaNome(
+          String(dadosApi.clinica?.nome || sessao?.clinica_nome || "")
+        );
+        if (dadosApi.foto_url) setFotoUrl(String(dadosApi.foto_url));
+
+        const atualizado = {
+          nome: String(dadosApi.nome || sessao?.nome || ""),
+          email: String(dadosApi.email || sessao?.email || ""),
+          cpf: String(dadosApi.cpf || sessao?.cpf || ""),
+          telefone: String(dadosApi.telefone || sessao?.telefone || ""),
+        };
+        setFormData(atualizado);
+
+        salvarUsuarioSessao({
+          ...dadosApi,
+          ...atualizado,
+          clinica_nome: dadosApi.clinica?.nome || sessao?.clinica_nome || "",
+        });
+      } else if (!sessao?.id && !sessao?.email) {
+        setErro("Sessão de usuário não encontrada. Faça login novamente.");
+      }
+    } catch {
+      if (!sessao?.id && !sessao?.email) {
+        setErro("Sessão de usuário não encontrada. Faça login novamente.");
+      }
+    } finally {
+      setCarregando(false);
+    }
+  }, [router]);
+
+  useEffect(() => {
     carregarPerfil();
-  }, []);
+    window.addEventListener("saspi_user_updated", carregarPerfil);
+    return () => {
+      window.removeEventListener("saspi_user_updated", carregarPerfil);
+    };
+  }, [carregarPerfil]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -97,7 +151,7 @@ export default function PerfilPage() {
     setMensagem("");
 
     if (!userId) {
-      setErro("Usuário não identificado.");
+      setErro("Usuário não identificado. Faça login novamente.");
       setSalvando(false);
       return;
     }
@@ -132,6 +186,7 @@ export default function PerfilPage() {
 
       salvarUsuarioSessao({
         nome: payload.nome,
+        cpf: payload.cpf,
         telefone: payload.telefone,
       });
 
@@ -299,7 +354,7 @@ export default function PerfilPage() {
                 />
                 <button
                   type="button"
-                  disabled={enviandoFoto}
+                  disabled={enviandoFoto || !userId}
                   onClick={() => fileInputRef.current?.click()}
                   className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-[#FAFCFE] px-4 py-2.5 text-xs font-semibold text-[#0A2540] transition hover:border-[#1565C0] hover:text-[#1565C0] disabled:opacity-60"
                 >
@@ -384,7 +439,7 @@ export default function PerfilPage() {
               <div className="mt-6 flex justify-end">
                 <button
                   type="submit"
-                  disabled={salvando}
+                  disabled={salvando || !userId}
                   className="inline-flex items-center gap-2 rounded-xl bg-[#1565C0] px-6 py-3 font-medium text-white shadow-sm transition hover:bg-[#0A2540] disabled:opacity-70"
                 >
                   {salvando ? (
