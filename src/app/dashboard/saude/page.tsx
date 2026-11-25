@@ -4,7 +4,16 @@ import { useEffect, useState, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
 import DashboardNavbar from "@/components/DashboardNavbar";
 import PatientSelector, { Idoso } from "@/components/PatientSelector";
-import MetricCard, { avaliarIndicadorClinico } from "@/components/MetricCard";
+import MetricCard, {
+  avaliarIndicadorClinico,
+  gerarAlertasClinicos,
+} from "@/components/MetricCard";
+import {
+  API_URL,
+  getAuthHeaders,
+  getIdosoAtivoSessao,
+  getTokenSessao,
+} from "@/lib/clinica";
 import {
   HeartPulse,
   Activity,
@@ -38,10 +47,6 @@ interface AlertaSaudePayload {
   indicador?: string;
   valor?: string | number;
 }
-
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://perfect-bravery-production-5ce7.up.railway.app";
 
 function normalizar(texto?: string | null): string {
   return (texto || "")
@@ -82,32 +87,23 @@ export default function SaudePage() {
   const [idosoAtivo, setIdosoAtivo] = useState<Idoso | null>(null);
   const [registros, setRegistros] = useState<RegistroSaudeItem[]>([]);
   const [carregando, setCarregando] = useState(false);
-  const [alertaAtivo, setAlertaAtivo] = useState<AlertaSaudePayload | null>(null);
+  const [alertaAtivo, setAlertaAtivo] = useState<AlertaSaudePayload | null>(
+    null
+  );
 
   useEffect(() => {
-    const saved = localStorage.getItem("saspi_active_elderly");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed && parsed.id) {
-          setIdosoAtivo(parsed);
-        }
-      } catch {
-        // Ignora JSON inválido
-      }
+    const ativo = getIdosoAtivoSessao<Idoso>();
+    if (ativo?.id) {
+      setIdosoAtivo(ativo);
     }
   }, []);
 
   const carregarRegistros = useCallback(async (idosoId: string) => {
-    const token = localStorage.getItem("saspi_token");
     setCarregando(true);
 
     try {
       const res = await fetch(`${API_URL}/registro-saude/idoso/${idosoId}`, {
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: getAuthHeaders(true),
       });
 
       if (!res.ok) {
@@ -134,7 +130,7 @@ export default function SaudePage() {
     setAlertaAtivo(null);
     carregarRegistros(idosoAtivo.id);
 
-    const token = localStorage.getItem("saspi_token");
+    const token = getTokenSessao();
     const socket: Socket = io(API_URL, {
       transports: ["websocket", "polling"],
       auth: token ? { token } : undefined,
@@ -152,6 +148,7 @@ export default function SaudePage() {
         if (novo?.id && prev.some((r) => r.id === novo.id)) return prev;
         return [novo, ...prev];
       });
+      window.dispatchEvent(new Event("saspi_alerta_clinico"));
     });
 
     socket.on("alerta-saude", (payload: AlertaSaudePayload) => {
@@ -171,7 +168,9 @@ export default function SaudePage() {
     window.dispatchEvent(new Event("saspi_elderly_updated"));
   }
 
-  const ultimoPorPredicado = (predicado: (nomeNorm: string) => boolean): string => {
+  const ultimoPorPredicado = (
+    predicado: (nomeNorm: string) => boolean
+  ): string => {
     const encontrado = registros.find((item) =>
       predicado(normalizar(item.indicador_saude?.nome))
     );
@@ -182,7 +181,8 @@ export default function SaudePage() {
     (n) => n.includes("frequencia") || n.includes("cardiaca") || n.includes("fc")
   );
   const valorSpo2 = ultimoPorPredicado(
-    (n) => n.includes("saturacao") || n.includes("oxigenacao") || n.includes("spo2")
+    (n) =>
+      n.includes("saturacao") || n.includes("oxigenacao") || n.includes("spo2")
   );
   const valorTemp = ultimoPorPredicado(
     (n) => n.includes("temperatura") || n.includes("termica")
@@ -195,6 +195,13 @@ export default function SaudePage() {
   const avSpo2 = avaliarIndicadorClinico("spo2", valorSpo2);
   const avTemp = avaliarIndicadorClinico("temp", valorTemp);
   const avPa = avaliarIndicadorClinico("pa", valorPa);
+
+  const alertasLimiares = gerarAlertasClinicos({
+    fc: valorFc,
+    spo2: valorSpo2,
+    temp: valorTemp,
+    pa: valorPa,
+  });
 
   return (
     <main className="min-h-screen bg-[#F2F7FB]">
@@ -215,30 +222,60 @@ export default function SaudePage() {
           </p>
         </div>
 
-        {alertaAtivo && (
-          <div className="mt-6 flex items-center justify-between gap-4 rounded-2xl border border-red-300 bg-red-50 p-4 text-red-900 shadow-sm">
-            <div className="flex items-center gap-3">
-              <AlertTriangle size={22} className="shrink-0 text-red-600" />
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-red-700">
-                  Alerta Clínico em Tempo Real
-                </p>
-                <p className="text-sm font-semibold">
-                  {alertaAtivo.mensagem ||
-                    `Alteração crítica detectada em ${
-                      alertaAtivo.indicador || "indicador vital"
-                    }: ${alertaAtivo.valor ?? ""}`}
-                </p>
-              </div>
-            </div>
+        {(alertaAtivo || alertasLimiares.length > 0) && (
+          <div className="mt-6 space-y-3">
+            {alertaAtivo && (
+              <div className="flex items-center justify-between gap-4 rounded-2xl border border-red-300 bg-red-50 p-4 text-red-900 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <AlertTriangle size={22} className="shrink-0 text-red-600" />
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-red-700">
+                      Alerta Clínico em Tempo Real
+                    </p>
+                    <p className="text-sm font-semibold">
+                      {alertaAtivo.mensagem ||
+                        `Alteração crítica detectada em ${
+                          alertaAtivo.indicador || "indicador vital"
+                        }: ${alertaAtivo.valor ?? ""}`}
+                    </p>
+                  </div>
+                </div>
 
-            <button
-              type="button"
-              onClick={() => setAlertaAtivo(null)}
-              className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100"
-            >
-              Dispensar
-            </button>
+                <button
+                  type="button"
+                  onClick={() => setAlertaAtivo(null)}
+                  className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100"
+                >
+                  Dispensar
+                </button>
+              </div>
+            )}
+
+            {alertasLimiares.length > 0 && (
+              <div className="rounded-2xl border border-red-200 bg-red-50/90 p-4 text-red-900 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle
+                    size={21}
+                    className="mt-0.5 shrink-0 text-red-600"
+                  />
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-red-700">
+                      Atenção Clínica — Indicadores fora do padrão seguro
+                    </p>
+                    <ul className="mt-1.5 space-y-1 text-sm text-red-800">
+                      {alertasLimiares.map((al) => (
+                        <li key={al.id}>
+                          <strong>• {al.indicador}:</strong> {al.mensagem}{" "}
+                          <span className="text-xs text-red-600">
+                            ({al.referencia})
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -318,7 +355,9 @@ export default function SaudePage() {
                         </p>
                         <p className="text-xs text-gray-500">
                           Origem: {item.origem}
-                          {item.usuario?.nome ? ` • Por: ${item.usuario.nome}` : ""}
+                          {item.usuario?.nome
+                            ? ` • Por: ${item.usuario.nome}`
+                            : ""}
                         </p>
                       </div>
                       <span className="text-xs font-medium text-gray-400">
