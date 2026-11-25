@@ -11,6 +11,8 @@ import {
   Mail,
   Loader2,
   AlertCircle,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -24,6 +26,7 @@ export default function Login() {
 
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
+  const [mostrarSenha, setMostrarSenha] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingSSO, setLoadingSSO] = useState<"GOOGLE" | null>(null);
   const [erro, setErro] = useState("");
@@ -241,13 +244,21 @@ export default function Login() {
                     />
                     <input
                       id="senha"
-                      type="password"
+                      type={mostrarSenha ? "text" : "password"}
                       required
                       value={senha}
                       onChange={(e) => setSenha(e.target.value)}
                       placeholder="Digite sua senha"
-                      className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-12 pr-4 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                      className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-12 pr-12 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setMostrarSenha((prev) => !prev)}
+                      aria-label={mostrarSenha ? "Ocultar senha" : "Ver senha"}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-[#0A2540]"
+                    >
+                      {mostrarSenha ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
                   </div>
                 </div>
 
