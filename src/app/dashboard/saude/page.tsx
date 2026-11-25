@@ -1,439 +1,347 @@
 "use client";
 
-import {
-  useState,
-  useEffect,
-  useCallback,
-  useRef,
-  type ComponentProps,
-} from "react";
+import { useEffect, useState, useCallback } from "react";
+import { io, Socket } from "socket.io-client";
 import DashboardNavbar from "@/components/DashboardNavbar";
 import PatientSelector, { Idoso } from "@/components/PatientSelector";
-import HealthChart from "@/components/HealthChart";
-
-type PontoGrafico = NonNullable<
-  ComponentProps<typeof HealthChart>["dados"]
->[number];
-import { avaliarIndicadorClinico } from "@/lib/clinicalRules";
-import {
-  API_URL,
-  getAuthHeaders,
-  getIdosoAtivoSessao,
-  getUsuarioSessao,
-  isAdminPerfil,
-} from "@/lib/clinica";
-import { io, Socket } from "socket.io-client";
+import MetricCard, { avaliarIndicadorClinico } from "@/components/MetricCard";
 import {
   HeartPulse,
-  Wind,
-  Thermometer,
   Activity,
-  Plus,
-  CheckCircle2,
+  Thermometer,
+  Droplet,
+  Clock,
   Loader2,
-  Wifi,
-  WifiOff,
   AlertTriangle,
-  ShieldAlert,
 } from "lucide-react";
 
-interface MetricasAtuais {
-  bpm: string;
-  spo2: string;
-  temperatura: string;
-  pressao: string;
-  ultimaAtualizacao: string;
+interface RegistroSaudeItem {
+  id: string;
+  idoso_id: string;
+  valor_numerico?: number | string | null;
+  valor_categorico?: string | null;
+  data_hora: string;
+  origem: string;
+  indicador_saude?: {
+    nome?: string | null;
+    unidade_padrao?: string | null;
+    unidade?: string | null;
+  } | null;
+  usuario?: {
+    nome?: string | null;
+  } | null;
+}
+
+interface AlertaSaudePayload {
+  idoso_id?: string;
+  mensagem?: string;
+  indicador?: string;
+  valor?: string | number;
+}
+
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://perfect-bravery-production-5ce7.up.railway.app";
+
+function normalizar(texto?: string | null): string {
+  return (texto || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function extrairValorTexto(item: RegistroSaudeItem): string {
+  if (item.valor_categorico && String(item.valor_categorico).trim() !== "") {
+    return String(item.valor_categorico);
+  }
+  if (
+    item.valor_numerico !== undefined &&
+    item.valor_numerico !== null &&
+    String(item.valor_numerico).trim() !== ""
+  ) {
+    return String(item.valor_numerico);
+  }
+  return "--";
+}
+
+function formatarDataHora(dataHora?: string): string {
+  if (!dataHora) return "--";
+  const d = new Date(dataHora);
+  if (Number.isNaN(d.getTime())) return "--";
+  return d.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export default function SaudePage() {
-  const [autorizado, setAutorizado] = useState<boolean | null>(null);
   const [idosoAtivo, setIdosoAtivo] = useState<Idoso | null>(null);
-  const [userPerfil, setUserPerfil] = useState<string>("");
-  const [metricas, setMetricas] = useState<MetricasAtuais>({
-    bpm: "--",
-    spo2: "--",
-    temperatura: "--",
-    pressao: "--",
-    ultimaAtualizacao: "Aguardando dados...",
-  });
-  const [pontosGrafico, setPontosGrafico] = useState<PontoGrafico[]>([]);
-  const [carregando, setCarregando] = useState(true);
-  const [socketConectado, setSocketConectado] = useState(false);
-  const [alertaEmergencia, setAlertaEmergencia] = useState<string | null>(null);
-
-  const socketRef = useRef<Socket | null>(null);
+  const [registros, setRegistros] = useState<RegistroSaudeItem[]>([]);
+  const [carregando, setCarregando] = useState(false);
+  const [alertaAtivo, setAlertaAtivo] = useState<AlertaSaudePayload | null>(null);
 
   useEffect(() => {
-    const sessao = getUsuarioSessao();
-    if (!sessao || isAdminPerfil(sessao.perfil)) {
-      setAutorizado(false);
-      setCarregando(false);
-      return;
-    }
-
-    setAutorizado(true);
-    setUserPerfil(sessao.perfil);
-
-    const ativo = getIdosoAtivoSessao<Idoso>();
-    if (ativo?.id) {
-      setIdosoAtivo(ativo);
-    } else {
-      setCarregando(false);
+    const saved = localStorage.getItem("saspi_active_elderly");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.id) {
+          setIdosoAtivo(parsed);
+        }
+      } catch {
+        // Ignora JSON inválido
+      }
     }
   }, []);
 
-  const carregarTelemetria = useCallback(async (pacienteId: string) => {
+  const carregarRegistros = useCallback(async (idosoId: string) => {
+    const token = localStorage.getItem("saspi_token");
     setCarregando(true);
+
     try {
-      const res = await fetch(
-        `${API_URL}/registro-saude/idoso/${pacienteId}?limit=20`,
-        {
-          headers: getAuthHeaders(false),
+      const res = await fetch(`${API_URL}/registro-saude/idoso/${idosoId}`, {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-      );
+      });
 
-      if (res.ok) {
-        const raw = await res.json();
-        const lista = Array.isArray(raw) ? raw : raw?.data || [];
-
-        const ultimos: MetricasAtuais = {
-          bpm: "--",
-          spo2: "--",
-          temperatura: "--",
-          pressao: "--",
-          ultimaAtualizacao:
-            lista.length > 0
-              ? new Date(lista[0].data_registro).toLocaleString("pt-BR", {
-                  day: "2-digit",
-                  month: "2-digit",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
-              : "Sem registros",
-        };
-
-        const pontos: PontoGrafico[] = [];
-
-        for (let i = lista.length - 1; i >= 0; i--) {
-          const item = lista[i];
-          const tipo = (item.tipo || "").toUpperCase();
-
-          if (tipo === "BATIMENTOS" || tipo === "BPM") {
-            const val = Number(item.valor_numerico);
-            if (!Number.isNaN(val)) {
-              ultimos.bpm = `${val} bpm`;
-              const horaFmt = new Date(item.data_registro).toLocaleTimeString(
-                "pt-BR",
-                {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                },
-              );
-              pontos.push({
-                horario: horaFmt,
-                valor: val,
-              } as PontoGrafico);
-            }
-          } else if (tipo === "SPO2" || tipo === "OXIGENACAO") {
-            if (item.valor_numerico != null) {
-              ultimos.spo2 = `${item.valor_numerico}%`;
-            }
-          } else if (tipo === "TEMPERATURA") {
-            if (item.valor_numerico != null) {
-              ultimos.temperatura = `${item.valor_numerico}°C`;
-            }
-          } else if (tipo === "PRESSAO") {
-            ultimos.pressao =
-              item.valor_categorico || `${item.valor_numerico} mmHg`;
-          }
-        }
-
-        setMetricas(ultimos);
-        setPontosGrafico(pontos.slice(-12));
+      if (!res.ok) {
+        setRegistros([]);
+        return;
       }
+
+      const data = await res.json();
+      setRegistros(Array.isArray(data) ? data : []);
     } catch {
+      setRegistros([]);
     } finally {
       setCarregando(false);
     }
   }, []);
 
   useEffect(() => {
-    if (!idosoAtivo?.id || autorizado !== true) return;
-
-    carregarTelemetria(idosoAtivo.id);
-
-    if (socketRef.current) {
-      socketRef.current.disconnect();
+    if (!idosoAtivo?.id) {
+      setRegistros([]);
+      setAlertaAtivo(null);
+      return;
     }
 
-    const wsUrl = API_URL.replace(/^http/, "ws");
-    const socket = io(wsUrl, {
+    setAlertaAtivo(null);
+    carregarRegistros(idosoAtivo.id);
+
+    const token = localStorage.getItem("saspi_token");
+    const socket: Socket = io(API_URL, {
       transports: ["websocket", "polling"],
+      auth: token ? { token } : undefined,
+      query: { idosoId: idosoAtivo.id },
     });
 
     socket.on("connect", () => {
-      setSocketConectado(true);
-      socket.emit("join-idoso", { idosoId: idosoAtivo.id });
+      socket.emit("entrar-sala-idoso", idosoAtivo.id);
     });
+    socket.emit("entrar-sala-idoso", idosoAtivo.id);
 
-    socket.on("disconnect", () => {
-      setSocketConectado(false);
-    });
-
-    socket.on("novo-registro-saude", (payload: any) => {
-      if (payload?.idoso_id !== idosoAtivo.id) return;
-
-      const tipo = (payload.tipo || "").toUpperCase();
-      const agora = new Date().toLocaleTimeString("pt-BR", {
-        hour: "2-digit",
-        minute: "2-digit",
+    socket.on("novo-registro-saude", (novo: RegistroSaudeItem) => {
+      if (novo?.idoso_id && novo.idoso_id !== idosoAtivo.id) return;
+      setRegistros((prev) => {
+        if (novo?.id && prev.some((r) => r.id === novo.id)) return prev;
+        return [novo, ...prev];
       });
-
-      let novoBpm: number | null = null;
-
-      if (
-        (tipo === "BATIMENTOS" || tipo === "BPM") &&
-        payload.valor_numerico != null
-      ) {
-        const val = Number(payload.valor_numerico);
-        if (!Number.isNaN(val)) {
-          novoBpm = val;
-        }
-      }
-
-      setMetricas((prev) => {
-        const next = { ...prev, ultimaAtualizacao: `Agora (${agora})` };
-        if (novoBpm !== null) {
-          next.bpm = `${novoBpm} bpm`;
-        } else if (tipo === "SPO2" || tipo === "OXIGENACAO") {
-          next.spo2 = `${payload.valor_numerico}%`;
-        } else if (tipo === "TEMPERATURA") {
-          next.temperatura = `${payload.valor_numerico}°C`;
-        } else if (tipo === "PRESSAO") {
-          next.pressao =
-            payload.valor_categorico || `${payload.valor_numerico} mmHg`;
-        }
-        return next;
-      });
-
-      if (novoBpm !== null) {
-        setPontosGrafico((g) => [
-          ...g.slice(-11),
-          { horario: agora, valor: novoBpm },
-        ]);
-      }
-
-      const avaliacao = avaliarIndicadorClinico(
-        tipo,
-        payload.valor_numerico ?? payload.valor_categorico,
-      );
-      if (avaliacao.status === "alerta") {
-        setAlertaEmergencia(
-          `Alerta Fisiológico: ${tipo} em ${
-            payload.valor_numerico ?? payload.valor_categorico
-          } (${avaliacao.rotulo})`,
-        );
-      }
     });
 
-    socketRef.current = socket;
+    socket.on("alerta-saude", (payload: AlertaSaudePayload) => {
+      if (payload?.idoso_id && payload.idoso_id !== idosoAtivo.id) return;
+      setAlertaAtivo(payload);
+      window.dispatchEvent(new Event("saspi_alerta_clinico"));
+    });
 
     return () => {
       socket.disconnect();
     };
-  }, [idosoAtivo, autorizado, carregarTelemetria]);
+  }, [idosoAtivo?.id, carregarRegistros]);
 
-  const evalBpm = avaliarIndicadorClinico("BATIMENTOS", metricas.bpm);
-  const evalSpo2 = avaliarIndicadorClinico("SPO2", metricas.spo2);
-  const evalTemp = avaliarIndicadorClinico("TEMPERATURA", metricas.temperatura);
-  const evalPressao = avaliarIndicadorClinico("PRESSAO", metricas.pressao);
-
-  const podeAferir =
-    userPerfil !== "FAMILIAR" && userPerfil !== "ADMINISTRADOR";
-
-  if (autorizado === false) {
-    return (
-      <main className="min-h-screen bg-[#F2F7FB]">
-        <DashboardNavbar />
-        <div className="mx-auto max-w-xl px-4 py-16 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
-            <ShieldAlert size={32} />
-          </div>
-          <h1 className="mt-4 text-2xl font-bold text-[#0A2540]">
-            Acesso Restrito
-          </h1>
-          <p className="mt-2 text-sm text-gray-600">
-            O módulo de telemetria e sinais vitais é destinado à equipe clínica
-            e familiares vinculados.
-          </p>
-        </div>
-      </main>
-    );
+  function handleSelectIdoso(selecionado: Idoso) {
+    setIdosoAtivo(selecionado);
+    localStorage.setItem("saspi_active_elderly", JSON.stringify(selecionado));
+    window.dispatchEvent(new Event("saspi_elderly_updated"));
   }
+
+  const ultimoPorPredicado = (predicado: (nomeNorm: string) => boolean): string => {
+    const encontrado = registros.find((item) =>
+      predicado(normalizar(item.indicador_saude?.nome))
+    );
+    return encontrado ? extrairValorTexto(encontrado) : "--";
+  };
+
+  const valorFc = ultimoPorPredicado(
+    (n) => n.includes("frequencia") || n.includes("cardiaca") || n.includes("fc")
+  );
+  const valorSpo2 = ultimoPorPredicado(
+    (n) => n.includes("saturacao") || n.includes("oxigenacao") || n.includes("spo2")
+  );
+  const valorTemp = ultimoPorPredicado(
+    (n) => n.includes("temperatura") || n.includes("termica")
+  );
+  const valorPa = ultimoPorPredicado(
+    (n) => n.includes("pressao") || n.includes("arterial") || n.includes("pa")
+  );
+
+  const avFc = avaliarIndicadorClinico("fc", valorFc);
+  const avSpo2 = avaliarIndicadorClinico("spo2", valorSpo2);
+  const avTemp = avaliarIndicadorClinico("temp", valorTemp);
+  const avPa = avaliarIndicadorClinico("pa", valorPa);
 
   return (
     <main className="min-h-screen bg-[#F2F7FB]">
       <DashboardNavbar />
 
       <div className="mx-auto max-w-7xl px-4 py-8 md:px-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
-                Telemetria & Sinais Vitais
-              </span>
-              <span
-                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                  socketConectado
-                    ? "bg-emerald-50 text-emerald-700"
-                    : "bg-gray-100 text-gray-500"
-                }`}
-              >
-                {socketConectado ? <Wifi size={12} /> : <WifiOff size={12} />}
-                {socketConectado ? "Tempo Real Ativo" : "Standby"}
-              </span>
-            </div>
-            <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0A2540] md:text-4xl">
-              Saúde do Paciente
-            </h1>
-            <p className="mt-2 text-gray-600">
-              Leituras fisiológicas contínuas captadas pela smartband e
-              registros manuais.
-            </p>
-          </div>
-
-          {podeAferir && (
-            <a
-              href="/dashboard/historico/novo"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-5 py-3 font-medium text-white shadow-sm transition hover:bg-[#0A2540]"
-            >
-              <Plus size={18} />
-              Registrar Aferição Manual
-            </a>
-          )}
+        <div>
+          <span className="text-sm font-semibold uppercase tracking-wider text-[#26A69A]">
+            Telemetria & Monitoramento
+          </span>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#0A2540] md:text-4xl">
+            Sinais Vitais
+          </h1>
+          <p className="mt-2 text-gray-600">
+            {idosoAtivo
+              ? `Aferições e histórico fisiológico de ${idosoAtivo.nome}.`
+              : "Selecione um paciente para visualizar os dados vitais."}
+          </p>
         </div>
 
-        <div className="mt-6">
-          <PatientSelector
-            selectedId={idosoAtivo?.id}
-            onSelect={(p) => setIdosoAtivo(p)}
-          />
-        </div>
-
-        {alertaEmergencia && (
-          <div className="mt-6 flex items-center justify-between gap-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-red-800 shadow-sm">
+        {alertaAtivo && (
+          <div className="mt-6 flex items-center justify-between gap-4 rounded-2xl border border-red-300 bg-red-50 p-4 text-red-900 shadow-sm">
             <div className="flex items-center gap-3">
               <AlertTriangle size={22} className="shrink-0 text-red-600" />
-              <p className="text-sm font-semibold">{alertaEmergencia}</p>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-red-700">
+                  Alerta Clínico em Tempo Real
+                </p>
+                <p className="text-sm font-semibold">
+                  {alertaAtivo.mensagem ||
+                    `Alteração crítica detectada em ${
+                      alertaAtivo.indicador || "indicador vital"
+                    }: ${alertaAtivo.valor ?? ""}`}
+                </p>
+              </div>
             </div>
+
             <button
               type="button"
-              onClick={() => setAlertaEmergencia(null)}
-              className="text-xs font-medium underline hover:text-red-950"
+              onClick={() => setAlertaAtivo(null)}
+              className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100"
             >
               Dispensar
             </button>
           </div>
         )}
 
-        <div className="mt-4 flex items-center gap-2 text-xs text-gray-500">
-          <CheckCircle2 size={14} className="text-[#26A69A]" />
-          <span>Última atualização: {metricas.ultimaAtualizacao}</span>
-        </div>
+        <div className="mt-8 space-y-6">
+          <PatientSelector
+            onSelect={handleSelectIdoso}
+            selectedId={idosoAtivo?.id}
+          />
 
-        {carregando ? (
-          <div className="mt-10 flex items-center justify-center py-12 text-gray-500">
-            <Loader2 size={24} className="animate-spin text-[#1565C0]" />
-            <span className="ml-2 text-sm">Sincronizando sinais vitais...</span>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <MetricCard
+              title="Frequência Cardíaca"
+              value={valorFc}
+              unit="bpm"
+              icon={<HeartPulse size={22} />}
+              statusLabel={avFc.label}
+              statusTone={avFc.tone}
+            />
+            <MetricCard
+              title="Saturação (SpO2)"
+              value={valorSpo2}
+              unit="%"
+              icon={<Activity size={22} />}
+              statusLabel={avSpo2.label}
+              statusTone={avSpo2.tone}
+            />
+            <MetricCard
+              title="Temperatura"
+              value={valorTemp}
+              unit="°C"
+              icon={<Thermometer size={22} />}
+              statusLabel={avTemp.label}
+              statusTone={avTemp.tone}
+            />
+            <MetricCard
+              title="Pressão Arterial"
+              value={valorPa === "--" ? "--/--" : valorPa}
+              unit="mmHg"
+              icon={<Droplet size={22} />}
+              statusLabel={avPa.label}
+              statusTone={avPa.tone}
+            />
           </div>
-        ) : (
-          <>
-            <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
-                    <HeartPulse size={22} />
-                  </div>
-                  <span
-                    className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${evalBpm.corBadge}`}
-                  >
-                    {evalBpm.rotulo}
-                  </span>
-                </div>
-                <p className="mt-5 text-sm font-medium text-gray-500">
-                  Frequência Cardíaca
-                </p>
-                <p className="mt-1 text-3xl font-bold text-[#0A2540]">
-                  {metricas.bpm}
+
+          <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-[#0A2540]">
+              Últimas Aferições Registradas
+            </h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Registros gerados por dispositivos vestíveis ou lançamentos manuais
+              da equipe.
+            </p>
+
+            {carregando ? (
+              <div className="mt-8 flex items-center justify-center gap-2 py-10 text-sm text-gray-500">
+                <Loader2 size={18} className="animate-spin text-[#1565C0]" />
+                Carregando aferições...
+              </div>
+            ) : registros.length > 0 ? (
+              <ul className="mt-6 space-y-3">
+                {registros.slice(0, 10).map((item) => {
+                  const nomeInd =
+                    item.indicador_saude?.nome || "Indicador de saúde";
+                  const unidadeRaw =
+                    item.indicador_saude?.unidade_padrao ||
+                    item.indicador_saude?.unidade;
+                  const unid = unidadeRaw ? ` ${unidadeRaw}` : "";
+                  return (
+                    <li
+                      key={item.id}
+                      className="flex flex-col justify-between gap-1 rounded-xl border border-gray-100 bg-[#FAFCFE] p-4 sm:flex-row sm:items-center"
+                    >
+                      <div>
+                        <p className="font-semibold text-[#0A2540]">
+                          {nomeInd}: {extrairValorTexto(item)}
+                          {unid}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Origem: {item.origem}
+                          {item.usuario?.nome ? ` • Por: ${item.usuario.nome}` : ""}
+                        </p>
+                      </div>
+                      <span className="text-xs font-medium text-gray-400">
+                        {formatarDataHora(item.data_hora)}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="mt-8 flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50/50 p-12 text-center">
+                <Clock size={36} className="text-gray-300" />
+                <h3 className="mt-4 font-semibold text-[#0A2540]">
+                  Sem aferições para este paciente
+                </h3>
+                <p className="mt-1 max-w-md text-sm text-gray-500">
+                  Assim que o dispositivo transmitir os dados ou for realizado um
+                  registro clínico, os índices aparecerão aqui.
                 </p>
               </div>
-
-              <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
-                    <Wind size={22} />
-                  </div>
-                  <span
-                    className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${evalSpo2.corBadge}`}
-                  >
-                    {evalSpo2.rotulo}
-                  </span>
-                </div>
-                <p className="mt-5 text-sm font-medium text-gray-500">
-                  Oxigenação (SpO₂)
-                </p>
-                <p className="mt-1 text-3xl font-bold text-[#0A2540]">
-                  {metricas.spo2}
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-                    <Thermometer size={22} />
-                  </div>
-                  <span
-                    className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${evalTemp.corBadge}`}
-                  >
-                    {evalTemp.rotulo}
-                  </span>
-                </div>
-                <p className="mt-5 text-sm font-medium text-gray-500">
-                  Temperatura Corporal
-                </p>
-                <p className="mt-1 text-3xl font-bold text-[#0A2540]">
-                  {metricas.temperatura}
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-                    <Activity size={22} />
-                  </div>
-                  <span
-                    className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${evalPressao.corBadge}`}
-                  >
-                    {evalPressao.rotulo}
-                  </span>
-                </div>
-                <p className="mt-5 text-sm font-medium text-gray-500">
-                  Pressão Arterial
-                </p>
-                <p className="mt-1 text-3xl font-bold text-[#0A2540]">
-                  {metricas.pressao}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-8 space-y-3">
-              <h2 className="text-base font-semibold text-[#0A2540]">
-                Curva de Frequência Cardíaca — {idosoAtivo?.nome || "Paciente"}
-              </h2>
-              <HealthChart dados={pontosGrafico} />
-            </div>
-          </>
-        )}
+            )}
+          </div>
+        </div>
       </div>
     </main>
   );

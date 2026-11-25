@@ -146,9 +146,9 @@ export default function Dashboard() {
       fetch(`${API_URL}/idoso?clinica_id=${user.clinica_id}`, {
         headers,
       }).then((r) => (r.ok ? r.json() : [])),
-      fetch(`${API_URL}/usuario-idoso`, { headers }).then((r) =>
-        r.ok ? r.json() : []
-      ),
+      fetch(`${API_URL}/usuario-idoso?clinica_id=${user.clinica_id}`, {
+        headers,
+      }).then((r) => (r.ok ? r.json() : [])),
     ])
       .then(([uList, iList, vList]) => {
         const usuariosClinica = Array.isArray(uList)
@@ -221,7 +221,7 @@ export default function Dashboard() {
               if (nomeInd.includes("card")) {
                 if (fcVal === "--") fcVal = valBruto;
                 const num = Number(r.valor_numerico ?? r.valor);
-                if (!Number.isNaN(num)) {
+                if (!Number.isNaN(num) && serieFc.length < 20) {
                   const dt = r.data_hora || r.created_at;
                   const hora = dt
                     ? new Date(dt).toLocaleTimeString("pt-BR", {
@@ -301,9 +301,9 @@ export default function Dashboard() {
     const token = getTokenSessao();
     if (!token) return;
 
-    const socket: Socket = io(API_URL.replace("http", "ws"), {
+    const socket: Socket = io(API_URL, {
       auth: { token },
-      transports: ["websocket"],
+      transports: ["websocket", "polling"],
     });
 
     socket.on("connect", () => {
@@ -311,13 +311,15 @@ export default function Dashboard() {
     });
 
     socket.on("novo-registro-saude", (registro: any) => {
+      if (registro?.idoso_id && registro.idoso_id !== idosoAtivo.id) return;
+
       const nomeInd = String(
-        registro.indicador_saude?.nome || registro.indicador_nome || ""
+        registro?.indicador_saude?.nome || registro?.indicador_nome || ""
       ).toLowerCase();
       const valBruto = String(
-        registro.valor_numerico ??
-          registro.valor_categorico ??
-          registro.valor ??
+        registro?.valor_numerico ??
+          registro?.valor_categorico ??
+          registro?.valor ??
           "--"
       );
 
@@ -325,7 +327,7 @@ export default function Dashboard() {
         const novoResumo = { ...prev };
         if (nomeInd.includes("card")) {
           novoResumo.fc = valBruto;
-          const num = Number(registro.valor_numerico ?? registro.valor);
+          const num = Number(registro?.valor_numerico ?? registro?.valor);
           if (!Number.isNaN(num)) {
             const hora = new Date().toLocaleTimeString("pt-BR", {
               hour: "2-digit",
@@ -348,13 +350,18 @@ export default function Dashboard() {
       window.dispatchEvent(new Event("saspi_elderly_updated"));
     });
 
-    socket.on("alerta-saude", (data: { mensagem: string }) => {
-      setAlertasEmergencia((prev) => [
-        ...prev,
-        { id: Date.now(), msg: data.mensagem },
-      ]);
-      window.dispatchEvent(new Event("saspi_elderly_updated"));
-    });
+    socket.on(
+      "alerta-saude",
+      (data: { mensagem?: string; msg?: string; idoso_id?: string }) => {
+        if (data?.idoso_id && data.idoso_id !== idosoAtivo.id) return;
+        const textoAlerta = data?.mensagem || data?.msg || "Alerta crítico de saúde.";
+        setAlertasEmergencia((prev) => [
+          ...prev,
+          { id: Date.now() + Math.random(), msg: textoAlerta },
+        ]);
+        window.dispatchEvent(new Event("saspi_elderly_updated"));
+      }
+    );
 
     return () => {
       socket.disconnect();

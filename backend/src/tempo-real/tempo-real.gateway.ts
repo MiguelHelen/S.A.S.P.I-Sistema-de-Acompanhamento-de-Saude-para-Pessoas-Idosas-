@@ -24,24 +24,33 @@ export class TempoRealGateway implements OnGatewayConnection, OnGatewayDisconnec
   ) {}
 
   async handleConnection(client: Socket) {
-    const authHeader = client.handshake.headers.authorization || client.handshake.auth?.token;
+    const authHeader =
+      client.handshake.headers.authorization ||
+      (client.handshake.auth as { token?: string } | undefined)?.token;
+
     if (!authHeader) {
       client.disconnect(true);
       return;
     }
-    const token = authHeader.replace('Bearer ', '');
+
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+    if (!token) {
+      client.disconnect(true);
+      return;
+    }
+
     const { data, error } = await this.supabase.client.auth.getUser(token);
 
     if (error || !data.user) {
       client.disconnect(true);
       return;
     }
-    // Salva o auth_id da sessão validada direto no cliente do socket
+
     client.data.user = data.user;
   }
 
-  handleDisconnect(client: Socket) {
-    // Tratamento de limpeza se necessário
+  handleDisconnect(_client: Socket) {
+    // Limpeza padrão gerenciada pelo Socket.IO
   }
 
   @SubscribeMessage('entrar-sala-idoso')
@@ -53,29 +62,36 @@ export class TempoRealGateway implements OnGatewayConnection, OnGatewayDisconnec
       return { status: 'error', message: 'Não autorizado' };
     }
 
+    if (!idosoId || typeof idosoId !== 'string') {
+      return { status: 'error', message: 'Identificador do paciente inválido.' };
+    }
+
     const authId = client.data.user.id;
 
-    // Localiza quem é o usuário interno mapeado para este token
     const usuarioInterno = await this.prisma.usuario.findUnique({
-      where: { auth_id: authId }
+      where: { auth_id: authId },
     });
 
     if (!usuarioInterno) {
       return { status: 'error', message: 'Usuário não encontrado na base.' };
     }
 
-    // Administrador entra onde quiser, equipe médica/cuidadores/familiares só com vínculo
     if (usuarioInterno.perfil !== 'ADMINISTRADOR') {
       const vinculo = await this.prisma.usuario_idoso.findFirst({
-        where: { usuario_id: usuarioInterno.id, idoso_id: idosoId }
+        where: { usuario_id: usuarioInterno.id, idoso_id: idosoId },
       });
+
       if (!vinculo) {
-        return { status: 'error', message: 'Acesso negado ao prontuário deste paciente.' };
+        return {
+          status: 'error',
+          message: 'Acesso negado ao prontuário deste paciente.',
+        };
       }
     }
 
-    client.join(`idoso-${idosoId}`);
-    return { status: 'ok', sala: `idoso-${idosoId}` };
+    const sala = `idoso-${idosoId}`;
+    client.join(sala);
+    return { status: 'ok', sala };
   }
 
   emitirNovoRegistro(idosoId: string, registro: any) {
