@@ -1,9 +1,29 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  FlatList,
+  ActivityIndicator,
+  Image,
+  DeviceEventEmitter,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../contexts/AuthContext';
 import { apiFetch } from '../api/client';
-import { ChevronRight } from 'lucide-react-native';
+import { ChevronRight, CheckCircle2 } from 'lucide-react-native';
+
+function calcularIdade(dataNasc?: string): string | null {
+  if (!dataNasc) return null;
+  const dt = new Date(dataNasc);
+  if (Number.isNaN(dt.getTime())) return null;
+  const hoje = new Date();
+  let idade = hoje.getFullYear() - dt.getFullYear();
+  const m = hoje.getMonth() - dt.getMonth();
+  if (m < 0 || (m === 0 && hoje.getDate() < dt.getDate())) idade--;
+  return idade >= 0 ? `${idade} anos` : null;
+}
 
 export default function SelectElderlyScreen({ navigation }: any) {
   const { usuario, token, logout } = useAuth();
@@ -17,23 +37,54 @@ export default function SelectElderlyScreen({ navigation }: any) {
     async function fetchVinculos() {
       try {
         const stored = await AsyncStorage.getItem('saspi_active_elderly');
-        if (stored) setIdAtivo(JSON.parse(stored).id);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed?.id) setIdAtivo(parsed.id);
+        }
 
-        const response = await apiFetch(`/usuario-idoso/usuario/${usuario?.id}`, {}, token);
-        const data = await response.json();
+        const perfilUpper = (usuario?.perfil || '').toUpperCase();
+        const response = usuario?.id
+          ? await apiFetch(`/usuario-idoso/usuario/${usuario.id}`, {}, token)
+          : null;
 
-        if (Array.isArray(data) && data.length > 0) {
-          if (!podeVoltar && (usuario?.perfil === 'IDOSO' || data.length === 1)) {
-            await AsyncStorage.setItem('saspi_active_elderly', JSON.stringify(data[0].idoso));
+        const raw = response && response.ok ? await response.json() : [];
+        const listaValida = (Array.isArray(raw) ? raw : []).filter((v: any) => v?.idoso?.id);
+
+        if (listaValida.length > 0) {
+          if (!podeVoltar && (perfilUpper === 'IDOSO' || listaValida.length === 1)) {
+            await AsyncStorage.setItem('saspi_active_elderly', JSON.stringify(listaValida[0].idoso));
+            DeviceEventEmitter.emit('saspi_elderly_changed');
             navigation.replace('MainTabs');
           } else {
-            setVinculos(data);
+            setVinculos(listaValida);
           }
-        } else if (!podeVoltar) {
+          return;
+        }
+
+        // Fallback quando o próprio IDOSO entra sem linha na tabela usuario-idoso
+        if (perfilUpper === 'IDOSO') {
+          const resIdosos = await apiFetch('/idoso', {}, token);
+          if (resIdosos.ok) {
+            const idosos = await resIdosos.json();
+            const listaIdosos = Array.isArray(idosos) ? idosos : idosos?.data || [];
+            const proprio = listaIdosos.find(
+              (i: any) =>
+                (usuario?.id && (i.usuario_id === usuario.id || i.usuario?.id === usuario.id)) ||
+                (usuario?.email && i.email?.toLowerCase() === usuario.email.toLowerCase()) ||
+                (usuario?.nome && i.nome?.trim().toLowerCase() === usuario.nome.trim().toLowerCase())
+            );
+            if (proprio?.id) {
+              await AsyncStorage.setItem('saspi_active_elderly', JSON.stringify(proprio));
+              DeviceEventEmitter.emit('saspi_elderly_changed');
+            }
+          }
+        }
+
+        if (!podeVoltar) {
           navigation.replace('MainTabs');
         }
       } catch (error) {
-        console.error('Erro ao procurar vínculos:', error);
+        console.error('Erro ao buscar vínculos:', error);
         if (!podeVoltar) navigation.replace('MainTabs');
       } finally {
         setLoading(false);
@@ -43,8 +94,10 @@ export default function SelectElderlyScreen({ navigation }: any) {
   }, [usuario, token, navigation, podeVoltar]);
 
   const handleSelectElderly = async (idoso: any) => {
+    if (!idoso?.id) return;
     setIdAtivo(idoso.id);
     await AsyncStorage.setItem('saspi_active_elderly', JSON.stringify(idoso));
+    DeviceEventEmitter.emit('saspi_elderly_changed');
     if (podeVoltar) {
       navigation.goBack();
     } else {
@@ -55,7 +108,7 @@ export default function SelectElderlyScreen({ navigation }: any) {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#00897B" />
+        <ActivityIndicator size="large" color="#159B87" />
       </View>
     );
   }
@@ -72,35 +125,55 @@ export default function SelectElderlyScreen({ navigation }: any) {
           <Text style={styles.logoutText}>{podeVoltar ? '← Voltar' : '← Sair'}</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Selecionar idoso</Text>
-        <Text style={styles.subtitle}>Escolha o idoso que deseja acompanhar.</Text>
+        <Text style={styles.subtitle}>Escolha o paciente que deseja acompanhar.</Text>
       </View>
 
       <FlatList
         data={vinculos}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 20 }}
+        keyExtractor={(item, idx) => item?.id || item?.idoso?.id || String(idx)}
+        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 30 }}
         renderItem={({ item }) => {
-          const isSelected = item.idoso.id === idAtivo;
+          const idoso = item?.idoso;
+          if (!idoso?.id) return null;
+          const isSelected = idoso.id === idAtivo;
+          const iniciais = (idoso.nome || 'ID')
+            .split(' ')
+            .slice(0, 2)
+            .map((p: string) => p[0])
+            .join('')
+            .toUpperCase();
+          const idade = calcularIdade(idoso.data_nascimento);
+          const subInfo = [idade, idoso.sexo].filter(Boolean).join(' • ') || 'Visualizar prontuário e rotina';
+
           return (
             <TouchableOpacity
               style={[styles.card, isSelected && styles.cardSelected]}
-              onPress={() => handleSelectElderly(item.idoso)}
+              onPress={() => handleSelectElderly(idoso)}
             >
-              <View style={[styles.avatarBox, isSelected && styles.avatarBoxSelected]}>
-                <Text style={[styles.avatarText, isSelected && styles.avatarTextSelected]}>
-                  {item.idoso.nome.substring(0, 2).toUpperCase()}
-                </Text>
-              </View>
+              {idoso.foto_url ? (
+                <Image
+                  source={{ uri: idoso.foto_url }}
+                  style={[styles.avatarImg, isSelected && styles.avatarImgSelected]}
+                />
+              ) : (
+                <View style={[styles.avatarBox, isSelected && styles.avatarBoxSelected]}>
+                  <Text style={[styles.avatarText, isSelected && styles.avatarTextSelected]}>
+                    {iniciais}
+                  </Text>
+                </View>
+              )}
+
               <View style={styles.cardInfo}>
-                <Text style={styles.cardName}>{item.idoso.nome}</Text>
-                <Text style={styles.cardDetail}>Visualizar prontuário e rotina</Text>
+                <Text style={styles.cardName}>{idoso.nome || 'Paciente'}</Text>
+                <Text style={styles.cardDetail}>{subInfo}</Text>
                 {isSelected && (
                   <View style={styles.badgeSelected}>
-                    <Text style={styles.badgeTextSelected}>Selecionado</Text>
+                    <CheckCircle2 size={12} color="#0F766E" />
+                    <Text style={styles.badgeTextSelected}>Em acompanhamento</Text>
                   </View>
                 )}
               </View>
-              <ChevronRight color={isSelected ? '#00897B' : '#A0AEC0'} size={20} />
+              <ChevronRight color={isSelected ? '#159B87' : '#A0AEC0'} size={22} />
             </TouchableOpacity>
           );
         }}
@@ -115,24 +188,74 @@ export default function SelectElderlyScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' },
-  blobTop: { position: 'absolute', top: -50, right: -50, width: 200, height: 200, borderRadius: 100, backgroundColor: '#E0F2F1', opacity: 0.8 },
+  container: { flex: 1, backgroundColor: '#F2F7FB' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F2F7FB' },
+  blobTop: {
+    position: 'absolute',
+    top: -60,
+    right: -60,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: '#CCFBF1',
+    opacity: 0.7,
+  },
   header: { paddingTop: 60, paddingHorizontal: 24, zIndex: 10 },
   title: { fontSize: 26, fontWeight: 'bold', color: '#0A2540', marginTop: 20 },
-  subtitle: { fontSize: 14, color: '#718096', marginTop: 4 },
-  logoutText: { fontSize: 14, color: '#00897B', fontWeight: 'bold' },
-  card: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', padding: 16, borderRadius: 16, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0' },
-  cardSelected: { borderColor: '#00897B', backgroundColor: '#F5FCFA' },
-  avatarBox: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center' },
-  avatarBoxSelected: { backgroundColor: '#00897B' },
-  avatarText: { color: '#4A5568', fontWeight: 'bold', fontSize: 16 },
-  avatarTextSelected: { color: '#FFF' },
-  cardInfo: { flex: 1, marginLeft: 16 },
-  cardName: { fontSize: 16, fontWeight: 'bold', color: '#0A2540' },
-  cardDetail: { fontSize: 12, color: '#718096', marginTop: 2 },
-  badgeSelected: { backgroundColor: '#E2F5F0', alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, marginTop: 6 },
-  badgeTextSelected: { color: '#00897B', fontSize: 11, fontWeight: 'bold' },
-  emptyContainer: { padding: 20, alignItems: 'center' },
-  emptyText: { color: '#718096', textAlign: 'center' },
+  subtitle: { fontSize: 14, color: '#64748B', marginTop: 4 },
+  logoutText: { fontSize: 15, color: '#159B87', fontWeight: 'bold' },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: 20,
+    marginBottom: 14,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0A2540',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  cardSelected: { borderColor: '#159B87', backgroundColor: '#F0FDFA' },
+  avatarImg: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#E2E8F0',
+  },
+  avatarImgSelected: {
+    borderWidth: 2,
+    borderColor: '#159B87',
+  },
+  avatarBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarBoxSelected: { backgroundColor: '#159B87' },
+  avatarText: { color: '#475569', fontWeight: 'bold', fontSize: 18 },
+  avatarTextSelected: { color: '#FFFFFF' },
+  cardInfo: { flex: 1, marginLeft: 14 },
+  cardName: { fontSize: 17, fontWeight: 'bold', color: '#0A2540' },
+  cardDetail: { fontSize: 13, color: '#64748B', marginTop: 2 },
+  badgeSelected: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#CCFBF1',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    marginTop: 6,
+  },
+  badgeTextSelected: { color: '#0F766E', fontSize: 11, fontWeight: 'bold' },
+  emptyContainer: { padding: 24, alignItems: 'center' },
+  emptyText: { color: '#64748B', textAlign: 'center', fontSize: 14 },
 });
