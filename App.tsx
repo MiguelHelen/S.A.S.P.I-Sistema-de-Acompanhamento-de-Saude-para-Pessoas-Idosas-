@@ -1,47 +1,51 @@
-import React from "react";
-import { View, ActivityIndicator, Image, StyleSheet, Text } from "react-native";
+import React from 'react';
+import { View, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
-import { StatusBar } from "expo-status-bar";
-import { AuthProvider, useAuth } from "./src/contexts/AuthContext";
+import { StatusBar } from 'expo-status-bar';
+import { AuthProvider, useAuth } from './src/contexts/AuthContext';
+import { AccessibilityProvider, useAccessibility } from './src/contexts/AccessibilityContext';
+import { SocketProvider } from './src/contexts/SocketContext';
 
-import AuthNavigator from "./src/navigation/AuthNavigator";
-import AppNavigator from "./src/navigation/AppNavigator";
+import AuthNavigator from './src/navigation/AuthNavigator';
+import AppNavigator from './src/navigation/AppNavigator';
 
 function MainApp() {
   const { usuario, loading } = useAuth();
+  const { highContrast } = useAccessibility();
 
-  // Tela de Loading (Splash idêntica ao Figma)
   if (loading) {
     return (
-      <View style={styles.splashContainer}>
-        <View style={styles.blobTop} />
-        <View style={styles.blobBottom} />
-        <Image source={require('./assets/logosemtexto.png')} style={{ width: 100, height: 100 }} resizeMode="contain" />
-        <Text style={styles.splashBrand}>SASPI</Text>
-        <Text style={styles.splashSlogan}>Mais cuidado hoje, mais{'\n'}independência amanhã.</Text>
-        <ActivityIndicator size="large" color="#00897B" style={{ marginTop: 40 }} />
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: highContrast ? '#000000' : '#F2F7FB',
+        }}
+      >
+        <ActivityIndicator size="large" color="#159B87" />
       </View>
     );
   }
 
-  return usuario ? <AppNavigator /> : <AuthNavigator />;
+  return (
+    <>
+      <StatusBar style={highContrast ? 'light' : 'dark'} />
+      <NavigationContainer>
+        {usuario ? <AppNavigator /> : <AuthNavigator />}
+      </NavigationContainer>
+    </>
+  );
 }
 
 export default function App() {
   return (
     <AuthProvider>
-      <StatusBar style="dark" />
-      <NavigationContainer>
-        <MainApp />
-      </NavigationContainer>
+      <AccessibilityProvider>
+        <SocketProvider>
+          <MainApp />
+        </SocketProvider>
+      </AccessibilityProvider>
     </AuthProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  splashContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#FFFFFF" },
-  blobTop: { position: 'absolute', top: -100, right: -50, width: 300, height: 300, borderRadius: 150, backgroundColor: '#E2F5F0', opacity: 0.8 },
-  blobBottom: { position: 'absolute', bottom: -100, left: -50, width: 250, height: 250, borderRadius: 125, backgroundColor: '#E2F5F0', opacity: 0.6 },
-  splashBrand: { fontSize: 40, fontWeight: "900", color: "#00897B", marginTop: 16, letterSpacing: 1 },
-  splashSlogan: { textAlign: 'center', color: '#00897B', fontSize: 16, fontWeight: '500', marginTop: 10, fontStyle: 'italic' }
-});

@@ -10,10 +10,9 @@ export default function AuthNavigator() {
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        animation: "fade", // Transição mais elegante ao abrir o login
+        animation: "fade",
       }}
     >
-      <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="RecuperarSenha" component={RecuperarSenhaScreen} />
     </Stack.Navigator>

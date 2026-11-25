@@ -1,48 +1,101 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Home, Bell, User } from 'lucide-react-native';
+import { Home, HeartPulse, Pill, CalendarDays, Bell, User } from 'lucide-react-native';
 
-import HomeScreen from '../screens/HomeScreen'; 
-import AlertasScreen from '../screens/AlertasScreen';
-import PerfilConfigScreen from '../screens/PerfilConfigScreen';
+import { useAuth } from '../contexts/AuthContext';
+import { useAccessibility } from '../contexts/AccessibilityContext';
+
 import SelectElderlyScreen from '../screens/SelectElderlyScreen';
-
-// Telas internas
-import AgendaConsultasScreen from '../screens/AgendaConsultasScreen';
+import HomeScreen from '../screens/HomeScreen';
 import MedicamentosScreen from '../screens/MedicamentosScreen';
 import SinaisVitaisScreen from '../screens/SinaisVitaisScreen';
+import AgendaConsultasScreen from '../screens/AgendaConsultasScreen';
+import AlertasScreen from '../screens/AlertasScreen';
+import PerfilConfigScreen from '../screens/PerfilConfigScreen';
 import NovoRegistroSinalScreen from '../screens/NovoRegistroSinalScreen';
-import RecuperarSenhaScreen from "../screens/RecuperarSenhaScreen";
+import AcessibilidadeScreen from '../screens/AcessibilidadeScreen';
+import AjudaScreen from '../screens/AjudaScreen';
+import TermosPrivacidadeScreen from '../screens/TermosPrivacidadeScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
 function TabNavigator() {
+  const { usuario } = useAuth();
+  const { highContrast, fontScale } = useAccessibility();
+
+  const isIdoso = (usuario?.perfil || '').toUpperCase() === 'IDOSO';
+  const tamanhoTextoAba = isIdoso || fontScale > 1 ? 11 : 10;
+  const tamanhoIcone = isIdoso ? 23 : 20;
+
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#00897B',
-        tabBarInactiveTintColor: '#A0AEC0',
-        tabBarStyle: { backgroundColor: '#FFFFFF', borderTopWidth: 0, elevation: 10, height: 65, paddingBottom: 10, paddingTop: 10 },
-        tabBarLabelStyle: { fontSize: 12, fontWeight: '600' }
+        tabBarActiveTintColor: highContrast ? '#38BDF8' : '#159B87',
+        tabBarInactiveTintColor: highContrast ? '#94A3B8' : '#64748B',
+        tabBarLabelStyle: {
+          fontSize: tamanhoTextoAba,
+          fontWeight: '700',
+          marginBottom: 4,
+        },
+        tabBarStyle: {
+          backgroundColor: highContrast ? '#0F172A' : '#FFFFFF',
+          borderTopWidth: 1,
+          borderTopColor: highContrast ? '#38BDF8' : '#E2E8F0',
+          height: isIdoso ? 68 : 62,
+          paddingTop: 6,
+        },
       }}
     >
-      <Tab.Screen 
-        name="Início" 
+      <Tab.Screen
+        name="Home"
         component={HomeScreen}
-        options={{ tabBarIcon: ({ color }) => <Home color={color} size={24} /> }} 
+        options={{
+          tabBarLabel: 'Início',
+          tabBarIcon: ({ color }) => <Home color={color} size={tamanhoIcone} />,
+        }}
       />
-      <Tab.Screen 
-        name="Notificações" 
-        component={AlertasScreen} 
-        options={{ tabBarIcon: ({ color }) => <Bell color={color} size={24} /> }} 
+      <Tab.Screen
+        name="Remédios"
+        component={MedicamentosScreen}
+        options={{
+          tabBarLabel: 'Remédios',
+          tabBarIcon: ({ color }) => <Pill color={color} size={tamanhoIcone} />,
+        }}
       />
-      <Tab.Screen 
-        name="Perfil" 
+      <Tab.Screen
+        name="Saúde"
+        component={SinaisVitaisScreen}
+        options={{
+          tabBarLabel: 'Saúde',
+          tabBarIcon: ({ color }) => <HeartPulse color={color} size={tamanhoIcone} />,
+        }}
+      />
+      <Tab.Screen
+        name="Agenda"
+        component={AgendaConsultasScreen}
+        options={{
+          tabBarLabel: 'Agenda',
+          tabBarIcon: ({ color }) => <CalendarDays color={color} size={tamanhoIcone} />,
+        }}
+      />
+      <Tab.Screen
+        name="Alertas"
+        component={AlertasScreen}
+        options={{
+          tabBarLabel: 'Alertas',
+          tabBarIcon: ({ color }) => <Bell color={color} size={tamanhoIcone} />,
+        }}
+      />
+      <Tab.Screen
+        name="Perfil"
         component={PerfilConfigScreen}
-        options={{ tabBarIcon: ({ color }) => <User color={color} size={24} /> }} 
+        options={{
+          tabBarLabel: 'Perfil',
+          tabBarIcon: ({ color }) => <User color={color} size={tamanhoIcone} />,
+        }}
       />
     </Tab.Navigator>
   );
@@ -50,16 +103,13 @@ function TabNavigator() {
 
 export default function AppNavigator() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="SelectElderly" component={SelectElderlyScreen} />
       <Stack.Screen name="MainTabs" component={TabNavigator} />
-      <Stack.Screen name="RecuperarSenha" component={RecuperarSenhaScreen} />
-      
-      {/* Telas que não ficam na TabBar inferior */}
-      <Stack.Screen name="Agenda" component={AgendaConsultasScreen} />
-      <Stack.Screen name="Remédios" component={MedicamentosScreen} />
-      <Stack.Screen name="Saúde" component={SinaisVitaisScreen} />
       <Stack.Screen name="NovoRegistroSinal" component={NovoRegistroSinalScreen} />
+      <Stack.Screen name="Acessibilidade" component={AcessibilidadeScreen} />
+      <Stack.Screen name="Ajuda" component={AjudaScreen} />
+      <Stack.Screen name="TermosPrivacidade" component={TermosPrivacidadeScreen} />
     </Stack.Navigator>
   );
 }
