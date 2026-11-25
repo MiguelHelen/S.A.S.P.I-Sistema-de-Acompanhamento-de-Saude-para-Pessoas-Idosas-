@@ -25,7 +25,7 @@ import {
   CheckCircle2,
   ShieldAlert,
   Phone,
-  HeartPulse,
+  MapPin,
   Calendar,
 } from "lucide-react";
 
@@ -34,8 +34,8 @@ interface IdosoItem {
   nome: string;
   idade: number;
   data_nascimento?: string;
-  telefone_emergencia?: string;
-  condicoes?: string;
+  telefone?: string;
+  endereco?: string;
   foto_url?: string | null;
   clinica_id?: string;
 }
@@ -50,7 +50,6 @@ export default function IdososPage() {
   const [mensagem, setMensagem] = useState("");
   const [erro, setErro] = useState("");
 
-  // Estado para recorte de avatar
   const [cropIdosoId, setCropIdosoId] = useState<string | null>(null);
   const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -95,8 +94,8 @@ export default function IdososPage() {
             nome: String(i.nome || ""),
             idade: idadeReal > 0 ? idadeReal : Number(i.idade || 0),
             data_nascimento: i.data_nascimento || undefined,
-            telefone_emergencia: i.telefone_emergencia || undefined,
-            condicoes: i.condicoes || undefined,
+            telefone: i.telefone || i.telefone_emergencia || undefined,
+            endereco: i.endereco || i.condicoes || undefined,
             foto_url: i.foto_url || null,
             clinica_id: i.clinica_id || clinicaId,
           };
@@ -246,7 +245,7 @@ export default function IdososPage() {
     if (!termo) return true;
     return (
       i.nome.toLowerCase().includes(termo) ||
-      (i.condicoes && i.condicoes.toLowerCase().includes(termo))
+      (i.endereco && i.endereco.toLowerCase().includes(termo))
     );
   });
 
@@ -348,7 +347,7 @@ export default function IdososPage() {
                 type="text"
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
-                placeholder="Buscar por nome ou condição clínica..."
+                placeholder="Buscar por nome ou acomodação..."
                 className="w-full rounded-xl border border-gray-200 py-2.5 pl-10 pr-4 text-sm text-gray-900 outline-none transition focus:border-[#1565C0]"
               />
             </div>
@@ -449,23 +448,23 @@ export default function IdososPage() {
                               <span>Nascimento: {dataNascFmt}</span>
                             </p>
                           )}
-                          {idoso.telefone_emergencia && (
+                          {idoso.telefone && (
                             <p className="flex items-center gap-2">
                               <Phone
                                 size={14}
                                 className="shrink-0 text-[#26A69A]"
                               />
-                              <span>Emergência: {idoso.telefone_emergencia}</span>
+                              <span>Contato: {idoso.telefone}</span>
                             </p>
                           )}
-                          {idoso.condicoes && (
+                          {idoso.endereco && (
                             <p className="flex items-start gap-2">
-                              <HeartPulse
+                              <MapPin
                                 size={14}
-                                className="mt-0.5 shrink-0 text-rose-500"
+                                className="mt-0.5 shrink-0 text-[#1565C0]"
                               />
                               <span className="line-clamp-2">
-                                {idoso.condicoes}
+                                {idoso.endereco}
                               </span>
                             </p>
                           )}

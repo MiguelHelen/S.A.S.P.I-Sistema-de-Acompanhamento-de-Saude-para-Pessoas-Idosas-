@@ -157,10 +157,11 @@ function AcessoAppIdosoContent() {
     }
 
     try {
-      const res = await fetch(`${API_URL}/idoso/${idosoId}/acesso-app`, {
+      const res = await fetch(`${API_URL}/auth/acesso-idoso`, {
         method: "POST",
         headers: getAuthHeaders(true),
         body: JSON.stringify({
+          idoso_id: idosoId,
           email: emailLimpo,
           senha: senhaApp,
         }),

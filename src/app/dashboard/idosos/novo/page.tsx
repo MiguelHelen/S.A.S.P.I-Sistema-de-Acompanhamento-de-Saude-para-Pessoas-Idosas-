@@ -32,9 +32,11 @@ export default function NovoIdosoPage() {
 
   const [formData, setFormData] = useState({
     nome: "",
+    cpf: "",
     data_nascimento: "",
-    telefone_emergencia: "",
-    condicoes: "",
+    sexo: "",
+    telefone: "",
+    endereco: "",
   });
 
   useEffect(() => {
@@ -85,15 +87,26 @@ export default function NovoIdosoPage() {
       return;
     }
 
+    const cpfDigitos = formData.cpf.replace(/\D/g, "");
+    if (cpfDigitos && cpfDigitos.length !== 11) {
+      setErro("O CPF do paciente deve conter 11 dígitos numéricos.");
+      setSalvando(false);
+      return;
+    }
+
     try {
       const payload = {
         nome: nomeLimpo,
+        ...(cpfDigitos ? { cpf: cpfDigitos } : {}),
         data_nascimento: formData.data_nascimento,
-        idade: idadeCalculada,
+        ...(formData.sexo ? { sexo: formData.sexo } : {}),
+        ...(formData.telefone.trim()
+          ? { telefone: formData.telefone.trim() }
+          : {}),
+        ...(formData.endereco.trim()
+          ? { endereco: formData.endereco.trim() }
+          : {}),
         clinica_id: clinicaId,
-        telefone_emergencia:
-          formData.telefone_emergencia.trim() || undefined,
-        condicoes: formData.condicoes.trim() || undefined,
       };
 
       const res = await fetch(`${API_URL}/idoso`, {
@@ -164,8 +177,8 @@ export default function NovoIdosoPage() {
             Novo Paciente Idoso
           </h1>
           <p className="mt-2 text-gray-600">
-            Preencha os dados cadastrais e clínicos iniciais para iniciar o
-            acompanhamento no S.A.S.P.I.
+            Preencha os dados cadastrais para iniciar o acompanhamento no
+            S.A.S.P.I.
           </p>
         </div>
 
@@ -193,7 +206,7 @@ export default function NovoIdosoPage() {
               </div>
               <div>
                 <h2 className="font-semibold text-[#0A2540]">
-                  Identificação e Informações Clínicas
+                  Identificação e Contato do Paciente
                 </h2>
                 <p className="text-xs text-gray-500">
                   A idade será calculada automaticamente a partir da data de
@@ -245,15 +258,53 @@ export default function NovoIdosoPage() {
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-[#0A2540]">
-                  Telefone de emergência
+                  CPF (opcional)
                 </label>
                 <input
                   type="text"
-                  value={formData.telefone_emergencia}
+                  inputMode="numeric"
+                  maxLength={14}
+                  value={formData.cpf}
                   onChange={(e) =>
                     setFormData({
                       ...formData,
-                      telefone_emergencia: e.target.value,
+                      cpf: e.target.value.replace(/\D/g, "").slice(0, 11),
+                    })
+                  }
+                  placeholder="11 dígitos numéricos"
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-[#0A2540]">
+                  Sexo (opcional)
+                </label>
+                <select
+                  value={formData.sexo}
+                  onChange={(e) =>
+                    setFormData({ ...formData, sexo: e.target.value })
+                  }
+                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                >
+                  <option value="">Não informado</option>
+                  <option value="M">Masculino</option>
+                  <option value="F">Feminino</option>
+                  <option value="OUTRO">Outro</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-[#0A2540]">
+                  Telefone de contato / emergência
+                </label>
+                <input
+                  type="text"
+                  value={formData.telefone}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      telefone: e.target.value,
                     })
                   }
                   placeholder="(11) 99999-9999"
@@ -263,16 +314,16 @@ export default function NovoIdosoPage() {
 
               <div className="md:col-span-2">
                 <label className="mb-2 block text-sm font-medium text-[#0A2540]">
-                  Condições clínicas, alergias ou observações gerais
+                  Endereço ou Acomodação / Leito
                 </label>
-                <textarea
-                  rows={4}
-                  value={formData.condicoes}
+                <input
+                  type="text"
+                  value={formData.endereco}
                   onChange={(e) =>
-                    setFormData({ ...formData, condicoes: e.target.value })
+                    setFormData({ ...formData, endereco: e.target.value })
                   }
-                  placeholder="Ex.: Hipertensão arterial controlada, diabetes tipo 2, alergia a dipirona..."
-                  className="w-full resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
+                  placeholder="Ex.: Ala B - Quarto 12 ou Rua das Acácias, 140"
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
               </div>
             </div>
