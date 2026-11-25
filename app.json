@@ -22,12 +22,14 @@
             "minSdkVersion": 26
           }
         }
-      ]
+      ],
+      "expo-status-bar"
     ],
     "extra": {
       "eas": {
-        "projectId": "7c102c71-3084-4571-9940-fb1702eebce8"
+        "projectId": "b4986cf4-2c1e-4703-abcf-67c9eb952ecf"
       }
-    }
+    },
+    "owner": "wallex-x"
   }
 }
