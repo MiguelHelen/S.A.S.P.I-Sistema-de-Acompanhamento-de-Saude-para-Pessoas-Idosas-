@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import DashboardNavbar from "@/components/DashboardNavbar";
@@ -34,6 +34,11 @@ interface UsuarioOption {
 interface IdosoOption {
   id: string;
   nome: string;
+}
+
+interface VinculoExistente {
+  usuario_id: string;
+  idoso_id: string;
 }
 
 const PERFIS_ELEGIVEIS_VINCULO = [
@@ -78,6 +83,9 @@ export default function NovoVinculoPage() {
   const [autorizado, setAutorizado] = useState<boolean | null>(null);
   const [usuarios, setUsuarios] = useState<UsuarioOption[]>([]);
   const [idosos, setIdosos] = useState<IdosoOption[]>([]);
+  const [vinculosExistentes, setVinculosExistentes] = useState<
+    VinculoExistente[]
+  >([]);
   const [carregandoListas, setCarregandoListas] = useState(true);
 
   const [usuarioId, setUsuarioId] = useState("");
@@ -103,13 +111,17 @@ export default function NovoVinculoPage() {
       const clinicaId = validarEObterClinicaId(sessao);
       const headers = getAuthHeaders(false);
 
-      const [resUsuarios, resIdosos] = await Promise.all([
+      const [resUsuarios, resIdosos, resVinculos] = await Promise.all([
         fetch(`${API_URL}/usuario?clinica_id=${clinicaId}`, { headers }),
         fetch(`${API_URL}/idoso?clinica_id=${clinicaId}`, { headers }),
+        fetch(`${API_URL}/usuario-idoso`, { headers }),
       ]);
 
       const dataUsuarios = await resUsuarios.json();
       const dataIdosos = await resIdosos.json();
+      const dataVinculos = resVinculos.ok
+        ? await resVinculos.json().catch(() => [])
+        : [];
 
       if (!resUsuarios.ok || !resIdosos.ok) {
         const msg =
@@ -120,7 +132,6 @@ export default function NovoVinculoPage() {
         return;
       }
 
-      // Filtra estritamente perfis elegíveis (exclui ADMINISTRADOR e IDOSO)
       const listaUsuarios: UsuarioOption[] = (
         Array.isArray(dataUsuarios) ? dataUsuarios : []
       )
@@ -135,18 +146,22 @@ export default function NovoVinculoPage() {
         );
 
       const listaIdosos: IdosoOption[] = Array.isArray(dataIdosos)
-        ? dataIdosos
+        ? dataIdosos.map((i: any) => ({ id: String(i.id), nome: String(i.nome || "") }))
         : [];
+
+      const listaVinculos: VinculoExistente[] = (
+        Array.isArray(dataVinculos) ? dataVinculos : []
+      ).map((v: any) => ({
+        usuario_id: String(v.usuario_id || v.usuario?.id || ""),
+        idoso_id: String(v.idoso_id || v.idoso?.id || ""),
+      }));
 
       setUsuarios(listaUsuarios);
       setIdosos(listaIdosos);
+      setVinculosExistentes(listaVinculos);
 
       if (listaUsuarios.length > 0) {
         setUsuarioId(listaUsuarios[0].id);
-      }
-
-      if (listaIdosos.length > 0) {
-        setIdosoId(listaIdosos[0].id);
       }
     } catch (err: any) {
       setErro(
@@ -161,6 +176,26 @@ export default function NovoVinculoPage() {
     carregarOpcoes();
   }, [carregarOpcoes]);
 
+  // Filtra os pacientes removendo aqueles já vinculados ao usuário selecionado
+  const idososDisponiveis = useMemo(() => {
+    if (!usuarioId) return idosos;
+    const idsJaVinculados = new Set(
+      vinculosExistentes
+        .filter((v) => v.usuario_id === usuarioId)
+        .map((v) => v.idoso_id)
+    );
+    return idosos.filter((i) => !idsJaVinculados.has(i.id));
+  }, [idosos, vinculosExistentes, usuarioId]);
+
+  // Mantém o idosoId selecionado sempre válido conforme a lista disponível muda
+  useEffect(() => {
+    if (idososDisponiveis.length === 0) {
+      setIdosoId("");
+    } else if (!idososDisponiveis.some((i) => i.id === idosoId)) {
+      setIdosoId(idososDisponiveis[0].id);
+    }
+  }, [idososDisponiveis, idosoId]);
+
   const usuarioSelecionado = usuarios.find((u) => u.id === usuarioId);
   const vinculoDerivado = mapearTipoVinculoPorPerfil(
     usuarioSelecionado?.perfil
@@ -172,7 +207,15 @@ export default function NovoVinculoPage() {
     setSucesso(false);
 
     if (!usuarioId || !idosoId || !usuarioSelecionado) {
-      setErro("Selecione um profissional/familiar elegível e um paciente.");
+      setErro("Selecione um profissional/familiar elegível e um paciente disponível.");
+      return;
+    }
+
+    const jaVinculado = vinculosExistentes.some(
+      (v) => v.usuario_id === usuarioId && v.idoso_id === idosoId
+    );
+    if (jaVinculado) {
+      setErro("Este usuário já está vinculado ao paciente selecionado.");
       return;
     }
 
@@ -282,8 +325,8 @@ export default function NovoVinculoPage() {
                   Dados da Associação
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  O tipo de vínculo é atribuído automaticamente conforme o
-                  perfil cadastrado do usuário.
+                  Apenas pacientes ainda não vinculados ao usuário selecionado
+                  são exibidos.
                 </p>
               </div>
             </div>
@@ -328,19 +371,23 @@ export default function NovoVinculoPage() {
                     htmlFor="idoso_id"
                     className="mb-2 block text-sm font-medium text-[#0A2540]"
                   >
-                    Paciente (Idoso) *
+                    Paciente (Idoso) Disponível *
                   </label>
                   <select
                     id="idoso_id"
                     value={idosoId}
                     onChange={(e) => setIdosoId(e.target.value)}
-                    disabled={idosos.length === 0}
+                    disabled={idososDisponiveis.length === 0}
                     className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   >
                     {idosos.length === 0 ? (
                       <option value="">Nenhum paciente cadastrado</option>
+                    ) : idososDisponiveis.length === 0 ? (
+                      <option value="">
+                        Todos os pacientes já estão vinculados a este usuário
+                      </option>
                     ) : (
-                      idosos.map((i) => (
+                      idososDisponiveis.map((i) => (
                         <option key={i.id} value={i.id}>
                           {i.nome}
                         </option>
@@ -394,7 +441,13 @@ export default function NovoVinculoPage() {
 
             <button
               type="submit"
-              disabled={salvando || carregandoListas || !usuarioId || !idosoId}
+              disabled={
+                salvando ||
+                carregandoListas ||
+                !usuarioId ||
+                !idosoId ||
+                idososDisponiveis.length === 0
+              }
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-6 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0A2540] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
             >
               {salvando ? (
