@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   API_URL,
   getAuthHeaders,
@@ -65,8 +65,21 @@ export default function PatientSelector({
   selectedId,
 }: PatientSelectorProps) {
   const [idosos, setIdosos] = useState<Idoso[]>([]);
+  const [ativoId, setAtivoId] = useState<string>(selectedId || "");
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
+
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
+
+  const selectedIdRef = useRef(selectedId);
+  selectedIdRef.current = selectedId;
+
+  useEffect(() => {
+    if (selectedId) {
+      setAtivoId(selectedId);
+    }
+  }, [selectedId]);
 
   const carregarIdosos = useCallback(async () => {
     setCarregando(true);
@@ -145,17 +158,19 @@ export default function PatientSelector({
           if (raw) ativoStorage = JSON.parse(raw);
         } catch {}
 
-        const idPreferencial = selectedId || ativoStorage?.id;
+        const idPreferencial = selectedIdRef.current || ativoStorage?.id;
         const encontrado =
           listaNormalizada.find((i) => i.id === idPreferencial) ||
           listaNormalizada[0];
 
+        setAtivoId(encontrado.id);
         localStorage.setItem(
           "saspi_active_elderly",
           JSON.stringify(encontrado)
         );
-        onSelect(encontrado);
+        onSelectRef.current(encontrado);
       } else {
+        setAtivoId("");
         localStorage.removeItem("saspi_active_elderly");
       }
     } catch {
@@ -164,13 +179,21 @@ export default function PatientSelector({
     } finally {
       setCarregando(false);
     }
-  }, [onSelect, selectedId]);
+  }, []);
 
   useEffect(() => {
     carregarIdosos();
 
     function handleAtualizacaoExterna() {
-      carregarIdosos();
+      try {
+        const raw = localStorage.getItem("saspi_active_elderly");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.id) {
+            setAtivoId(parsed.id);
+          }
+        }
+      } catch {}
     }
 
     window.addEventListener("saspi_elderly_updated", handleAtualizacaoExterna);
@@ -183,8 +206,10 @@ export default function PatientSelector({
   }, [carregarIdosos]);
 
   function selecionarPaciente(idoso: Idoso) {
+    setAtivoId(idoso.id);
     localStorage.setItem("saspi_active_elderly", JSON.stringify(idoso));
-    onSelect(idoso);
+    window.dispatchEvent(new Event("saspi_elderly_updated"));
+    onSelectRef.current(idoso);
   }
 
   if (carregando) {
@@ -226,7 +251,7 @@ export default function PatientSelector({
 
       <div className="flex flex-wrap gap-2.5">
         {idosos.map((idoso) => {
-          const ativo = idoso.id === selectedId;
+          const ativo = idoso.id === ativoId;
           const iniciais = idoso.nome
             .split(" ")
             .slice(0, 2)
