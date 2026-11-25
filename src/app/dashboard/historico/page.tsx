@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { io, Socket } from "socket.io-client";
 import DashboardNavbar from "@/components/DashboardNavbar";
 import PatientSelector, { Idoso } from "@/components/PatientSelector";
 import { getUsuarioSessao, isAdminPerfil } from "@/lib/clinica";
@@ -81,7 +82,9 @@ export default function HistoricoPage() {
   const [perfilUsuario, setPerfilUsuario] = useState<string>("");
   const [idosoAtivo, setIdosoAtivo] = useState<Idoso | null>(null);
   const [registros, setRegistros] = useState<RegistroHistoricoApi[]>([]);
-  const [filtroOrigem, setFiltroOrigem] = useState<"todos" | "MANUAL" | "AUTOMATICO">("todos");
+  const [filtroOrigem, setFiltroOrigem] = useState<
+    "todos" | "MANUAL" | "AUTOMATICO"
+  >("todos");
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -146,7 +149,32 @@ export default function HistoricoPage() {
       setRegistros([]);
       return;
     }
+
     carregarHistorico(idosoAtivo.id);
+
+    const token = localStorage.getItem("saspi_token");
+    const socket: Socket = io(API_URL, {
+      transports: ["websocket", "polling"],
+      auth: token ? { token } : undefined,
+      query: { idosoId: idosoAtivo.id },
+    });
+
+    socket.on("connect", () => {
+      socket.emit("entrar-sala-idoso", idosoAtivo.id);
+    });
+    socket.emit("entrar-sala-idoso", idosoAtivo.id);
+
+    socket.on("novo-registro-saude", (novo: RegistroHistoricoApi) => {
+      if (novo?.idoso_id && novo.idoso_id !== idosoAtivo.id) return;
+      setRegistros((prev) => {
+        if (novo?.id && prev.some((r) => r.id === novo.id)) return prev;
+        return [novo, ...prev];
+      });
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, [idosoAtivo?.id, autorizado, carregarHistorico]);
 
   function handleSelectElderly(selectedIdoso: Idoso) {
@@ -293,7 +321,9 @@ export default function HistoricoPage() {
                 const isAutomatico = item.origem === "AUTOMATICO";
                 const autorLabel =
                   item.usuario?.nome ||
-                  (isAutomatico ? "Dispositivo vestível" : "Equipe responsável");
+                  (isAutomatico
+                    ? "Dispositivo vestível"
+                    : "Equipe responsável");
 
                 return (
                   <li

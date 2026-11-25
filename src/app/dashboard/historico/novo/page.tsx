@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import DashboardNavbar from "@/components/DashboardNavbar";
-import type { Idoso } from "@/components/PatientSelector";
+import { type Idoso, formatarCpf } from "@/components/PatientSelector";
 import {
   ArrowLeft,
   HeartPulse,
@@ -34,13 +34,20 @@ function normalizarTexto(texto?: string | null): string {
     .trim();
 }
 
-function inferirUnidade(nomeIndicador: string, unidadeApi?: string | null): string {
+function inferirUnidade(
+  nomeIndicador: string,
+  unidadeApi?: string | null
+): string {
   if (unidadeApi && unidadeApi.trim() !== "") {
     return unidadeApi.trim();
   }
   const norm = normalizarTexto(nomeIndicador);
   if (norm.includes("pressao") || norm.includes("pa")) return "mmHg";
-  if (norm.includes("saturacao") || norm.includes("oxigenacao") || norm.includes("spo2")) {
+  if (
+    norm.includes("saturacao") ||
+    norm.includes("oxigenacao") ||
+    norm.includes("spo2")
+  ) {
     return "%";
   }
   if (norm.includes("temperatura") || norm.includes("termica")) return "°C";
@@ -93,7 +100,8 @@ export default function NovoRegistroHistoricoPage() {
       if (!res.ok) {
         const msg = Array.isArray(data?.message)
           ? data.message.join(", ")
-          : data?.message || "Não foi possível carregar os indicadores de saúde.";
+          : data?.message ||
+            "Não foi possível carregar os indicadores de saúde.";
         setErro(msg);
         setIndicadores([]);
         return;
@@ -130,8 +138,12 @@ export default function NovoRegistroHistoricoPage() {
     }
   }
 
-  const indicadorSelecionado = indicadores.find((item) => item.id === indicadorId);
-  const ehPressaoArterial = normalizarTexto(indicadorSelecionado?.nome).includes("pressao");
+  const indicadorSelecionado = indicadores.find(
+    (item) => item.id === indicadorId
+  );
+  const ehPressaoArterial = normalizarTexto(
+    indicadorSelecionado?.nome
+  ).includes("pressao");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -241,8 +253,8 @@ export default function NovoRegistroHistoricoPage() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-gray-600">
-            Adicione uma nova aferição manual para manter o histórico clínico e o
-            monitoramento do paciente atualizados.
+            Adicione uma nova aferição manual para manter o histórico clínico e
+            o monitoramento do paciente atualizados.
           </p>
         </div>
 
@@ -272,8 +284,20 @@ export default function NovoRegistroHistoricoPage() {
                 Aferição vinculada ao paciente:
               </span>
               <p className="text-sm font-bold">
-                {idoso.nome} ({idoso.idade} anos)
+                {idoso.nome}
+                {typeof idoso.idade === "number" ? ` (${idoso.idade} anos)` : ""}
               </p>
+              {(idoso.cpf || idoso.telefone || idoso.endereco) && (
+                <p className="mt-0.5 text-xs text-gray-600">
+                  {[
+                    idoso.cpf ? `CPF: ${formatarCpf(idoso.cpf)}` : null,
+                    idoso.telefone ? `Tel: ${idoso.telefone}` : null,
+                    idoso.endereco ? idoso.endereco : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" • ")}
+                </p>
+              )}
             </div>
           </div>
         ) : (
