@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import { limparSessao } from "@/lib/clinica";
 import {
   Lock,
   Loader2,
@@ -51,29 +51,51 @@ export default function RedefinirSenha() {
   const [erro, setErro] = useState("");
 
   useEffect(() => {
-    const hash = window.location.hash;
-    const search = window.location.search;
+    async function inicializarSessaoRecuperacao() {
+      const hash = window.location.hash;
+      const search = window.location.search;
 
-    if (hash && hash.includes("error_description")) {
-      const params = new URLSearchParams(hash.substring(1));
-      const errMsg = params.get("error_description");
-      if (errMsg) {
-        setErro(
-          "Link inválido ou expirado. Por favor, solicite um novo e-mail de ativação ou recuperação."
-        );
+      if (hash && hash.includes("error_description")) {
+        const params = new URLSearchParams(hash.substring(1));
+        if (params.get("error_description")) {
+          setErro(
+            "Link inválido ou expirado. Por favor, solicite um novo e-mail de ativação ou recuperação."
+          );
+          return;
+        }
+      } else if (search && search.includes("error_description")) {
+        const params = new URLSearchParams(search);
+        if (params.get("error_description")) {
+          setErro(
+            "Link inválido ou expirado. Por favor, solicite um novo e-mail de ativação ou recuperação."
+          );
+          return;
+        }
       }
-    } else if (search && search.includes("error_description")) {
-      const params = new URLSearchParams(search);
-      const errMsg = params.get("error_description");
-      if (errMsg) {
-        setErro(
-          "Link inválido ou expirado. Por favor, solicite um novo e-mail de ativação ou recuperação."
-        );
+
+      if (hash && hash.includes("access_token")) {
+        const params = new URLSearchParams(hash.substring(1));
+        const accessToken = params.get("access_token");
+        const refreshToken = params.get("refresh_token");
+        if (accessToken && refreshToken) {
+          await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+        }
+      } else if (search && search.includes("code=")) {
+        const params = new URLSearchParams(search);
+        const code = params.get("code");
+        if (code) {
+          await supabase.auth.exchangeCodeForSession(code);
+        }
       }
     }
 
+    inicializarSessaoRecuperacao();
+
     const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") {
+      if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
         setErro("");
       }
     });
@@ -82,6 +104,11 @@ export default function RedefinirSenha() {
       authListener.subscription.unsubscribe();
     };
   }, []);
+
+  function irParaLogin() {
+    limparSessao();
+    router.push("/login");
+  }
 
   async function handleReset(e: React.FormEvent) {
     e.preventDefault();
@@ -110,10 +137,11 @@ export default function RedefinirSenha() {
 
       setSucesso(true);
       await supabase.auth.signOut();
+      limparSessao();
 
       setTimeout(() => {
         router.push("/login");
-      }, 3000);
+      }, 2500);
     } catch (err: any) {
       setErro(
         err?.message ||
@@ -149,12 +177,13 @@ export default function RedefinirSenha() {
               <p className="mt-2 text-sm leading-relaxed text-emerald-700">
                 Você será redirecionado para a tela de login em instantes.
               </p>
-              <Link
-                href="/login"
+              <button
+                type="button"
+                onClick={irParaLogin}
                 className="mt-4 inline-block text-sm font-medium text-[#1565C0] hover:underline"
               >
                 Ir para o Login agora
-              </Link>
+              </button>
             </div>
           ) : (
             <form onSubmit={handleReset} className="mt-8 space-y-5">
