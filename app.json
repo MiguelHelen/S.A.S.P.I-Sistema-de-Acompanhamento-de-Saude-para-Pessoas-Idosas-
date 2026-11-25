@@ -10,7 +10,11 @@
         "android.permission.health.READ_OXYGEN_SATURATION",
         "android.permission.health.READ_BLOOD_PRESSURE",
         "android.permission.health.READ_BODY_TEMPERATURE"
-      ]
+      ],
+      "icon": "./assets/logosemtexto.png",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logosemtexto.png"
+      }
     },
     "plugins": [
       "expo-secure-store",
@@ -30,6 +34,7 @@
         "projectId": "b4986cf4-2c1e-4703-abcf-67c9eb952ecf"
       }
     },
-    "owner": "wallex-x"
+    "owner": "wallex-x",
+    "icon": "./assets/logosemtexto.png"
   }
 }
