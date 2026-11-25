@@ -60,22 +60,22 @@ export default function Navbar() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-gray-200/80 bg-white shadow-[0_2px_12px_rgba(10,37,64,0.03)]">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3.5 md:px-8">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 md:px-8">
         <Link
           href="/"
-          className="group flex items-center gap-3 rounded-xl transition-transform duration-200 hover:scale-[1.02]"
+          className="group flex items-center rounded-xl transition-transform duration-200 hover:scale-[1.02]"
         >
           <Image
             src="/logo.png"
-            alt="S.A.S.P.I. — Sistema de Acompanhamento de Saúde para Pessoas Idosas"
-            width={150}
-            height={44}
+            alt="S.A.S.P.I."
+            width={160}
+            height={42}
             priority
             className="h-10 w-auto object-contain"
           />
         </Link>
 
-        <nav className="hidden items-center gap-2 md:flex">
+        <nav className="hidden items-center gap-1.5 md:flex">
           {LINKS_PUBLICOS.map((item) => {
             const ativo = pathname === item.href;
             return (
@@ -84,13 +84,13 @@ export default function Navbar() {
                 href={item.href}
                 className={`group relative rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${
                   ativo
-                    ? "bg-[#E8F1FB]/80 font-semibold text-[#1565C0]"
+                    ? "bg-[#E8F1FB]/85 font-semibold text-[#1565C0]"
                     : "text-gray-600 hover:bg-[#F2F7FB] hover:text-[#0A2540]"
                 }`}
               >
                 <span>{item.label}</span>
                 <span
-                  className={`absolute bottom-1 left-4 right-4 h-0.5 rounded-full bg-[#1565C0] transition-transform duration-200 origin-left ${
+                  className={`absolute bottom-1 left-4 right-4 h-0.5 origin-left rounded-full bg-[#1565C0] transition-transform duration-200 ${
                     ativo ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
                   }`}
                 />
@@ -99,7 +99,7 @@ export default function Navbar() {
           })}
         </nav>
 
-        <div className="hidden items-center gap-3 md:flex">
+        <div className="hidden items-center gap-2.5 md:flex">
           {autenticado && usuario ? (
             <>
               <Link

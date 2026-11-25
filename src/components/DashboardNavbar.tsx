@@ -37,11 +37,12 @@ import {
   Menu,
   X,
   CheckCheck,
+  Info,
 } from "lucide-react";
 
-interface NotificacaoSistema {
+export interface NotificacaoSistema {
   id: string;
-  tipo: "alerta_clinico" | "vinculo" | "consulta";
+  tipo: "alerta_clinico" | "vinculo" | "consulta" | "institucional";
   titulo: string;
   descricao: string;
   dataHora?: string;
@@ -108,11 +109,47 @@ export default function DashboardNavbar() {
     const headers = getAuthHeaders();
     const listaNotif: NotificacaoSistema[] = [];
 
+    // 1. Avisos institucionais locais da clínica (ex: atualização de cadastro, convites enviados)
+    try {
+      const avisosRaw = localStorage.getItem(
+        `saspi_avisos_clinica_${sessao.clinica_id || "geral"}`
+      );
+      if (avisosRaw) {
+        const avisosLocais = JSON.parse(avisosRaw);
+        if (Array.isArray(avisosLocais)) {
+          avisosLocais.forEach((av: NotificacaoSistema) => listaNotif.push(av));
+        }
+      }
+    } catch {}
+
     try {
       if (isAdminPerfil(sessao.perfil)) {
-        const resVinc = await fetch(`${API_URL}/usuario-idoso`, {
-          headers,
-        }).catch(() => null);
+        const [resVinc, resUsers] = await Promise.all([
+          fetch(`${API_URL}/usuario-idoso`, { headers }).catch(() => null),
+          fetch(
+            `${API_URL}/usuario?clinica_id=${sessao.clinica_id || ""}`,
+            { headers }
+          ).catch(() => null),
+        ]);
+
+        if (resUsers?.ok) {
+          const users = await resUsers.json();
+          if (Array.isArray(users)) {
+            const pendentes = users.filter(
+              (u: any) => String(u.status || "").toUpperCase() === "PENDENTE"
+            );
+            if (pendentes.length > 0) {
+              listaNotif.push({
+                id: `convites-pendentes-${pendentes.length}`,
+                tipo: "institucional",
+                titulo: `${pendentes.length} convite(s) aguardando ativação`,
+                descricao: `Há membro(s) da equipe ou familiares que ainda não definiram a senha de acesso.`,
+                href: "/dashboard/usuarios",
+              });
+            }
+          }
+        }
+
         if (resVinc?.ok) {
           const vincs = await resVinc.json();
           if (Array.isArray(vincs)) {
@@ -122,7 +159,7 @@ export default function DashboardNavbar() {
                   id: `vinc-adm-${v.id}`,
                   tipo: "vinculo",
                   titulo: "Vínculo Institucional Ativo",
-                  descricao: `${v.usuario.nome} foi vinculado(a) a ${v.idoso.nome} (${formatarPapelVinculo(v.tipo_vinculo)}).`,
+                  descricao: `${v.usuario.nome} agora acompanha ${v.idoso.nome} (${formatarPapelVinculo(v.tipo_vinculo)}).`,
                   dataHora: v.data_vinculo
                     ? new Date(v.data_vinculo).toLocaleDateString("pt-BR")
                     : undefined,
@@ -132,8 +169,21 @@ export default function DashboardNavbar() {
             });
           }
         }
+
         setNotificacoes(listaNotif);
         return;
+      }
+
+      // Perfil Clínico / Familiar: informa em qual clínica está atuando e vínculos ativos
+      const dadosClinica = getClinicaDados();
+      if (dadosClinica.nome) {
+        listaNotif.push({
+          id: `unidade-atual-${sessao.clinica_id}-${dadosClinica.nome}`,
+          tipo: "institucional",
+          titulo: "Unidade Institucional Conectada",
+          descricao: `Você faz parte da equipe vinculada à unidade ${dadosClinica.nome}.`,
+          href: "/dashboard/perfil",
+        });
       }
 
       const activeElderlyRaw = localStorage.getItem("saspi_active_elderly");
@@ -239,7 +289,7 @@ export default function DashboardNavbar() {
                 id: `meu-vinculo-${v.id}`,
                 tipo: "vinculo",
                 titulo: "Vínculo de Paciente Atribuído",
-                descricao: `Você foi vinculado(a) a ${v.idoso.nome} como ${formatarPapelVinculo(v.tipo_vinculo)} pela Administração.`,
+                descricao: `Agora você acompanha ${v.idoso.nome} como ${formatarPapelVinculo(v.tipo_vinculo)}.`,
                 dataHora: v.data_vinculo
                   ? new Date(v.data_vinculo).toLocaleDateString("pt-BR")
                   : undefined,
@@ -292,6 +342,7 @@ export default function DashboardNavbar() {
 
     window.addEventListener("saspi_user_updated", carregarUsuario);
     window.addEventListener("saspi_elderly_updated", carregarNotificacoes);
+    window.addEventListener("saspi_notif_updated", carregarNotificacoes);
     window.addEventListener("storage", carregarUsuario);
 
     function handleClickFora(event: MouseEvent) {
@@ -313,6 +364,7 @@ export default function DashboardNavbar() {
     return () => {
       window.removeEventListener("saspi_user_updated", carregarUsuario);
       window.removeEventListener("saspi_elderly_updated", carregarNotificacoes);
+      window.removeEventListener("saspi_notif_updated", carregarNotificacoes);
       window.removeEventListener("storage", carregarUsuario);
       document.removeEventListener("mousedown", handleClickFora);
     };
@@ -364,38 +416,48 @@ export default function DashboardNavbar() {
       : "");
 
   return (
-    <header className="sticky top-0 z-40 border-b border-gray-100 bg-white/95 backdrop-blur-md">
+    <header className="sticky top-0 z-40 border-b border-gray-200/80 bg-white shadow-[0_2px_12px_rgba(10,37,64,0.03)]">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 md:px-8">
-        <div className="flex items-center gap-3 md:gap-4">
-          <Link href="/dashboard" className="flex items-center">
+        <div className="flex items-center gap-3.5">
+          <Link
+            href="/dashboard"
+            className="group flex items-center rounded-xl transition-transform duration-200 hover:scale-[1.02]"
+          >
             <Image
               src="/logo.png"
               alt="S.A.S.P.I."
               width={160}
-              height={40}
+              height={42}
               priority
-              style={{ width: "auto", height: "auto" }}
+              className="h-10 w-auto object-contain"
             />
           </Link>
 
           {(nomeClinica || buscandoClinica) && (
-            <div className="hidden items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs text-gray-700 sm:flex">
-              <Building2 size={14} className="text-[#1565C0]" />
+            <div className="hidden items-center gap-2 rounded-xl border border-[#DCEAF8] bg-linear-to-r from-[#F4F9FE] to-[#EDF7F5] px-3 py-1.5 shadow-2xs sm:flex">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-[#1565C0]/10 text-[#1565C0]">
+                <Building2 size={13} />
+              </span>
               {buscandoClinica && !nomeClinica ? (
-                <span className="flex items-center gap-1 text-gray-400">
+                <span className="flex items-center gap-1.5 text-xs text-gray-400">
                   <Loader2 size={12} className="animate-spin text-[#1565C0]" />
                   Carregando unidade...
                 </span>
               ) : (
-                <span className="font-semibold text-[#0A2540]">
-                  {nomeClinica}
-                </span>
+                <div className="leading-tight">
+                  <span className="block text-[10px] font-semibold uppercase tracking-wider text-[#26A69A]">
+                    Unidade
+                  </span>
+                  <span className="block max-w-45 truncate text-xs font-bold text-[#0A2540]">
+                    {nomeClinica}
+                  </span>
+                </div>
               )}
             </div>
           )}
         </div>
 
-        <nav className="hidden items-center gap-1 md:flex">
+        <nav className="hidden items-center gap-1.5 md:flex">
           {navLinksAtivos.map((link) => {
             const Icon = link.icon;
             const ativo =
@@ -407,14 +469,19 @@ export default function DashboardNavbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition ${
+                className={`group relative flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition-all duration-200 ${
                   ativo
-                    ? "bg-[#E8F1FB] text-[#1565C0]"
-                    : "text-gray-600 hover:bg-gray-50 hover:text-[#0A2540]"
+                    ? "bg-[#E8F1FB]/85 font-semibold text-[#1565C0]"
+                    : "text-gray-600 hover:bg-[#F2F7FB] hover:text-[#0A2540]"
                 }`}
               >
                 <Icon size={16} />
-                {link.label}
+                <span>{link.label}</span>
+                <span
+                  className={`absolute bottom-1 left-3.5 right-3.5 h-0.5 origin-left rounded-full bg-[#1565C0] transition-transform duration-200 ${
+                    ativo ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
+                  }`}
+                />
               </Link>
             );
           })}
@@ -426,7 +493,7 @@ export default function DashboardNavbar() {
               type="button"
               onClick={() => setNotificacoesAbertas((prev) => !prev)}
               aria-label="Notificações e Alertas"
-              className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-gray-100 bg-gray-50/70 text-gray-600 transition hover:bg-[#E8F1FB] hover:text-[#1565C0]"
+              className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200/80 bg-[#F8FBFE] text-gray-600 transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:bg-[#E8F1FB] hover:text-[#1565C0]"
             >
               <Bell size={19} />
               {notificacoesNaoLidas.length > 0 && (
@@ -442,9 +509,9 @@ export default function DashboardNavbar() {
 
             {notificacoesAbertas && (
               <div className="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-xl ring-1 ring-black/5 sm:w-105">
-                <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50/60 px-4 py-3">
+                <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50/70 px-4 py-3">
                   <span className="text-sm font-bold text-[#0A2540]">
-                    Notificações e Alertas ({notificacoesNaoLidas.length})
+                    Avisos e Alertas ({notificacoesNaoLidas.length})
                   </span>
                   <div className="flex items-center gap-3">
                     {qtdCriticas > 0 && (
@@ -456,7 +523,7 @@ export default function DashboardNavbar() {
                       <button
                         type="button"
                         onClick={marcarTodasComoLidas}
-                        className="flex items-center gap-1 text-[11px] font-medium text-[#1565C0] transition hover:text-[#0A2540]"
+                        className="flex items-center gap-1 text-[11px] font-semibold text-[#1565C0] transition hover:text-[#0A2540]"
                         title="Marcar todas como lidas"
                       >
                         <CheckCheck size={14} />
@@ -473,10 +540,10 @@ export default function DashboardNavbar() {
                         <CheckCheck size={24} />
                       </div>
                       <p className="text-sm font-medium text-[#0A2540]">
-                        Tudo limpo!
+                        Tudo em dia!
                       </p>
                       <p className="mt-1 text-xs text-gray-500">
-                        Nenhuma notificação pendente.
+                        Nenhum aviso ou alerta pendente no momento.
                       </p>
                     </div>
                   ) : (
@@ -507,13 +574,17 @@ export default function DashboardNavbar() {
                                 ? "bg-red-100 text-red-600"
                                 : n.tipo === "vinculo"
                                   ? "bg-[#E8F1FB] text-[#1565C0]"
-                                  : "bg-[#E6F4EF] text-[#26A69A]"
+                                  : n.tipo === "institucional"
+                                    ? "bg-amber-50 text-amber-600"
+                                    : "bg-[#E6F4EF] text-[#26A69A]"
                             }`}
                           >
                             {n.tipo === "alerta_clinico" ? (
                               <AlertTriangle size={16} />
                             ) : n.tipo === "vinculo" ? (
                               <UserCheck size={16} />
+                            ) : n.tipo === "institucional" ? (
+                              <Info size={16} />
                             ) : (
                               <CalendarDays size={16} />
                             )}
@@ -541,7 +612,7 @@ export default function DashboardNavbar() {
                           type="button"
                           onClick={(e) => marcarComoLida(n.id, e)}
                           className="absolute right-3 top-4 rounded-md p-1.5 text-gray-400 opacity-0 transition hover:bg-gray-100 hover:text-gray-700 group-hover:opacity-100"
-                          title="Descartar notificação"
+                          title="Descartar aviso"
                         >
                           <X size={14} />
                         </button>
@@ -557,14 +628,14 @@ export default function DashboardNavbar() {
             <button
               type="button"
               onClick={() => setDropdownAberto((prev) => !prev)}
-              className="flex items-center gap-3 rounded-xl p-1.5 transition hover:bg-gray-50"
+              className="flex items-center gap-2.5 rounded-xl border border-transparent p-1.5 transition-all duration-200 hover:border-gray-200 hover:bg-[#F8FBFE]"
               aria-expanded={dropdownAberto}
             >
               {usuario ? (
                 <img
                   src={avatarUrl}
                   alt={usuario.nome}
-                  className="h-9 w-9 shrink-0 rounded-full object-cover shadow-sm ring-1 ring-gray-200"
+                  className="h-9 w-9 shrink-0 rounded-full object-cover shadow-sm ring-2 ring-[#E8F1FB]"
                 />
               ) : (
                 <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-gray-200" />
@@ -581,7 +652,7 @@ export default function DashboardNavbar() {
                     <p className="text-sm font-semibold text-[#0A2540]">
                       {usuario.nome}
                     </p>
-                    <p className="text-xs font-medium text-gray-500">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1565C0]">
                       {usuario.perfil}
                     </p>
                   </>
@@ -590,7 +661,7 @@ export default function DashboardNavbar() {
 
               <ChevronDown
                 size={16}
-                className={`text-gray-400 transition-transform ${
+                className={`text-gray-400 transition-transform duration-200 ${
                   dropdownAberto ? "rotate-180" : ""
                 }`}
               />
@@ -674,7 +745,7 @@ export default function DashboardNavbar() {
             type="button"
             onClick={() => setMenuMobileAberto((prev) => !prev)}
             aria-label="Abrir menu"
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-100 bg-gray-50/70 text-[#0A2540] transition hover:bg-[#E8F1FB] hover:text-[#1565C0] md:hidden"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-[#0A2540] transition hover:bg-gray-50 md:hidden"
           >
             {menuMobileAberto ? <X size={20} /> : <Menu size={20} />}
           </button>
@@ -682,7 +753,7 @@ export default function DashboardNavbar() {
       </div>
 
       {menuMobileAberto && (
-        <div className="border-t border-gray-100 bg-white px-4 py-3 shadow-sm md:hidden">
+        <div className="border-t border-gray-100 bg-white px-4 py-3 shadow-lg md:hidden">
           <nav className="flex flex-col gap-1">
             {navLinksAtivos.map((link) => {
               const Icon = link.icon;
@@ -698,8 +769,8 @@ export default function DashboardNavbar() {
                   onClick={() => setMenuMobileAberto(false)}
                   className={`flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-sm font-medium transition ${
                     ativo
-                      ? "bg-[#E8F1FB] text-[#1565C0]"
-                      : "text-gray-600 hover:bg-gray-50 hover:text-[#0A2540]"
+                      ? "bg-[#E8F1FB] font-semibold text-[#1565C0]"
+                      : "text-gray-600 hover:bg-[#F2F7FB] hover:text-[#0A2540]"
                   }`}
                 >
                   <Icon size={17} />

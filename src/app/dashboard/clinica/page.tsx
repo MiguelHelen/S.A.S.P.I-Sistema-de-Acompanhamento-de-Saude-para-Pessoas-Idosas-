@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import DashboardNavbar from "@/components/DashboardNavbar";
+import DashboardNavbar, {
+  NotificacaoSistema,
+} from "@/components/DashboardNavbar";
 import {
   API_URL,
   getAuthHeaders,
@@ -109,7 +111,10 @@ export default function ClinicaPage() {
       return;
     }
 
-    if (telefoneLimpo && (telefoneLimpo.length < 10 || telefoneLimpo.length > 11)) {
+    if (
+      telefoneLimpo &&
+      (telefoneLimpo.length < 10 || telefoneLimpo.length > 11)
+    ) {
       setErro("O telefone deve conter 10 ou 11 dígitos numéricos com DDD.");
       return;
     }
@@ -139,6 +144,32 @@ export default function ClinicaPage() {
       }
 
       salvarUsuarioSessao({ clinica_nome: nome.trim() });
+
+      // Registra aviso institucional no sino de notificações
+      try {
+        const storageKey = `saspi_avisos_clinica_${clinicaId}`;
+        const atuaisRaw = localStorage.getItem(storageKey);
+        const atuais: NotificacaoSistema[] = atuaisRaw
+          ? JSON.parse(atuaisRaw)
+          : [];
+        const novoAviso: NotificacaoSistema = {
+          id: `clinica-upd-${Date.now()}`,
+          tipo: "institucional",
+          titulo: "Dados da Clínica Atualizados",
+          descricao: `As informações cadastrais da unidade "${nome.trim()}" foram atualizadas com sucesso.`,
+          dataHora: new Date().toLocaleString("pt-BR", {
+            dateStyle: "short",
+            timeStyle: "short",
+          }),
+          href: "/dashboard/clinica",
+        };
+        localStorage.setItem(
+          storageKey,
+          JSON.stringify([novoAviso, ...atuais].slice(0, 5))
+        );
+        window.dispatchEvent(new Event("saspi_notif_updated"));
+      } catch {}
+
       setSucesso(true);
     } catch {
       setErro("Erro de conexão ao salvar os dados da clínica.");
@@ -189,7 +220,8 @@ export default function ClinicaPage() {
           <div className="mt-6 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
             <CheckCircle2 size={20} className="shrink-0 text-emerald-600" />
             <p className="text-sm font-medium">
-              Dados da clínica atualizados com sucesso!
+              Dados da clínica atualizados com sucesso! O nome da unidade já
+              foi refletido no painel.
             </p>
           </div>
         )}
@@ -255,7 +287,9 @@ export default function ClinicaPage() {
                     maxLength={14}
                     required
                     value={cnpj}
-                    onChange={(e) => setCnpj(apenasDigitos(e.target.value).slice(0, 14))}
+                    onChange={(e) =>
+                      setCnpj(apenasDigitos(e.target.value).slice(0, 14))
+                    }
                     placeholder="14 dígitos"
                     className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   />
