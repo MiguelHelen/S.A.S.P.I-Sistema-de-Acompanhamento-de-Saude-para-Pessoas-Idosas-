@@ -88,9 +88,15 @@ export default function ConsultasPage() {
     }
   }, [idosoAtivo, autorizado, carregarConsultas]);
 
+  function handleSelectIdoso(selecionado: Idoso) {
+    setIdosoAtivo(selecionado);
+    localStorage.setItem("saspi_active_elderly", JSON.stringify(selecionado));
+    window.dispatchEvent(new Event("saspi_elderly_updated"));
+  }
+
   async function alterarStatus(
     consultaId: string,
-    novoStatus: "Agendada" | "Confirmada" | "Realizada" | "Cancelada"
+    novoStatus: "Agendada" | "Confirmada" | "Realizada" | "Cancelada",
   ) {
     setAtualizandoId(consultaId);
     try {
@@ -103,8 +109,8 @@ export default function ConsultasPage() {
       if (res.ok) {
         setConsultas((prev) =>
           prev.map((c) =>
-            c.id === consultaId ? { ...c, status: novoStatus } : c
-          )
+            c.id === consultaId ? { ...c, status: novoStatus } : c,
+          ),
         );
       }
     } catch {
@@ -137,8 +143,8 @@ export default function ConsultasPage() {
             Acesso Restrito
           </h1>
           <p className="mt-2 text-sm text-gray-600">
-            A agenda clínica de consultas é destinada aos profissionais de
-            saúde e familiares vinculados.
+            A agenda clínica de consultas é destinada aos profissionais de saúde
+            e familiares vinculados.
           </p>
         </div>
       </main>
@@ -178,7 +184,7 @@ export default function ConsultasPage() {
         <div className="mt-6">
           <PatientSelector
             selectedId={idosoAtivo?.id}
-            onSelect={(p) => setIdosoAtivo(p)}
+            onSelect={handleSelectIdoso}
           />
         </div>
 
@@ -238,7 +244,7 @@ export default function ConsultasPage() {
                           </h3>
                           <span
                             className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${badgeStatus(
-                              statusUpper
+                              statusUpper,
                             )}`}
                           >
                             {statusLabel}

@@ -40,7 +40,11 @@ export default function NovaConsultaPage() {
 
   useEffect(() => {
     const sessao = getUsuarioSessao();
-    if (!sessao || sessao.perfil === "FAMILIAR" || isAdminPerfil(sessao.perfil)) {
+    if (
+      !sessao ||
+      sessao.perfil === "FAMILIAR" ||
+      isAdminPerfil(sessao.perfil)
+    ) {
       setAutorizado(false);
       return;
     }
@@ -55,6 +59,12 @@ export default function NovaConsultaPage() {
       setIdosoAtivo(ativo);
     }
   }, []);
+
+  function handleSelectIdoso(selecionado: Idoso) {
+    setIdosoAtivo(selecionado);
+    localStorage.setItem("saspi_active_elderly", JSON.stringify(selecionado));
+    window.dispatchEvent(new Event("saspi_elderly_updated"));
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -134,7 +144,7 @@ export default function NovaConsultaPage() {
     } catch (err: any) {
       setErro(
         err.message ||
-          "Erro de comunicação ao agendar consulta. Verifique a data e os campos."
+          "Erro de comunicação ao agendar consulta. Verifique a data e os campos.",
       );
     } finally {
       setSalvando(false);
@@ -197,7 +207,7 @@ export default function NovaConsultaPage() {
         <div className="mt-6">
           <PatientSelector
             selectedId={idosoAtivo?.id}
-            onSelect={(p) => setIdosoAtivo(p)}
+            onSelect={handleSelectIdoso}
           />
         </div>
 
