@@ -82,7 +82,9 @@ export default function NovoIdosoPage() {
 
     const idadeCalculada = calcularIdadeReal(formData.data_nascimento);
     if (idadeCalculada <= 0 || idadeCalculada > 130) {
-      setErro("A data de nascimento informada não corresponde a uma idade válida.");
+      setErro(
+        "A data de nascimento informada não corresponde a uma idade válida."
+      );
       setSalvando(false);
       return;
     }
@@ -206,7 +208,7 @@ export default function NovoIdosoPage() {
               </div>
               <div>
                 <h2 className="font-semibold text-[#0A2540]">
-                  Identificação e Contato do Paciente
+                  Identificação, Contato e Endereço do Paciente
                 </h2>
                 <p className="text-xs text-gray-500">
                   A idade será calculada automaticamente a partir da data de
@@ -227,7 +229,7 @@ export default function NovoIdosoPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, nome: e.target.value })
                   }
-                  placeholder="Ex.: Sr. Antônio Carlos Pereira"
+                  placeholder="Ex.: André Roberto"
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
               </div>
@@ -258,7 +260,7 @@ export default function NovoIdosoPage() {
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-[#0A2540]">
-                  CPF (opcional)
+                  CPF
                 </label>
                 <input
                   type="text"
@@ -278,7 +280,7 @@ export default function NovoIdosoPage() {
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-[#0A2540]">
-                  Sexo (opcional)
+                  Sexo
                 </label>
                 <select
                   value={formData.sexo}
@@ -288,9 +290,9 @@ export default function NovoIdosoPage() {
                   className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 >
                   <option value="">Não informado</option>
-                  <option value="M">Masculino</option>
-                  <option value="F">Feminino</option>
-                  <option value="OUTRO">Outro</option>
+                  <option value="Masculino">Masculino</option>
+                  <option value="Feminino">Feminino</option>
+                  <option value="Outro">Outro</option>
                 </select>
               </div>
 
@@ -314,7 +316,7 @@ export default function NovoIdosoPage() {
 
               <div className="md:col-span-2">
                 <label className="mb-2 block text-sm font-medium text-[#0A2540]">
-                  Endereço ou Acomodação / Leito
+                  Endereço completo
                 </label>
                 <input
                   type="text"
@@ -322,7 +324,7 @@ export default function NovoIdosoPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, endereco: e.target.value })
                   }
-                  placeholder="Ex.: Ala B - Quarto 12 ou Rua das Acácias, 140"
+                  placeholder="Ex.: Rua Barão Antônio De Cairari Número 68"
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                 />
               </div>

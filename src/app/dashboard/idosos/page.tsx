@@ -4,7 +4,12 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import DashboardNavbar from "@/components/DashboardNavbar";
 import AvatarCropModal from "@/components/AvatarCropModal";
-import { calcularIdadeReal } from "@/components/PatientSelector";
+import {
+  calcularIdadeReal,
+  formatarCpf,
+  formatarDataBr,
+  formatarSexo,
+} from "@/components/PatientSelector";
 import {
   API_URL,
   getAuthHeaders,
@@ -27,17 +32,27 @@ import {
   Phone,
   MapPin,
   Calendar,
+  Smartphone,
+  Mail,
+  FileText,
+  UserCheck,
 } from "lucide-react";
 
 interface IdosoItem {
   id: string;
   nome: string;
   idade: number;
+  cpf?: string;
   data_nascimento?: string;
+  sexo?: string;
   telefone?: string;
   endereco?: string;
   foto_url?: string | null;
   clinica_id?: string;
+  created_at?: string;
+  usuario_id?: string | null;
+  app_ativo: boolean;
+  app_email?: string;
 }
 
 export default function IdososPage() {
@@ -70,34 +85,102 @@ export default function IdososPage() {
 
     try {
       const clinicaId = validarEObterClinicaId(sessao);
+      const headers = getAuthHeaders(false);
 
-      const res = await fetch(`${API_URL}/idoso?clinica_id=${clinicaId}`, {
-        headers: getAuthHeaders(false),
-      });
+      const [resIdosos, resUsuarios] = await Promise.all([
+        fetch(`${API_URL}/idoso?clinica_id=${clinicaId}`, { headers }),
+        fetch(`${API_URL}/usuario?clinica_id=${clinicaId}`, { headers }).catch(
+          () => null
+        ),
+      ]);
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
+      if (!resIdosos.ok) {
+        const errData = await resIdosos.json().catch(() => null);
         throw new Error(
-          errData?.message || "Não foi possível carregar os pacientes da clínica."
+          errData?.message ||
+            "Não foi possível carregar os pacientes da clínica."
         );
       }
 
-      const raw = await res.json();
-      const lista = Array.isArray(raw) ? raw : raw?.data || [];
+      const rawIdosos = await resIdosos.json();
+      const lista = Array.isArray(rawIdosos)
+        ? rawIdosos
+        : rawIdosos?.data || [];
+
+      const mapaUsuariosIdoso = new Map<string, { email: string }>();
+      const mapaUsuariosPorIdosoId = new Map<string, { email: string }>();
+
+      if (resUsuarios?.ok) {
+        const rawUsers = await resUsuarios.json();
+        const listaUsers = Array.isArray(rawUsers)
+          ? rawUsers
+          : rawUsers?.data || [];
+        listaUsers.forEach((u: any) => {
+          const perfilU = String(u.perfil || "").toUpperCase();
+          if (perfilU === "IDOSO") {
+            if (u.id) {
+              mapaUsuariosIdoso.set(String(u.id), {
+                email: String(u.email || ""),
+              });
+            }
+            if (u.idoso_id) {
+              mapaUsuariosPorIdosoId.set(String(u.idoso_id), {
+                email: String(u.email || ""),
+              });
+            }
+          }
+        });
+      }
+
+      let cacheLocalApp: Record<string, { email?: string; ativo?: boolean }> =
+        {};
+      if (typeof window !== "undefined") {
+        try {
+          const rawCache = localStorage.getItem(`saspi_idoso_app_${clinicaId}`);
+          if (rawCache) cacheLocalApp = JSON.parse(rawCache);
+        } catch {}
+      }
 
       const filtrados: IdosoItem[] = lista
         .filter((i: any) => !i.clinica_id || i.clinica_id === clinicaId)
         .map((i: any) => {
+          const idStr = String(i.id);
           const idadeReal = calcularIdadeReal(i.data_nascimento);
+          const usuarioId = i.usuario_id ? String(i.usuario_id) : null;
+          const usuarioEmbutido = i.usuario || null;
+          const usuarioMapeado =
+            (usuarioId ? mapaUsuariosIdoso.get(usuarioId) : undefined) ||
+            mapaUsuariosPorIdosoId.get(idStr);
+          const registroLocal = cacheLocalApp[idStr];
+
+          const emailApp =
+            usuarioEmbutido?.email ||
+            usuarioMapeado?.email ||
+            registroLocal?.email ||
+            "";
+          const appAtivo = Boolean(
+            usuarioId ||
+              usuarioEmbutido?.id ||
+              usuarioMapeado ||
+              emailApp ||
+              registroLocal?.ativo
+          );
+
           return {
-            id: String(i.id),
+            id: idStr,
             nome: String(i.nome || ""),
             idade: idadeReal > 0 ? idadeReal : Number(i.idade || 0),
+            cpf: i.cpf ? String(i.cpf) : undefined,
             data_nascimento: i.data_nascimento || undefined,
+            sexo: i.sexo ? String(i.sexo) : undefined,
             telefone: i.telefone || i.telefone_emergencia || undefined,
-            endereco: i.endereco || i.condicoes || undefined,
+            endereco: i.endereco || undefined,
             foto_url: i.foto_url || null,
             clinica_id: i.clinica_id || clinicaId,
+            created_at: i.created_at || undefined,
+            usuario_id: usuarioId,
+            app_ativo: appAtivo,
+            app_email: emailApp || undefined,
           };
         });
 
@@ -232,20 +315,17 @@ export default function IdososPage() {
     }
   }
 
-  function formatarDataNascimento(dataStr?: string) {
-    if (!dataStr) return null;
-    const limpa = String(dataStr).split("T")[0];
-    const partes = limpa.split("-");
-    if (partes.length !== 3) return limpa;
-    return `${partes[2]}/${partes[1]}/${partes[0]}`;
-  }
-
   const idososFiltrados = idosos.filter((i) => {
     const termo = busca.trim().toLowerCase();
     if (!termo) return true;
+    const cpfLimpo = (i.cpf || "").replace(/\D/g, "");
+    const termoDigitos = termo.replace(/\D/g, "");
     return (
       i.nome.toLowerCase().includes(termo) ||
-      (i.endereco && i.endereco.toLowerCase().includes(termo))
+      (i.endereco && i.endereco.toLowerCase().includes(termo)) ||
+      (i.app_email && i.app_email.toLowerCase().includes(termo)) ||
+      (i.telefone && i.telefone.toLowerCase().includes(termo)) ||
+      (termoDigitos.length >= 3 && cpfLimpo.includes(termoDigitos))
     );
   });
 
@@ -299,8 +379,8 @@ export default function IdososPage() {
               Pacientes Idosos
             </h1>
             <p className="mt-2 text-gray-600">
-              Cadastre pacientes, atualize fotos de identificação e configure o
-              acesso ao aplicativo móvel.
+              Visualize os dados completos dos pacientes, atualize fotos e
+              gerencie o acesso ao aplicativo móvel.
             </p>
           </div>
 
@@ -338,7 +418,7 @@ export default function IdososPage() {
 
         <div className="mt-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="relative flex-1 max-w-md">
+            <div className="relative max-w-md flex-1">
               <Search
                 size={17}
                 className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
@@ -347,7 +427,7 @@ export default function IdososPage() {
                 type="text"
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
-                placeholder="Buscar por nome ou acomodação..."
+                placeholder="Buscar por nome, CPF, telefone, endereço ou e-mail..."
                 className="w-full rounded-xl border border-gray-200 py-2.5 pl-10 pr-4 text-sm text-gray-900 outline-none transition focus:border-[#1565C0]"
               />
             </div>
@@ -387,9 +467,9 @@ export default function IdososPage() {
                     .join("")
                     .toUpperCase();
 
-                  const dataNascFmt = formatarDataNascimento(
-                    idoso.data_nascimento
-                  );
+                  const dataNascFmt = formatarDataBr(idoso.data_nascimento);
+                  const cpfFmt = formatarCpf(idoso.cpf);
+                  const sexoFmt = formatarSexo(idoso.sexo);
 
                   return (
                     <div
@@ -419,6 +499,7 @@ export default function IdososPage() {
                                 {idoso.idade > 0
                                   ? `${idoso.idade} anos`
                                   : "Idade não informada"}
+                                {sexoFmt ? ` • ${sexoFmt}` : ""}
                               </p>
                             </div>
                           </div>
@@ -438,7 +519,33 @@ export default function IdososPage() {
                           </button>
                         </div>
 
+                        <div className="mt-3.5">
+                          {idoso.app_ativo ? (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200">
+                              <Smartphone size={12} />
+                              App Ativo
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-200">
+                              <Smartphone size={12} />
+                              Sem Acesso App
+                            </span>
+                          )}
+                        </div>
+
                         <div className="mt-4 space-y-2 text-xs text-gray-600">
+                          {idoso.app_email && (
+                            <p className="flex items-center gap-2">
+                              <Mail
+                                size={14}
+                                className="shrink-0 text-emerald-600"
+                              />
+                              <span className="truncate font-medium text-gray-700">
+                                {idoso.app_email}
+                              </span>
+                            </p>
+                          )}
+
                           {dataNascFmt && (
                             <p className="flex items-center gap-2">
                               <Calendar
@@ -448,23 +555,45 @@ export default function IdososPage() {
                               <span>Nascimento: {dataNascFmt}</span>
                             </p>
                           )}
+
+                          {sexoFmt && (
+                            <p className="flex items-center gap-2">
+                              <UserCheck
+                                size={14}
+                                className="shrink-0 text-gray-400"
+                              />
+                              <span>Sexo: {sexoFmt}</span>
+                            </p>
+                          )}
+
+                          {cpfFmt && (
+                            <p className="flex items-center gap-2">
+                              <FileText
+                                size={14}
+                                className="shrink-0 text-gray-400"
+                              />
+                              <span>CPF: {cpfFmt}</span>
+                            </p>
+                          )}
+
                           {idoso.telefone && (
                             <p className="flex items-center gap-2">
                               <Phone
                                 size={14}
                                 className="shrink-0 text-[#26A69A]"
                               />
-                              <span>Contato: {idoso.telefone}</span>
+                              <span>Telefone: {idoso.telefone}</span>
                             </p>
                           )}
+
                           {idoso.endereco && (
                             <p className="flex items-start gap-2">
                               <MapPin
                                 size={14}
                                 className="mt-0.5 shrink-0 text-[#1565C0]"
                               />
-                              <span className="line-clamp-2">
-                                {idoso.endereco}
+                              <span className="wrap-break-word">
+                                Endereço: {idoso.endereco}
                               </span>
                             </p>
                           )}
@@ -474,10 +603,14 @@ export default function IdososPage() {
                       <div className="mt-5 flex items-center justify-between gap-2 border-t border-gray-100 pt-4">
                         <Link
                           href={`/dashboard/idosos/acesso-app?idoso_id=${idoso.id}`}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-[#E8F1FB] px-3 py-1.5 text-xs font-semibold text-[#1565C0] transition hover:bg-[#d6e6f9]"
+                          className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                            idoso.app_ativo
+                              ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                              : "bg-[#E8F1FB] text-[#1565C0] hover:bg-[#d6e6f9]"
+                          }`}
                         >
                           <KeyRound size={13} />
-                          Credencial App
+                          {idoso.app_ativo ? "Gerenciar App" : "Configurar App"}
                         </Link>
 
                         <button

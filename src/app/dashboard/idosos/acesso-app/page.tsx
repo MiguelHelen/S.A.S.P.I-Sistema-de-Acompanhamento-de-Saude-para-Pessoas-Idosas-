@@ -24,12 +24,15 @@ import {
   RefreshCw,
   Copy,
   Check,
+  Info,
 } from "lucide-react";
 
 interface IdosoOpcao {
   id: string;
   nome: string;
   idade: number;
+  app_ativo: boolean;
+  app_email?: string;
 }
 
 function gerarSenhaSegura(tamanho = 10): string {
@@ -53,6 +56,7 @@ function AcessoAppIdosoContent() {
   const idosoParam = searchParams.get("idoso_id") || "";
 
   const [autorizado, setAutorizado] = useState<boolean | null>(null);
+  const [clinicaId, setClinicaId] = useState("");
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [sucesso, setSucesso] = useState(false);
@@ -80,36 +84,88 @@ function AcessoAppIdosoContent() {
       setAutorizado(true);
 
       try {
-        const clinicaId = validarEObterClinicaId(sessao);
+        const cid = validarEObterClinicaId(sessao);
+        setClinicaId(cid);
+        const headers = getAuthHeaders(false);
 
-        const res = await fetch(`${API_URL}/idoso?clinica_id=${clinicaId}`, {
-          headers: getAuthHeaders(false),
-        });
+        const [resIdosos, resUsuarios] = await Promise.all([
+          fetch(`${API_URL}/idoso?clinica_id=${cid}`, { headers }),
+          fetch(`${API_URL}/usuario?clinica_id=${cid}`, { headers }).catch(
+            () => null
+          ),
+        ]);
 
-        if (!res.ok) {
+        if (!resIdosos.ok) {
           throw new Error("Não foi possível carregar os pacientes da clínica.");
         }
 
-        const raw = await res.json();
+        const raw = await resIdosos.json();
         const lista = Array.isArray(raw) ? raw : raw?.data || [];
 
+        const mapaUsuarios = new Map<string, string>();
+        const mapaPorIdosoId = new Map<string, string>();
+        if (resUsuarios?.ok) {
+          const rawUsers = await resUsuarios.json();
+          const listaUsers = Array.isArray(rawUsers)
+            ? rawUsers
+            : rawUsers?.data || [];
+          listaUsers.forEach((u: any) => {
+            if (String(u.perfil || "").toUpperCase() === "IDOSO") {
+              if (u.id) mapaUsuarios.set(String(u.id), String(u.email || ""));
+              if (u.idoso_id)
+                mapaPorIdosoId.set(String(u.idoso_id), String(u.email || ""));
+            }
+          });
+        }
+
+        let cacheLocalApp: Record<string, { email?: string; ativo?: boolean }> =
+          {};
+        if (typeof window !== "undefined") {
+          try {
+            const rawCache = localStorage.getItem(`saspi_idoso_app_${cid}`);
+            if (rawCache) cacheLocalApp = JSON.parse(rawCache);
+          } catch {}
+        }
+
         const opcoes: IdosoOpcao[] = lista
-          .filter((i: any) => !i.clinica_id || i.clinica_id === clinicaId)
+          .filter((i: any) => !i.clinica_id || i.clinica_id === cid)
           .map((i: any) => {
+            const idStr = String(i.id);
             const idadeReal = calcularIdadeReal(i.data_nascimento);
+            const usuarioId = i.usuario_id ? String(i.usuario_id) : "";
+            const emailVinculado =
+              i.usuario?.email ||
+              (usuarioId ? mapaUsuarios.get(usuarioId) : "") ||
+              mapaPorIdosoId.get(idStr) ||
+              cacheLocalApp[idStr]?.email ||
+              "";
+
             return {
-              id: String(i.id),
+              id: idStr,
               nome: String(i.nome || ""),
               idade: idadeReal > 0 ? idadeReal : Number(i.idade || 0),
+              app_ativo: Boolean(
+                usuarioId ||
+                  i.usuario?.id ||
+                  mapaPorIdosoId.has(idStr) ||
+                  emailVinculado ||
+                  cacheLocalApp[idStr]?.ativo
+              ),
+              app_email: emailVinculado || undefined,
             };
           });
 
         setIdosos(opcoes);
 
-        if (idosoParam && opcoes.some((o) => o.id === idosoParam)) {
-          setIdosoId(idosoParam);
-        } else if (opcoes.length > 0 && !idosoId) {
-          setIdosoId(opcoes[0].id);
+        const inicialId =
+          idosoParam && opcoes.some((o) => o.id === idosoParam)
+            ? idosoParam
+            : opcoes[0]?.id || "";
+
+        setIdosoId(inicialId);
+        const opcaoInicial = opcoes.find((o) => o.id === inicialId);
+        if (opcaoInicial?.app_email) {
+          setEmailApp(opcaoInicial.app_email);
         }
       } catch (err: any) {
         setErro(err.message || "Falha ao carregar pacientes.");
@@ -120,6 +176,15 @@ function AcessoAppIdosoContent() {
 
     carregarIdosos();
   }, [idosoParam]);
+
+  function handleTrocarPaciente(novoId: string) {
+    setIdosoId(novoId);
+    setSucesso(false);
+    setErro("");
+    const selecionado = idosos.find((o) => o.id === novoId);
+    setEmailApp(selecionado?.app_email || "");
+    setSenhaApp(gerarSenhaSegura(10));
+  }
 
   function handleCopiarCredenciais() {
     const paciente = idosos.find((i) => i.id === idosoId);
@@ -177,6 +242,26 @@ function AcessoAppIdosoContent() {
         );
       }
 
+      if (typeof window !== "undefined" && clinicaId) {
+        try {
+          const rawCache = localStorage.getItem(`saspi_idoso_app_${clinicaId}`);
+          const atual = rawCache ? JSON.parse(rawCache) : {};
+          atual[idosoId] = { email: emailLimpo, ativo: true };
+          localStorage.setItem(
+            `saspi_idoso_app_${clinicaId}`,
+            JSON.stringify(atual)
+          );
+        } catch {}
+      }
+
+      setIdosos((prev) =>
+        prev.map((item) =>
+          item.id === idosoId
+            ? { ...item, app_ativo: true, app_email: emailLimpo }
+            : item
+        )
+      );
+
       setSucesso(true);
     } catch (err: any) {
       setErro(err.message || "Erro ao salvar credencial do aplicativo.");
@@ -204,6 +289,8 @@ function AcessoAppIdosoContent() {
       </main>
     );
   }
+
+  const pacienteSelecionado = idosos.find((i) => i.id === idosoId);
 
   return (
     <main className="min-h-screen bg-[#F2F7FB]">
@@ -285,6 +372,19 @@ function AcessoAppIdosoContent() {
                 </div>
               </div>
 
+              {pacienteSelecionado?.app_ativo && (
+                <div className="mt-5 flex items-start gap-2.5 rounded-xl border border-blue-100 bg-[#F2F7FB] p-3.5 text-xs text-[#0A2540]">
+                  <Info size={16} className="mt-0.5 shrink-0 text-[#1565C0]" />
+                  <span>
+                    Este paciente já possui acesso ativo no aplicativo
+                    {pacienteSelecionado.app_email
+                      ? ` (${pacienteSelecionado.app_email})`
+                      : ""}
+                    . Ao salvar abaixo, a senha de acesso será atualizada.
+                  </span>
+                </div>
+              )}
+
               <div className="mt-6 grid gap-5 md:grid-cols-2">
                 <div className="md:col-span-2">
                   <label className="mb-2 block text-sm font-medium text-[#0A2540]">
@@ -293,14 +393,15 @@ function AcessoAppIdosoContent() {
                   <select
                     required
                     value={idosoId}
-                    onChange={(e) => setIdosoId(e.target.value)}
+                    onChange={(e) => handleTrocarPaciente(e.target.value)}
                     className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
                   >
                     <option value="">Selecione o paciente...</option>
                     {idosos.map((i) => (
                       <option key={i.id} value={i.id}>
                         {i.nome}
-                        {i.idade > 0 ? ` (${i.idade} anos)` : ""}
+                        {i.idade > 0 ? ` (${i.idade} anos)` : ""} —{" "}
+                        {i.app_ativo ? "App Ativo" : "Sem Acesso"}
                       </option>
                     ))}
                   </select>
@@ -322,7 +423,9 @@ function AcessoAppIdosoContent() {
 
                 <div>
                   <label className="mb-2 block text-sm font-medium text-[#0A2540]">
-                    Senha do App *
+                    {pacienteSelecionado?.app_ativo
+                      ? "Nova Senha do App *"
+                      : "Senha do App *"}
                   </label>
                   <div className="flex gap-2">
                     <div className="relative flex-1">
@@ -369,7 +472,11 @@ function AcessoAppIdosoContent() {
                 ) : (
                   <Save size={18} />
                 )}
-                {salvando ? "Salvando..." : "Salvar Credencial do App"}
+                {salvando
+                  ? "Salvando..."
+                  : pacienteSelecionado?.app_ativo
+                    ? "Atualizar Credencial do App"
+                    : "Salvar Credencial do App"}
               </button>
             </div>
           </form>

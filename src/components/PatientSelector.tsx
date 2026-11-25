@@ -6,18 +6,30 @@ import {
   getAuthHeaders,
   getUsuarioSessao,
 } from "@/lib/clinica";
-import { Users, CheckCircle2, Loader2, AlertCircle } from "lucide-react";
+import {
+  Users,
+  CheckCircle2,
+  Loader2,
+  AlertCircle,
+  MapPin,
+  Phone,
+  Calendar,
+  FileText,
+  UserCheck,
+} from "lucide-react";
 
 export interface Idoso {
   id: string;
   nome: string;
   idade: number;
-  data_nascimento?: string;
-  quarto?: string | null;
-  foto_url?: string | null;
-  condicoes?: string | null;
-  telefone_emergencia?: string | null;
+  cpf?: string | null;
+  data_nascimento?: string | null;
+  sexo?: string | null;
+  telefone?: string | null;
+  endereco?: string | null;
   clinica_id?: string;
+  created_at?: string;
+  foto_url?: string | null;
 }
 
 interface PatientSelectorProps {
@@ -45,18 +57,44 @@ export function calcularIdadeReal(dataNascimento?: string | null): number {
   return idade > 0 ? idade : 0;
 }
 
+export function formatarCpf(cpf?: string | null): string {
+  const digitos = String(cpf || "").replace(/\D/g, "");
+  if (digitos.length !== 11) return digitos || "";
+  return digitos.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+}
+
+export function formatarDataBr(dataStr?: string | null): string {
+  if (!dataStr) return "";
+  const limpa = String(dataStr).split("T")[0];
+  const partes = limpa.split("-");
+  if (partes.length !== 3) return limpa;
+  return `${partes[2]}/${partes[1]}/${partes[0]}`;
+}
+
+export function formatarSexo(sexo?: string | null): string {
+  const s = String(sexo || "").trim();
+  if (!s) return "";
+  const up = s.toUpperCase();
+  if (up === "M" || up === "MASCULINO") return "Masculino";
+  if (up === "F" || up === "FEMININO") return "Feminino";
+  if (up === "OUTRO") return "Outro";
+  return s;
+}
+
 function normalizarIdoso(bruto: any): Idoso {
   const idadeCalculada = calcularIdadeReal(bruto.data_nascimento);
   return {
     id: String(bruto.id || ""),
     nome: String(bruto.nome || "Paciente"),
     idade: idadeCalculada > 0 ? idadeCalculada : Number(bruto.idade || 0),
-    data_nascimento: bruto.data_nascimento,
-    quarto: bruto.quarto || null,
-    foto_url: bruto.foto_url || null,
-    condicoes: bruto.condicoes || null,
-    telefone_emergencia: bruto.telefone_emergencia || null,
+    cpf: bruto.cpf || null,
+    data_nascimento: bruto.data_nascimento || null,
+    sexo: bruto.sexo || null,
+    telefone: bruto.telefone || bruto.telefone_emergencia || null,
+    endereco: bruto.endereco || null,
     clinica_id: bruto.clinica_id || undefined,
+    created_at: bruto.created_at || undefined,
+    foto_url: bruto.foto_url || null,
   };
 }
 
@@ -242,6 +280,8 @@ export default function PatientSelector({
     );
   }
 
+  const pacienteAtivo = idosos.find((i) => i.id === ativoId) || idosos[0];
+
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
       <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
@@ -294,7 +334,7 @@ export default function PatientSelector({
                 </p>
                 <p className="mt-0.5 text-xs text-gray-500">
                   {idoso.idade > 0 ? `${idoso.idade} anos` : "Paciente ativo"}
-                  {idoso.quarto ? ` • ${idoso.quarto}` : ""}
+                  {idoso.sexo ? ` • ${formatarSexo(idoso.sexo)}` : ""}
                 </p>
               </div>
 
@@ -308,6 +348,70 @@ export default function PatientSelector({
           );
         })}
       </div>
+
+      {pacienteAtivo && (
+        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-gray-100 bg-[#F8FBFE] px-4 py-2.5 text-xs text-gray-600">
+          {pacienteAtivo.data_nascimento && (
+            <span className="inline-flex items-center gap-1.5">
+              <Calendar size={13} className="text-[#1565C0]" />
+              <span>
+                Nasc.:{" "}
+                <strong className="font-semibold text-[#0A2540]">
+                  {formatarDataBr(pacienteAtivo.data_nascimento)}
+                </strong>
+              </span>
+            </span>
+          )}
+
+          {pacienteAtivo.sexo && (
+            <span className="inline-flex items-center gap-1.5">
+              <UserCheck size={13} className="text-[#1565C0]" />
+              <span>
+                Sexo:{" "}
+                <strong className="font-semibold text-[#0A2540]">
+                  {formatarSexo(pacienteAtivo.sexo)}
+                </strong>
+              </span>
+            </span>
+          )}
+
+          {pacienteAtivo.cpf && (
+            <span className="inline-flex items-center gap-1.5">
+              <FileText size={13} className="text-[#1565C0]" />
+              <span>
+                CPF:{" "}
+                <strong className="font-semibold text-[#0A2540]">
+                  {formatarCpf(pacienteAtivo.cpf)}
+                </strong>
+              </span>
+            </span>
+          )}
+
+          {pacienteAtivo.telefone && (
+            <span className="inline-flex items-center gap-1.5">
+              <Phone size={13} className="text-[#26A69A]" />
+              <span>
+                Tel.:{" "}
+                <strong className="font-semibold text-[#0A2540]">
+                  {pacienteAtivo.telefone}
+                </strong>
+              </span>
+            </span>
+          )}
+
+          {pacienteAtivo.endereco && (
+            <span className="inline-flex items-center gap-1.5">
+              <MapPin size={13} className="shrink-0 text-[#1565C0]" />
+              <span>
+                Endereço:{" "}
+                <strong className="font-semibold text-[#0A2540]">
+                  {pacienteAtivo.endereco}
+                </strong>
+              </span>
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
