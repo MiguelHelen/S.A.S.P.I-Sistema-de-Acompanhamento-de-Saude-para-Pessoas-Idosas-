@@ -355,8 +355,11 @@ export async function resolverESalvarSessao(params: {
 }): Promise<UsuarioSessao> {
   const { token, usuarioParcial, emailFallback } = params;
 
+  localStorage.removeItem("saspi_user");
   localStorage.removeItem("saspi_active_elderly");
   localStorage.removeItem("saspi_elderly_list");
+  removerCookieSessao("saspi_user");
+
   localStorage.setItem("saspi_token", token);
   gravarCookieSessao("saspi_token", token);
 
@@ -386,6 +389,19 @@ export async function resolverESalvarSessao(params: {
         if (resById.ok) {
           const full = await resById.json();
           dadosUsuario = { ...dadosUsuario, ...(full?.data || full) };
+        }
+      }
+
+      if (!dadosUsuario.clinica_id || !dadosUsuario.perfil || !dadosUsuario.nome) {
+        for (const rotaPerfil of ["/auth/me", "/auth/profile", "/usuario/me"]) {
+          const resMe = await fetch(`${API_URL}${rotaPerfil}`, {
+            headers: getAuthHeaders(false, token),
+          }).catch(() => null);
+          if (resMe?.ok) {
+            const meData = await resMe.json();
+            dadosUsuario = { ...dadosUsuario, ...(meData?.data || meData) };
+            break;
+          }
         }
       }
 
