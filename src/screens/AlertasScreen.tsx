@@ -11,17 +11,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../contexts/AuthContext';
 import { apiFetch } from '../api/client';
+import { AlertaItem, gerarAlertasClinicos } from '../utils/alertasHelper';
 import { CalendarDays, CheckCircle2 } from 'lucide-react-native';
-
-interface AlertaItem {
-  id: string;
-  categoria: 'Saúde' | 'Medicamentos' | 'Consultas';
-  nivel: 'CRITICO' | 'AVISO' | 'INFO';
-  prioridade: 'ALTA' | 'NORMAL';
-  titulo: string;
-  descricao: string;
-  destino: string;
-}
 
 export default function AlertasScreen({ navigation }: any) {
   const { usuario, token } = useAuth();
@@ -47,138 +38,22 @@ export default function AlertasScreen({ navigation }: any) {
             apiFetch(`/consulta/idoso/${idosoId}`, {}, token),
           ]);
 
-          const lista: AlertaItem[] = [];
+          const registros =
+            resSaude.status === 'fulfilled' && resSaude.value.ok
+              ? await resSaude.value.json().then((r) => (Array.isArray(r) ? r : r.data || []))
+              : [];
 
-          if (resSaude.status === 'fulfilled' && resSaude.value.ok) {
-            const raw = await resSaude.value.json();
-            const registros = Array.isArray(raw) ? raw : raw.data || [];
+          const meds =
+            resMeds.status === 'fulfilled' && resMeds.value.ok
+              ? await resMeds.value.json().then((r) => (Array.isArray(r) ? r : r.data || []))
+              : [];
 
-            registros.forEach((reg: any) => {
-              const nomeInd = String(reg.indicador_saude?.nome || '').toLowerCase();
-              const valorNum = Number(reg.valor_numerico);
-              const valorCat = String(reg.valor_categorico || '');
-              const horario = reg.data_hora
-                ? new Date(reg.data_hora).toLocaleTimeString('pt-BR', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })
-                : '';
+          const cons =
+            resConsultas.status === 'fulfilled' && resConsultas.value.ok
+              ? await resConsultas.value.json().then((r) => (Array.isArray(r) ? r : r.data || []))
+              : [];
 
-              if (nomeInd.includes('press') || nomeInd.includes('pa')) {
-                const matchPa = valorCat.match(/^(\d{2,3})\/(\d{2,3})$/);
-                if (matchPa) {
-                  const sist = Number(matchPa[1]);
-                  const diast = Number(matchPa[2]);
-                  if (sist >= 140 || diast >= 90) {
-                    lista.push({
-                      id: `pa_alta_${reg.id}`,
-                      categoria: 'Saúde',
-                      nivel: 'CRITICO',
-                      prioridade: 'ALTA',
-                      titulo: 'Pressão arterial elevada',
-                      descricao: `PA: ${valorCat} mmHg às ${horario}. Atenção para hipertensão.`,
-                      destino: 'Saúde',
-                    });
-                  } else if (sist < 90 || diast < 60) {
-                    lista.push({
-                      id: `pa_baixa_${reg.id}`,
-                      categoria: 'Saúde',
-                      nivel: 'AVISO',
-                      prioridade: 'ALTA',
-                      titulo: 'Pressão arterial baixa',
-                      descricao: `PA: ${valorCat} mmHg às ${horario}. Monitore sintomas de tontura.`,
-                      destino: 'Saúde',
-                    });
-                  }
-                }
-              } else if (!Number.isNaN(valorNum)) {
-                if (nomeInd.includes('card') && valorNum > 100) {
-                  lista.push({
-                    id: `fc_alta_${reg.id}`,
-                    categoria: 'Saúde',
-                    nivel: 'CRITICO',
-                    prioridade: 'ALTA',
-                    titulo: 'Frequência cardíaca elevada',
-                    descricao: `FC: ${valorNum} bpm às ${horario}. Verifique o estado da pessoa acompanhada.`,
-                    destino: 'Saúde',
-                  });
-                } else if (nomeInd.includes('card') && valorNum < 60) {
-                  lista.push({
-                    id: `fc_baixa_${reg.id}`,
-                    categoria: 'Saúde',
-                    nivel: 'CRITICO',
-                    prioridade: 'ALTA',
-                    titulo: 'Frequência cardíaca baixa',
-                    descricao: `FC: ${valorNum} bpm às ${horario}. Considere avaliação profissional.`,
-                    destino: 'Saúde',
-                  });
-                } else if (nomeInd.includes('oxig') && valorNum < 95) {
-                  lista.push({
-                    id: `spo2_${reg.id}`,
-                    categoria: 'Saúde',
-                    nivel: 'CRITICO',
-                    prioridade: 'ALTA',
-                    titulo: 'Oxigenação abaixo do normal',
-                    descricao: `SpO₂: ${valorNum}% às ${horario}. Atenção para possível quadro de hipóxia.`,
-                    destino: 'Saúde',
-                  });
-                } else if (nomeInd.includes('temp') && valorNum >= 37.3) {
-                  lista.push({
-                    id: `temp_${reg.id}`,
-                    categoria: 'Saúde',
-                    nivel: 'AVISO',
-                    prioridade: 'ALTA',
-                    titulo: 'Estado febril detectado',
-                    descricao: `Temperatura: ${valorNum}°C às ${horario}. Monitore a evolução.`,
-                    destino: 'Saúde',
-                  });
-                }
-              }
-            });
-          }
-
-          if (resMeds.status === 'fulfilled' && resMeds.value.ok) {
-            const rawMeds = await resMeds.value.json();
-            const meds = Array.isArray(rawMeds) ? rawMeds : rawMeds?.data || [];
-            const ativas = meds.filter(
-              (m: any) => (m.status || 'ATIVA').toUpperCase() === 'ATIVA'
-            );
-            ativas.slice(0, 3).forEach((m: any) => {
-              lista.push({
-                id: `med_${m.id}`,
-                categoria: 'Medicamentos',
-                nivel: 'AVISO',
-                prioridade: 'ALTA',
-                titulo: 'Dose de medicamento ativa',
-                descricao: `${m.medicamento?.nome || 'Medicamento'} ${m.dosagem || ''} • ${m.frequencia || 'Uso contínuo'}`,
-                destino: 'Remédios',
-              });
-            });
-          }
-
-          if (resConsultas.status === 'fulfilled' && resConsultas.value.ok) {
-            const rawCons = await resConsultas.value.json();
-            const cons = Array.isArray(rawCons) ? rawCons : rawCons?.data || [];
-            const agendadas = cons.filter((c: any) => {
-              const st = (c.status || 'AGENDADA').toUpperCase();
-              return st === 'AGENDADA' || st === 'CONFIRMADA';
-            });
-            agendadas.slice(0, 3).forEach((c: any) => {
-              const dataBr = c.data
-                ? new Date(c.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
-                : '';
-              lista.push({
-                id: `cons_${c.id}`,
-                categoria: 'Consultas',
-                nivel: 'INFO',
-                prioridade: 'NORMAL',
-                titulo: 'Consulta próxima',
-                descricao: `${c.especialidade} • ${dataBr} às ${c.horario}`,
-                destino: 'Agenda',
-              });
-            });
-          }
-
+          const lista = gerarAlertasClinicos(registros, meds, cons);
           if (isMounted) setAlertas(lista);
         } catch (err) {
           console.error('Erro ao carregar alertas:', err);
