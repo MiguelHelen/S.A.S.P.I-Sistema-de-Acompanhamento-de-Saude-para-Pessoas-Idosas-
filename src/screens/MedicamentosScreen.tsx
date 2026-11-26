@@ -26,6 +26,7 @@ import {
 } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useAccessibility } from '../contexts/AccessibilityContext';
+import { useSocket } from '../contexts/SocketContext';
 import { apiFetch } from '../api/client';
 
 interface Prescricao {
@@ -65,7 +66,9 @@ interface RegistroDose {
 export default function MedicamentosScreen() {
   const { usuario, token } = useAuth();
   const { fontScale, highContrast, simplifiedMode } = useAccessibility();
+  const { emitirAtualizacao } = useSocket();
 
+  const [idosoIdAtivo, setIdosoIdAtivo] = useState<string>('');
   const [idosoNome, setIdosoNome] = useState<string>('');
   const [prescricoes, setPrescricoes] = useState<Prescricao[]>([]);
   const [historicoDoses, setHistoricoDoses] = useState<RegistroDose[]>([]);
@@ -92,6 +95,7 @@ export default function MedicamentosScreen() {
       }
 
       const idosoObj = JSON.parse(storedElderly);
+      setIdosoIdAtivo(idosoObj.id || '');
       setIdosoNome(idosoObj.nome || '');
 
       const [resPresc, resDoses] = await Promise.all([
@@ -176,6 +180,11 @@ export default function MedicamentosScreen() {
               if (!res.ok) {
                 throw new Error(data?.message || 'Não foi possível registrar a dose.');
               }
+
+              emitirAtualizacao('saspi_elderly_updated', {
+                idoso_id: idosoIdAtivo,
+                tipo: 'registro-dose',
+              });
 
               setFeedback({
                 tipo: 'ok',

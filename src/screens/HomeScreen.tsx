@@ -14,6 +14,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "../contexts/AuthContext";
 import { useSocket } from "../contexts/SocketContext";
+import { useAccessibility } from "../contexts/AccessibilityContext";
 import { apiFetch } from "../api/client";
 import {
   parseDataConsulta,
@@ -38,6 +39,7 @@ const logoMini = require("../../assets/logosemtexto.png");
 export default function HomeScreen({ navigation }: any) {
   const { usuario, token } = useAuth();
   const { conectado } = useSocket();
+  const { colors, fontScale, highContrast } = useAccessibility();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [idoso, setIdoso] = useState<any>(null);
@@ -53,6 +55,9 @@ export default function HomeScreen({ navigation }: any) {
   });
 
   const perfil = (usuario?.perfil || "FAMILIAR").toUpperCase();
+  const isIdoso = perfil === "IDOSO";
+  const escalaEfetiva = isIdoso && fontScale === 1 ? 1.15 : fontScale;
+  const fs = (base: number) => Math.round(base * escalaEfetiva);
 
   const carregarDashboard = useCallback(async () => {
     try {
@@ -231,34 +236,42 @@ export default function HomeScreen({ navigation }: any) {
 
   const renderHomeIdoso = () => (
     <View style={styles.content}>
-      <Text style={styles.welcomeText}>{saudacao}</Text>
-      <Text style={styles.subtitleText}>Como você está se sentindo hoje?</Text>
+      <Text style={[styles.welcomeText, { color: colors.textPrimary, fontSize: fs(26) }]}>
+        {saudacao}
+      </Text>
+      <Text style={[styles.subtitleText, { color: colors.textSecondary, fontSize: fs(15) }]}>
+        Como você está se sentindo hoje?
+      </Text>
 
       <View style={styles.greenCard}>
-        <Text style={styles.greenCardSub}>SEU CUIDADO DE HOJE</Text>
-        <Text style={styles.greenCardTitle}>Um passo de cada vez.</Text>
-        <Text style={styles.greenCardText}>
+        <Text style={[styles.greenCardSub, { fontSize: fs(11) }]}>SEU CUIDADO DE HOJE</Text>
+        <Text style={[styles.greenCardTitle, { fontSize: fs(22) }]}>Um passo de cada vez.</Text>
+        <Text style={[styles.greenCardText, { fontSize: fs(14) }]}>
           {resumo.fc !== "--"
             ? `Último batimento registrado: ${resumo.fc} bpm`
             : "Você está indo muito bem!"}
         </Text>
         <View style={styles.badgeGreen}>
-          <Text style={styles.badgeGreenText}>
+          <Text style={[styles.badgeGreenText, { fontSize: fs(12) }]}>
             {conectado ? "Monitoramento ativo" : "Rotina em dia"}
           </Text>
         </View>
         <Heart color="#FFF" fill="#FFF" size={40} style={styles.greenCardIcon} opacity={0.2} />
       </View>
 
-      <Text style={styles.sectionTitle}>Para hoje</Text>
-      <View style={styles.actionCard}>
+      <Text style={[styles.sectionTitle, { color: colors.textPrimary, fontSize: fs(16) }]}>
+        Para hoje
+      </Text>
+      <View style={[styles.actionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={styles.actionCardHeader}>
           <View style={styles.iconWrapperGreen}>
             <Pill size={20} color="#159B87" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.actionCardTitle}>Medicamentos prescritos</Text>
-            <Text style={styles.actionCardValue}>
+            <Text style={[styles.actionCardTitle, { color: colors.textSecondary, fontSize: fs(12) }]}>
+              Medicamentos prescritos
+            </Text>
+            <Text style={[styles.actionCardValue, { color: colors.textPrimary, fontSize: fs(16) }]}>
               {resumo.proximoRemedio
                 ? `${resumo.proximoRemedio.medicamento?.nome || resumo.proximoRemedio.nome_medicamento || "Medicamento"} • ${resumo.proximoRemedio.dosagem || ""}`
                 : "Nenhum medicamento ativo"}
@@ -272,32 +285,40 @@ export default function HomeScreen({ navigation }: any) {
           style={styles.primaryButton}
           onPress={() => navigation.navigate("Remédios")}
         >
-          <Text style={styles.primaryButtonText}>Ver meus medicamentos</Text>
+          <Text style={[styles.primaryButtonText, { fontSize: fs(15) }]}>Ver meus medicamentos</Text>
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.sectionTitle}>Acesso rápido</Text>
+      <Text style={[styles.sectionTitle, { color: colors.textPrimary, fontSize: fs(16) }]}>
+        Acesso rápido
+      </Text>
       <View style={styles.gridFastAccess}>
         <TouchableOpacity
-          style={styles.fastAccessBtn}
+          style={[styles.fastAccessBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
           onPress={() => navigation.navigate("Saúde")}
         >
           <HeartPulse size={24} color="#159B87" />
-          <Text style={styles.fastAccessText}>Minha saúde</Text>
+          <Text style={[styles.fastAccessText, { color: colors.textPrimary, fontSize: fs(13) }]}>
+            Minha saúde
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={styles.fastAccessBtn}
+          style={[styles.fastAccessBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
           onPress={() => navigation.navigate("NovoRegistroSinal")}
         >
           <Plus size={24} color="#159B87" />
-          <Text style={styles.fastAccessText}>Aferir sinais</Text>
+          <Text style={[styles.fastAccessText, { color: colors.textPrimary, fontSize: fs(13) }]}>
+            Aferir sinais
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={styles.fastAccessBtn}
+          style={[styles.fastAccessBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
           onPress={() => navigation.navigate("Agenda")}
         >
           <CalendarDays size={24} color="#159B87" />
-          <Text style={styles.fastAccessText}>Consultas</Text>
+          <Text style={[styles.fastAccessText, { color: colors.textPrimary, fontSize: fs(13) }]}>
+            Consultas
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -305,30 +326,45 @@ export default function HomeScreen({ navigation }: any) {
 
   const renderHomeCuidador = () => (
     <View style={styles.content}>
-      <Text style={styles.welcomeText}>{saudacao}</Text>
-      <Text style={styles.subtitleText}>Aqui está o resumo do seu cuidado.</Text>
+      <Text style={[styles.welcomeText, { color: colors.textPrimary, fontSize: fs(26) }]}>
+        {saudacao}
+      </Text>
+      <Text style={[styles.subtitleText, { color: colors.textSecondary, fontSize: fs(15) }]}>
+        Aqui está o resumo do seu cuidado.
+      </Text>
 
       <TouchableOpacity
-        style={styles.patientSelector}
+        style={[styles.patientSelector, { backgroundColor: colors.card, borderColor: colors.border }]}
         onPress={() => navigation.navigate("SelectElderly")}
       >
         {renderAvatarIdoso()}
         <View style={{ flex: 1 }}>
-          <Text style={styles.patientSelectorSub}>Idoso acompanhado</Text>
-          <Text style={styles.patientSelectorName}>{idoso?.nome || "Selecione um paciente"}</Text>
+          <Text style={[styles.patientSelectorSub, { color: colors.textSecondary, fontSize: fs(12) }]}>
+            Idoso acompanhado
+          </Text>
+          <Text style={[styles.patientSelectorName, { color: colors.textPrimary, fontSize: fs(16) }]}>
+            {idoso?.nome || "Selecione um paciente"}
+          </Text>
         </View>
         <ChevronRight size={20} color="#A0AEC0" />
       </TouchableOpacity>
 
-      <Text style={styles.sectionTitle}>Tarefas de hoje</Text>
+      <Text style={[styles.sectionTitle, { color: colors.textPrimary, fontSize: fs(16) }]}>
+        Tarefas de hoje
+      </Text>
 
-      <TouchableOpacity style={styles.taskCard} onPress={() => navigation.navigate("Remédios")}>
+      <TouchableOpacity
+        style={[styles.taskCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+        onPress={() => navigation.navigate("Remédios")}
+      >
         <View style={styles.iconWrapperYellow}>
           <Pill size={20} color="#D97706" />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.taskCardTitle}>Medicamentos em uso</Text>
-          <Text style={styles.taskCardSub}>
+          <Text style={[styles.taskCardTitle, { color: colors.textPrimary, fontSize: fs(15) }]}>
+            Medicamentos em uso
+          </Text>
+          <Text style={[styles.taskCardSub, { color: colors.textSecondary, fontSize: fs(13) }]}>
             {resumo.totalRemedios > 0
               ? `${resumo.totalRemedios} prescrição(ões) ativa(s)`
               : "Nenhum medicamento cadastrado"}
@@ -338,15 +374,17 @@ export default function HomeScreen({ navigation }: any) {
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={styles.taskCard}
+        style={[styles.taskCard, { backgroundColor: colors.card, borderColor: colors.border }]}
         onPress={() => navigation.navigate("NovoRegistroSinal")}
       >
         <View style={styles.iconWrapperGreen}>
           <HeartPulse size={20} color="#159B87" />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.taskCardTitle}>Registrar sinais vitais</Text>
-          <Text style={styles.taskCardSub}>
+          <Text style={[styles.taskCardTitle, { color: colors.textPrimary, fontSize: fs(15) }]}>
+            Registrar sinais vitais
+          </Text>
+          <Text style={[styles.taskCardSub, { color: colors.textSecondary, fontSize: fs(13) }]}>
             {resumo.ultimaHoraSinal
               ? `Último registro às ${resumo.ultimaHoraSinal}`
               : "Toque para aferir ou puxar da pulseira"}
@@ -355,13 +393,18 @@ export default function HomeScreen({ navigation }: any) {
         <ChevronRight size={18} color="#A0AEC0" />
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.taskCard} onPress={() => navigation.navigate("Agenda")}>
+      <TouchableOpacity
+        style={[styles.taskCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+        onPress={() => navigation.navigate("Agenda")}
+      >
         <View style={styles.iconWrapperBlue}>
           <CalendarDays size={20} color="#187BC0" />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.taskCardTitle}>Próxima consulta</Text>
-          <Text style={styles.taskCardSub}>
+          <Text style={[styles.taskCardTitle, { color: colors.textPrimary, fontSize: fs(15) }]}>
+            Próxima consulta
+          </Text>
+          <Text style={[styles.taskCardSub, { color: colors.textSecondary, fontSize: fs(13) }]}>
             {resumo.proximaConsulta
               ? formatarResumoConsulta(resumo.proximaConsulta)
               : "Nenhuma consulta agendada"}
@@ -377,13 +420,15 @@ export default function HomeScreen({ navigation }: any) {
         >
           <Bell size={20} color="#DC2626" />
           <View style={{ marginLeft: 12 }}>
-            <Text style={styles.alertBannerTitle}>
+            <Text style={[styles.alertBannerTitle, { fontSize: fs(14) }]}>
               {resumo.alertasPendentes}{" "}
               {resumo.alertasPendentes === 1
                 ? "alerta precisa de atenção"
                 : "alertas precisam de atenção"}
             </Text>
-            <Text style={styles.alertBannerSub}>Toque para ver os detalhes</Text>
+            <Text style={[styles.alertBannerSub, { fontSize: fs(12) }]}>
+              Toque para ver os detalhes
+            </Text>
           </View>
         </TouchableOpacity>
       )}
@@ -393,41 +438,51 @@ export default function HomeScreen({ navigation }: any) {
         onPress={() => navigation.navigate("NovoRegistroSinal")}
       >
         <Plus size={20} color="#FFF" />
-        <Text style={styles.primaryButtonText}>Novo registro de saúde</Text>
+        <Text style={[styles.primaryButtonText, { fontSize: fs(15) }]}>Novo registro de saúde</Text>
       </TouchableOpacity>
     </View>
   );
 
   const renderHomeFamilia = () => (
     <View style={styles.content}>
-      <Text style={styles.welcomeText}>{saudacao}</Text>
-      <Text style={styles.subtitleText}>Acompanhe quem você ama.</Text>
+      <Text style={[styles.welcomeText, { color: colors.textPrimary, fontSize: fs(26) }]}>
+        {saudacao}
+      </Text>
+      <Text style={[styles.subtitleText, { color: colors.textSecondary, fontSize: fs(15) }]}>
+        Acompanhe quem você ama.
+      </Text>
 
       <TouchableOpacity
-        style={styles.patientSelector}
+        style={[styles.patientSelector, { backgroundColor: colors.card, borderColor: colors.border }]}
         onPress={() => navigation.navigate("SelectElderly")}
       >
         {renderAvatarIdoso()}
         <View style={{ flex: 1 }}>
-          <Text style={styles.patientSelectorSub}>Acompanhando</Text>
-          <Text style={styles.patientSelectorName}>
+          <Text style={[styles.patientSelectorSub, { color: colors.textSecondary, fontSize: fs(12) }]}>
+            Acompanhando
+          </Text>
+          <Text style={[styles.patientSelectorName, { color: colors.textPrimary, fontSize: fs(16) }]}>
             {idoso?.nome || "Selecione um familiar"}
           </Text>
         </View>
         <Text style={styles.tagVinculado}>Trocar</Text>
       </TouchableOpacity>
 
-      <Text style={styles.sectionTitle}>Resumo da saúde</Text>
+      <Text style={[styles.sectionTitle, { color: colors.textPrimary, fontSize: fs(16) }]}>
+        Resumo da saúde
+      </Text>
       <View style={styles.healthSummaryGrid}>
         <TouchableOpacity
-          style={styles.healthSummaryCard}
+          style={[styles.healthSummaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}
           onPress={() => navigation.navigate("Saúde")}
         >
           <View style={styles.rowCenter}>
             <HeartPulse size={14} color="#159B87" />
-            <Text style={styles.healthSummaryLabel}> Batimentos</Text>
+            <Text style={[styles.healthSummaryLabel, { color: colors.textSecondary, fontSize: fs(11) }]}>
+              {" "}Batimentos
+            </Text>
           </View>
-          <Text style={styles.healthSummaryValue}>
+          <Text style={[styles.healthSummaryValue, { color: colors.textPrimary, fontSize: fs(18) }]}>
             {resumo.fc} <Text style={styles.healthSummaryUnit}>bpm</Text>
           </Text>
           <Text style={styles.healthSummaryStatus}>
@@ -436,14 +491,16 @@ export default function HomeScreen({ navigation }: any) {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.healthSummaryCard}
+          style={[styles.healthSummaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}
           onPress={() => navigation.navigate("Saúde")}
         >
           <View style={styles.rowCenter}>
             <Activity size={14} color="#187BC0" />
-            <Text style={styles.healthSummaryLabel}> SpO₂</Text>
+            <Text style={[styles.healthSummaryLabel, { color: colors.textSecondary, fontSize: fs(11) }]}>
+              {" "}SpO₂
+            </Text>
           </View>
-          <Text style={styles.healthSummaryValue}>
+          <Text style={[styles.healthSummaryValue, { color: colors.textPrimary, fontSize: fs(18) }]}>
             {resumo.spo2} <Text style={styles.healthSummaryUnit}>%</Text>
           </Text>
           <Text style={styles.healthSummaryStatus}>
@@ -452,29 +509,40 @@ export default function HomeScreen({ navigation }: any) {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.healthSummaryCard}
+          style={[styles.healthSummaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}
           onPress={() => navigation.navigate("Saúde")}
         >
           <View style={styles.rowCenter}>
             <Droplet size={14} color="#6554D9" />
-            <Text style={styles.healthSummaryLabel}> Pressão</Text>
+            <Text style={[styles.healthSummaryLabel, { color: colors.textSecondary, fontSize: fs(11) }]}>
+              {" "}Pressão
+            </Text>
           </View>
-          <Text style={styles.healthSummaryValue}>{resumo.pa}</Text>
+          <Text style={[styles.healthSummaryValue, { color: colors.textPrimary, fontSize: fs(18) }]}>
+            {resumo.pa}
+          </Text>
           <Text style={styles.healthSummaryStatus}>
             {resumo.pa !== "--/--" ? "Registrado" : "Sem dados"}
           </Text>
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.sectionTitle}>Informações recentes</Text>
+      <Text style={[styles.sectionTitle, { color: colors.textPrimary, fontSize: fs(16) }]}>
+        Informações recentes
+      </Text>
 
-      <TouchableOpacity style={styles.infoCard} onPress={() => navigation.navigate("Agenda")}>
+      <TouchableOpacity
+        style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+        onPress={() => navigation.navigate("Agenda")}
+      >
         <View style={styles.iconWrapperBlue}>
           <CalendarDays size={20} color="#187BC0" />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.taskCardTitle}>Próxima consulta</Text>
-          <Text style={styles.taskCardSub}>
+          <Text style={[styles.taskCardTitle, { color: colors.textPrimary, fontSize: fs(15) }]}>
+            Próxima consulta
+          </Text>
+          <Text style={[styles.taskCardSub, { color: colors.textSecondary, fontSize: fs(13) }]}>
             {resumo.proximaConsulta
               ? formatarResumoConsulta(resumo.proximaConsulta)
               : "Nenhuma consulta futura"}
@@ -483,13 +551,18 @@ export default function HomeScreen({ navigation }: any) {
         <ChevronRight size={18} color="#A0AEC0" />
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.infoCard} onPress={() => navigation.navigate("Remédios")}>
+      <TouchableOpacity
+        style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+        onPress={() => navigation.navigate("Remédios")}
+      >
         <View style={styles.iconWrapperBlue}>
           <Pill size={20} color="#187BC0" />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.taskCardTitle}>Medicamentos</Text>
-          <Text style={styles.taskCardSub}>
+          <Text style={[styles.taskCardTitle, { color: colors.textPrimary, fontSize: fs(15) }]}>
+            Medicamentos
+          </Text>
+          <Text style={[styles.taskCardSub, { color: colors.textSecondary, fontSize: fs(13) }]}>
             {resumo.totalRemedios > 0
               ? `${resumo.totalRemedios} medicamento(s) ativo(s)`
               : "Nenhum medicamento cadastrado"}
@@ -505,10 +578,10 @@ export default function HomeScreen({ navigation }: any) {
         >
           <Bell size={20} color="#DC2626" />
           <View style={{ marginLeft: 12 }}>
-            <Text style={styles.alertBannerTitle}>
+            <Text style={[styles.alertBannerTitle, { fontSize: fs(14) }]}>
               {resumo.alertasPendentes} alerta(s) clínico(s) pendente(s)
             </Text>
-            <Text style={styles.alertBannerSub}>Toque para visualizar</Text>
+            <Text style={[styles.alertBannerSub, { fontSize: fs(12) }]}>Toque para visualizar</Text>
           </View>
         </TouchableOpacity>
       ) : (
@@ -517,8 +590,10 @@ export default function HomeScreen({ navigation }: any) {
             <CheckCircle2 size={16} color="#FFF" />
           </View>
           <View style={{ marginLeft: 10 }}>
-            <Text style={styles.alertBannerGreenTitle}>Sem novos alertas</Text>
-            <Text style={styles.alertBannerGreenSub}>
+            <Text style={[styles.alertBannerGreenTitle, { fontSize: fs(14) }]}>
+              Sem novos alertas
+            </Text>
+            <Text style={[styles.alertBannerGreenSub, { fontSize: fs(12) }]}>
               {conectado ? "Sincronizado em tempo real com a clínica" : "Acompanhamento atualizado"}
             </Text>
           </View>
@@ -529,7 +604,7 @@ export default function HomeScreen({ navigation }: any) {
 
   if (loading) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color="#159B87" />
       </View>
     );
@@ -537,7 +612,7 @@ export default function HomeScreen({ navigation }: any) {
 
   return (
     <ScrollView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#159B87"]} />
@@ -561,7 +636,7 @@ export default function HomeScreen({ navigation }: any) {
           style={styles.notificationBtn}
           onPress={() => navigation.navigate("Alertas")}
         >
-          <Bell size={24} color="#102F50" />
+          <Bell size={24} color={highContrast ? "#FFFFFF" : "#102F50"} />
           {resumo.alertasPendentes > 0 && (
             <View style={styles.bellBadge}>
               <Text style={styles.bellBadgeText}>{resumo.alertasPendentes}</Text>
@@ -580,8 +655,8 @@ export default function HomeScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F5FAFD" },
-  center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#F5FAFD" },
+  container: { flex: 1 },
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
   topHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -617,21 +692,15 @@ const styles = StyleSheet.create({
   },
   bellBadgeText: { color: "#FFF", fontSize: 10, fontWeight: "bold" },
   content: { paddingHorizontal: 20, paddingBottom: 40 },
-  welcomeText: { fontSize: 26, fontWeight: "bold", color: "#102F50" },
-  subtitleText: { fontSize: 15, color: "#577187", marginTop: 4, marginBottom: 24 },
-  sectionTitle: { fontSize: 16, fontWeight: "bold", color: "#102F50", marginTop: 24, marginBottom: 12 },
+  welcomeText: { fontWeight: "bold" },
+  subtitleText: { marginTop: 4, marginBottom: 24 },
+  sectionTitle: { fontWeight: "bold", marginTop: 24, marginBottom: 12 },
   patientSelector: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFF",
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#DCEAF2",
-    elevation: 1,
-    shadowColor: "#102F50",
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
   },
   patientAvatarImg: {
     width: 46,
@@ -645,8 +714,8 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 16,
   },
-  patientSelectorSub: { fontSize: 12, color: "#577187" },
-  patientSelectorName: { fontSize: 16, fontWeight: "bold", color: "#102F50", marginTop: 2 },
+  patientSelectorSub: {},
+  patientSelectorName: { fontWeight: "bold", marginTop: 2 },
   tagVinculado: {
     backgroundColor: "#E2F5F0",
     color: "#159B87",
@@ -663,9 +732,9 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     position: "relative",
   },
-  greenCardSub: { color: "#CDECE6", fontSize: 11, fontWeight: "bold", letterSpacing: 1 },
-  greenCardTitle: { color: "#FFF", fontSize: 22, fontWeight: "bold", marginTop: 8 },
-  greenCardText: { color: "#E2F5F0", fontSize: 14, marginTop: 4 },
+  greenCardSub: { color: "#CDECE6", fontWeight: "bold", letterSpacing: 1 },
+  greenCardTitle: { color: "#FFF", fontWeight: "bold", marginTop: 8 },
+  greenCardText: { color: "#E2F5F0", marginTop: 4 },
   badgeGreen: {
     backgroundColor: "#27B59A",
     alignSelf: "flex-start",
@@ -674,18 +743,16 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginTop: 16,
   },
-  badgeGreenText: { color: "#FFF", fontSize: 12, fontWeight: "bold" },
+  badgeGreenText: { color: "#FFF", fontWeight: "bold" },
   greenCardIcon: { position: "absolute", right: -10, bottom: -10 },
   actionCard: {
-    backgroundColor: "#FFF",
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#DCEAF2",
   },
   actionCardHeader: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
-  actionCardTitle: { fontSize: 12, color: "#577187" },
-  actionCardValue: { fontSize: 16, fontWeight: "bold", color: "#102F50", marginTop: 2 },
+  actionCardTitle: {},
+  actionCardValue: { fontWeight: "bold", marginTop: 2 },
   tagPendente: {
     backgroundColor: "#FEF3C7",
     color: "#D97706",
@@ -701,31 +768,27 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: "center",
   },
-  primaryButtonText: { color: "#FFF", fontSize: 15, fontWeight: "bold" },
+  primaryButtonText: { color: "#FFF", fontWeight: "bold" },
   gridFastAccess: { flexDirection: "row", gap: 10 },
   fastAccessBtn: {
     flex: 1,
-    backgroundColor: "#FFF",
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#DCEAF2",
     alignItems: "center",
     gap: 8,
   },
-  fastAccessText: { fontSize: 13, fontWeight: "bold", color: "#102F50", textAlign: "center" },
+  fastAccessText: { fontWeight: "bold", textAlign: "center" },
   taskCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFF",
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#DCEAF2",
     marginBottom: 12,
   },
-  taskCardTitle: { fontSize: 15, fontWeight: "bold", color: "#102F50" },
-  taskCardSub: { fontSize: 13, color: "#577187", marginTop: 2 },
+  taskCardTitle: { fontWeight: "bold" },
+  taskCardSub: { marginTop: 2 },
   alertBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -737,8 +800,8 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 24,
   },
-  alertBannerTitle: { fontSize: 14, fontWeight: "bold", color: "#B91C1C" },
-  alertBannerSub: { fontSize: 12, color: "#DC2626", marginTop: 2 },
+  alertBannerTitle: { fontWeight: "bold", color: "#B91C1C" },
+  alertBannerSub: { color: "#DC2626", marginTop: 2 },
   primaryButtonFull: {
     flexDirection: "row",
     backgroundColor: "#159B87",
@@ -751,25 +814,21 @@ const styles = StyleSheet.create({
   healthSummaryGrid: { flexDirection: "row", gap: 10 },
   healthSummaryCard: {
     flex: 1,
-    backgroundColor: "#FFF",
     borderRadius: 16,
     padding: 12,
     borderWidth: 1,
-    borderColor: "#DCEAF2",
   },
   rowCenter: { flexDirection: "row", alignItems: "center" },
-  healthSummaryLabel: { fontSize: 11, color: "#577187", fontWeight: "600" },
-  healthSummaryValue: { fontSize: 18, fontWeight: "bold", color: "#102F50", marginTop: 8 },
+  healthSummaryLabel: { fontWeight: "600" },
+  healthSummaryValue: { fontWeight: "bold", marginTop: 8 },
   healthSummaryUnit: { fontSize: 12, fontWeight: "normal", color: "#577187" },
   healthSummaryStatus: { fontSize: 10, color: "#159B87", fontWeight: "bold", marginTop: 4 },
   infoCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFF",
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#DCEAF2",
     marginBottom: 12,
   },
   alertBannerGreen: {
@@ -788,8 +847,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  alertBannerGreenTitle: { fontSize: 14, fontWeight: "bold", color: "#159B87" },
-  alertBannerGreenSub: { fontSize: 12, color: "#159B87", marginTop: 2 },
+  alertBannerGreenTitle: { fontWeight: "bold", color: "#159B87" },
+  alertBannerGreenSub: { color: "#159B87", marginTop: 2 },
   iconWrapperBlue: {
     width: 44,
     height: 44,

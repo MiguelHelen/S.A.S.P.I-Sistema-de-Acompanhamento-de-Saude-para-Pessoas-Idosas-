@@ -25,6 +25,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "../contexts/AuthContext";
 import { useSocket } from "../contexts/SocketContext";
+import { useAccessibility } from "../contexts/AccessibilityContext";
 import { apiFetch } from "../api/client";
 
 let HealthConnect: any = null;
@@ -54,6 +55,7 @@ function formatarTempoAtras(isoDate?: string): string {
 export default function NovoRegistroSinalScreen({ navigation }: any) {
   const { token, usuario } = useAuth();
   const { emitirAtualizacao } = useSocket();
+  const { colors, fs } = useAccessibility();
   const [idoso, setIdoso] = useState<{ id: string; nome: string } | null>(null);
 
   const [indicadorSelecionado, setIndicadorSelecionado] = useState(INDICADORES[0]);
@@ -406,14 +408,21 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <View style={styles.header}>
+      <View
+        style={[
+          styles.header,
+          { backgroundColor: colors.card, borderBottomColor: colors.border },
+        ]}
+      >
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <ArrowLeft size={24} color="#0A2540" />
+          <ArrowLeft size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Nova Aferição</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary, fontSize: fs(18) }]}>
+          Nova Aferição
+        </Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -421,13 +430,15 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
         {!podeRegistrar && (
           <View style={styles.readOnlyBanner}>
             <Eye size={18} color="#1D4ED8" />
-            <Text style={styles.readOnlyBannerText}>
+            <Text style={[styles.readOnlyBannerText, { fontSize: fs(13) }]}>
               Seu perfil possui acesso apenas de leitura para sinais vitais. Somente o idoso, cuidador ou equipe clínica pode registrar aferições.
             </Text>
           </View>
         )}
 
-        <Text style={styles.label}>O que você deseja aferir?</Text>
+        <Text style={[styles.label, { color: colors.textSecondary, fontSize: fs(14) }]}>
+          O que você deseja aferir?
+        </Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -439,7 +450,11 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
             return (
               <TouchableOpacity
                 key={item.nome}
-                style={[styles.chip, isActive && styles.chipActive]}
+                style={[
+                  styles.chip,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                  isActive && styles.chipActive,
+                ]}
                 onPress={() => handleIndicadorChange(item)}
               >
                 <IconComponent
@@ -447,22 +462,38 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
                   color={isActive ? "#FFF" : item.color}
                   style={{ marginRight: 6 }}
                 />
-                <Text style={[styles.chipText, isActive && { color: "#FFF" }]}>{item.nome}</Text>
+                <Text
+                  style={[
+                    styles.chipText,
+                    { color: isActive ? "#FFF" : colors.textPrimary, fontSize: fs(13) },
+                  ]}
+                >
+                  {item.nome}
+                </Text>
               </TouchableOpacity>
             );
           })}
         </ScrollView>
 
-        <View style={styles.formCard}>
+        <View
+          style={[
+            styles.formCard,
+            { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 },
+          ]}
+        >
           <View style={[styles.iconCircle, { backgroundColor: indicadorSelecionado.bg }]}>
             <IconeAtivo size={32} color={indicadorSelecionado.color} />
           </View>
-          <Text style={styles.formTitle}>Registrar {indicadorSelecionado.nome}</Text>
-          <Text style={styles.formSub}>Digite manualmente ou puxe da pulseira</Text>
+          <Text style={[styles.formTitle, { color: colors.textPrimary, fontSize: fs(20) }]}>
+            Registrar {indicadorSelecionado.nome}
+          </Text>
+          <Text style={[styles.formSub, { color: colors.textSecondary, fontSize: fs(13) }]}>
+            Digite manualmente ou puxe da pulseira
+          </Text>
 
-          <View style={styles.inputContainer}>
+          <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
             <TextInput
-              style={styles.mainInput}
+              style={[styles.mainInput, { color: colors.textPrimary }]}
               keyboardType={indicadorSelecionado.nome === "Pressão Arterial" ? "default" : "numeric"}
               value={valor}
               onChangeText={handleValorChange}
@@ -471,7 +502,9 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
               maxLength={7}
               editable={podeRegistrar}
             />
-            <Text style={styles.unitText}>{indicadorSelecionado.unidade}</Text>
+            <Text style={[styles.unitText, { color: colors.textSecondary }]}>
+              {indicadorSelecionado.unidade}
+            </Text>
           </View>
 
           <TouchableOpacity
@@ -484,7 +517,7 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
             ) : (
               <Watch size={18} color="#159B87" />
             )}
-            <Text style={styles.btnWatchText}>
+            <Text style={[styles.btnWatchText, { fontSize: fs(14) }]}>
               {lendoRelogio ? "Buscando IoT..." : "Puxar da Pulseira Inteligente"}
             </Text>
           </TouchableOpacity>
@@ -504,7 +537,7 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
             disabled={salvando}
           >
             {salvando ? <ActivityIndicator color="#FFF" /> : <Save size={20} color="#FFF" />}
-            <Text style={styles.saveButtonText}>
+            <Text style={[styles.saveButtonText, { fontSize: fs(16) }]}>
               {salvando ? "Enviando para a Nuvem..." : "Salvar no Prontuário"}
             </Text>
           </TouchableOpacity>
@@ -515,7 +548,7 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F2F7FB" },
+  container: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -523,12 +556,10 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingHorizontal: 20,
     paddingBottom: 20,
-    backgroundColor: "#FFF",
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
   },
   backBtn: { width: 40, height: 40, justifyContent: "center" },
-  headerTitle: { fontSize: 18, fontWeight: "bold", color: "#0A2540" },
+  headerTitle: { fontWeight: "bold" },
   content: { padding: 20, paddingBottom: 40 },
   readOnlyBanner: {
     flexDirection: "row",
@@ -541,38 +572,29 @@ const styles = StyleSheet.create({
   },
   readOnlyBannerText: {
     flex: 1,
-    fontSize: 13,
     color: "#1E40AF",
     fontWeight: "600",
   },
-  label: { fontSize: 14, fontWeight: "600", color: "#4A5568", marginBottom: 12 },
+  label: { fontWeight: "600", marginBottom: 12 },
   chipsContainer: { flexDirection: "row", marginBottom: 24, paddingBottom: 8 },
   chip: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFF",
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 20,
     marginRight: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
   },
   chipActive: {
     backgroundColor: "#159B87",
     borderColor: "#159B87",
   },
-  chipText: { fontSize: 13, fontWeight: "600", color: "#4A5568" },
+  chipText: { fontWeight: "600" },
   formCard: {
-    backgroundColor: "#FFF",
     borderRadius: 24,
     padding: 24,
     alignItems: "center",
-    shadowColor: "#0A2540",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 3,
     marginBottom: 24,
   },
   iconCircle: {
@@ -583,26 +605,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
   },
-  formTitle: { fontSize: 20, fontWeight: "bold", color: "#0A2540" },
-  formSub: { fontSize: 13, color: "#718096", marginTop: 4, marginBottom: 24 },
+  formTitle: { fontWeight: "bold" },
+  formSub: { marginTop: 4, marginBottom: 24 },
   inputContainer: {
     flexDirection: "row",
     alignItems: "baseline",
     justifyContent: "center",
     paddingBottom: 8,
     borderBottomWidth: 2,
-    borderBottomColor: "#E2E8F0",
     width: "70%",
     marginBottom: 20,
   },
   mainInput: {
     fontSize: 48,
     fontWeight: "bold",
-    color: "#0A2540",
     textAlign: "center",
     minWidth: 100,
   },
-  unitText: { fontSize: 18, fontWeight: "600", color: "#718096", marginLeft: 8 },
+  unitText: { fontSize: 18, fontWeight: "600", marginLeft: 8 },
   btnWatch: {
     flexDirection: "row",
     alignItems: "center",
@@ -635,5 +655,5 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     gap: 10,
   },
-  saveButtonText: { color: "#FFF", fontSize: 16, fontWeight: "bold" },
+  saveButtonText: { color: "#FFF", fontWeight: "bold" },
 });

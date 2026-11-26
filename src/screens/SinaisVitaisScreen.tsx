@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { LineChart } from 'react-native-chart-kit';
 import { useAuth } from '../contexts/AuthContext';
+import { useAccessibility } from '../contexts/AccessibilityContext';
 import { apiFetch } from '../api/client';
 import {
   HeartPulse,
@@ -74,6 +75,7 @@ const CONFIG_GRAFICO: Record<
 
 export default function SinaisVitaisScreen({ navigation }: any) {
   const { usuario, token } = useAuth();
+  const { colors, fs, highContrast, simplifiedMode } = useAccessibility();
   const [registros, setRegistros] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -190,18 +192,27 @@ export default function SinaisVitaisScreen({ navigation }: any) {
 
   if (loading) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color="#159B87" />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View
+        style={[
+          styles.header,
+          { backgroundColor: colors.card, borderBottomColor: colors.border },
+        ]}
+      >
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>Sinais Vitais</Text>
-          <Text style={styles.subtitle}>Histórico clínico e leitura via Smartband</Text>
+          <Text style={[styles.title, { color: colors.textPrimary, fontSize: fs(24) }]}>
+            Sinais Vitais
+          </Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary, fontSize: fs(13) }]}>
+            Histórico clínico e leitura via Smartband
+          </Text>
         </View>
 
         {podeRegistrarSinal ? (
@@ -210,7 +221,7 @@ export default function SinaisVitaisScreen({ navigation }: any) {
             onPress={() => navigation.navigate('NovoRegistroSinal')}
           >
             <Plus color="#FFFFFF" size={20} />
-            <Text style={styles.addBtnText}>Novo</Text>
+            <Text style={[styles.addBtnText, { fontSize: fs(14) }]}>Novo</Text>
           </TouchableOpacity>
         ) : (
           <View style={styles.readOnlyBadge}>
@@ -224,126 +235,145 @@ export default function SinaisVitaisScreen({ navigation }: any) {
         contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#159B87']} />}
       >
-        <View style={styles.chartCard}>
-          <View style={styles.chartTopRow}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <TrendingUp size={18} color={cfgAtual.cor} />
-              <Text style={styles.chartTitle}>Evolução Clínica</Text>
-            </View>
-            <Text style={styles.refText}>{cfgAtual.referencia}</Text>
-          </View>
-
-          <View style={styles.tabsRow}>
-            {(Object.keys(CONFIG_GRAFICO) as AbaGrafico[]).map((key) => {
-              const item = CONFIG_GRAFICO[key];
-              const ativo = abaAtiva === key;
-              return (
-                <TouchableOpacity
-                  key={key}
-                  style={[
-                    styles.tabChip,
-                    ativo && { backgroundColor: item.cor, borderColor: item.cor },
-                  ]}
-                  onPress={() => {
-                    setAbaAtiva(key);
-                    setPontoSelecionado(null);
-                  }}
-                >
-                  <Text style={[styles.tabChipText, ativo && { color: '#FFFFFF' }]}>
-                    {item.labelCurto}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {!dadosGrafico.vazio ? (
-            <>
-              <View style={styles.metricSummary}>
-                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-                  <Text style={[styles.bigMetric, { color: cfgAtual.cor }]}>
-                    {pontoSelecionado ? pontoSelecionado.valor : dadosGrafico.ultimoValor}
-                  </Text>
-                  <Text style={styles.bigMetricUnit}>{cfgAtual.unidade}</Text>
-                </View>
-
-                {pontoSelecionado ? (
-                  <Text style={styles.pointHint}>Leitura de {pontoSelecionado.hora}</Text>
-                ) : dadosGrafico.variacao !== null ? (
-                  <Text style={styles.pointHint}>
-                    {dadosGrafico.variacao > 0
-                      ? `+${dadosGrafico.variacao} ${cfgAtual.unidade} vs. anterior`
-                      : dadosGrafico.variacao < 0
-                      ? `${dadosGrafico.variacao} ${cfgAtual.unidade} vs. anterior`
-                      : 'Estável em relação à última leitura'}
-                  </Text>
-                ) : (
-                  <Text style={styles.pointHint}>Toque nos pontos para inspecionar</Text>
-                )}
+        {!simplifiedMode && (
+          <View
+            style={[
+              styles.chartCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <View style={styles.chartTopRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <TrendingUp size={18} color={cfgAtual.cor} />
+                <Text style={[styles.chartTitle, { color: colors.textPrimary, fontSize: fs(15) }]}>
+                  Evolução Clínica
+                </Text>
               </View>
-
-              <LineChart
-                data={{
-                  labels: dadosGrafico.labels,
-                  datasets: [
-                    {
-                      data:
-                        dadosGrafico.valores.length === 1
-                          ? [dadosGrafico.valores[0], dadosGrafico.valores[0]]
-                          : dadosGrafico.valores,
-                      color: () => cfgAtual.cor,
-                      strokeWidth: 3,
-                    },
-                  ],
-                }}
-                width={SCREEN_WIDTH - 68}
-                height={185}
-                withInnerLines={true}
-                withOuterLines={false}
-                withVerticalLines={false}
-                bezier
-                fromZero={false}
-                segments={4}
-                onDataPointClick={({ value, index }) => {
-                  const hora = dadosGrafico.horasCompletas[index] || '';
-                  setPontoSelecionado({ valor: value, hora });
-                }}
-                chartConfig={{
-                  backgroundColor: '#FFFFFF',
-                  backgroundGradientFrom: '#FFFFFF',
-                  backgroundGradientTo: '#FFFFFF',
-                  decimalPlaces: abaAtiva === 'temp' ? 1 : 0,
-                  color: () => cfgAtual.cor,
-                  labelColor: () => '#64748B',
-                  propsForDots: {
-                    r: '5',
-                    strokeWidth: '2',
-                    stroke: '#FFFFFF',
-                  },
-                  propsForBackgroundLines: {
-                    strokeDasharray: '4 4',
-                    stroke: '#E2E8F0',
-                  },
-                }}
-                style={{ marginLeft: -12, borderRadius: 12 }}
-              />
-            </>
-          ) : (
-            <View style={styles.emptyChartBox}>
-              <Text style={styles.emptyChartText}>
-                Nenhuma leitura numérica de {cfgAtual.titulo.toLowerCase()} registrada ainda.
+              <Text style={[styles.refText, { color: colors.textSecondary, fontSize: fs(11) }]}>
+                {cfgAtual.referencia}
               </Text>
             </View>
-          )}
-        </View>
 
-        <Text style={styles.sectionTitle}>Últimas Aferições ({registros.length})</Text>
+            <View style={styles.tabsRow}>
+              {(Object.keys(CONFIG_GRAFICO) as AbaGrafico[]).map((key) => {
+                const item = CONFIG_GRAFICO[key];
+                const ativo = abaAtiva === key;
+                return (
+                  <TouchableOpacity
+                    key={key}
+                    style={[
+                      styles.tabChip,
+                      ativo && { backgroundColor: item.cor, borderColor: item.cor },
+                    ]}
+                    onPress={() => {
+                      setAbaAtiva(key);
+                      setPontoSelecionado(null);
+                    }}
+                  >
+                    <Text style={[styles.tabChipText, ativo && { color: '#FFFFFF' }]}>
+                      {item.labelCurto}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {!dadosGrafico.vazio ? (
+              <>
+                <View style={styles.metricSummary}>
+                  <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+                    <Text style={[styles.bigMetric, { color: cfgAtual.cor }]}>
+                      {pontoSelecionado ? pontoSelecionado.valor : dadosGrafico.ultimoValor}
+                    </Text>
+                    <Text style={styles.bigMetricUnit}>{cfgAtual.unidade}</Text>
+                  </View>
+
+                  {pontoSelecionado ? (
+                    <Text style={[styles.pointHint, { color: colors.textSecondary }]}>
+                      Leitura de {pontoSelecionado.hora}
+                    </Text>
+                  ) : dadosGrafico.variacao !== null ? (
+                    <Text style={[styles.pointHint, { color: colors.textSecondary }]}>
+                      {dadosGrafico.variacao > 0
+                        ? `+${dadosGrafico.variacao} ${cfgAtual.unidade} vs. anterior`
+                        : dadosGrafico.variacao < 0
+                        ? `${dadosGrafico.variacao} ${cfgAtual.unidade} vs. anterior`
+                        : 'Estável em relação à última leitura'}
+                    </Text>
+                  ) : (
+                    <Text style={[styles.pointHint, { color: colors.textSecondary }]}>
+                      Toque nos pontos para inspecionar
+                    </Text>
+                  )}
+                </View>
+
+                <LineChart
+                  data={{
+                    labels: dadosGrafico.labels,
+                    datasets: [
+                      {
+                        data:
+                          dadosGrafico.valores.length === 1
+                            ? [dadosGrafico.valores[0], dadosGrafico.valores[0]]
+                            : dadosGrafico.valores,
+                        color: () => cfgAtual.cor,
+                        strokeWidth: 3,
+                      },
+                    ],
+                  }}
+                  width={SCREEN_WIDTH - 68}
+                  height={185}
+                  withInnerLines={true}
+                  withOuterLines={false}
+                  withVerticalLines={false}
+                  bezier
+                  fromZero={false}
+                  segments={4}
+                  onDataPointClick={({ value, index }) => {
+                    const hora = dadosGrafico.horasCompletas[index] || '';
+                    setPontoSelecionado({ valor: value, hora });
+                  }}
+                  chartConfig={{
+                    backgroundColor: highContrast ? '#111827' : '#FFFFFF',
+                    backgroundGradientFrom: highContrast ? '#111827' : '#FFFFFF',
+                    backgroundGradientTo: highContrast ? '#111827' : '#FFFFFF',
+                    decimalPlaces: abaAtiva === 'temp' ? 1 : 0,
+                    color: () => cfgAtual.cor,
+                    labelColor: () => (highContrast ? '#E2E8F0' : '#64748B'),
+                    propsForDots: {
+                      r: '5',
+                      strokeWidth: '2',
+                      stroke: '#FFFFFF',
+                    },
+                    propsForBackgroundLines: {
+                      strokeDasharray: '4 4',
+                      stroke: highContrast ? '#334155' : '#E2E8F0',
+                    },
+                  }}
+                  style={{ marginLeft: -12, borderRadius: 12 }}
+                />
+              </>
+            ) : (
+              <View style={styles.emptyChartBox}>
+                <Text style={[styles.emptyChartText, { color: colors.textSecondary }]}>
+                  Nenhuma leitura numérica de {cfgAtual.titulo.toLowerCase()} registrada ainda.
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary, fontSize: fs(16) }]}>
+          Últimas Aferições ({registros.length})
+        </Text>
 
         {registros.length === 0 ? (
-          <View style={styles.emptyBox}>
+          <View style={[styles.emptyBox, { backgroundColor: colors.card }]}>
             <Activity color="#94A3B8" size={40} />
-            <Text style={styles.emptyTitle}>Nenhum registro encontrado</Text>
-            <Text style={styles.emptySub}>
+            <Text style={[styles.emptyTitle, { color: colors.textPrimary, fontSize: fs(16) }]}>
+              Nenhum registro encontrado
+            </Text>
+            <Text style={[styles.emptySub, { color: colors.textSecondary, fontSize: fs(13) }]}>
               {podeRegistrarSinal
                 ? 'Toque em "+ Novo" para registrar manualmente ou puxar da Smartband.'
                 : 'As aferições registradas pelo cuidador ou equipe clínica aparecerão aqui.'}
@@ -393,14 +423,19 @@ export default function SinaisVitaisScreen({ navigation }: any) {
             }
 
             return (
-              <View key={item.id} style={styles.card}>
+              <View
+                key={item.id}
+                style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+              >
                 <View style={[styles.iconBox, { backgroundColor: iconBg }]}>
                   <IconComp color={iconColor} size={22} />
                 </View>
 
                 <View style={styles.cardInfo}>
-                  <Text style={styles.cardTitle}>{nomeInd}</Text>
-                  <Text style={styles.cardDate}>
+                  <Text style={[styles.cardTitle, { color: colors.textPrimary, fontSize: fs(15) }]}>
+                    {nomeInd}
+                  </Text>
+                  <Text style={[styles.cardDate, { color: colors.textSecondary, fontSize: fs(12) }]}>
                     {formatarDataHora(item.data_hora || item.criado_em)}
                   </Text>
 
@@ -428,7 +463,9 @@ export default function SinaisVitaisScreen({ navigation }: any) {
                   </View>
                 </View>
 
-                <Text style={styles.valorText}>{valorExibido}</Text>
+                <Text style={[styles.valorText, { color: colors.textPrimary, fontSize: fs(17) }]}>
+                  {valorExibido}
+                </Text>
               </View>
             );
           })
@@ -439,8 +476,8 @@ export default function SinaisVitaisScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2F7FB' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F2F7FB' },
+  container: { flex: 1 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -448,12 +485,10 @@ const styles = StyleSheet.create({
     paddingTop: 58,
     paddingHorizontal: 20,
     paddingBottom: 16,
-    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
   },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#0A2540' },
-  subtitle: { fontSize: 13, color: '#64748B', marginTop: 2 },
+  title: { fontWeight: 'bold' },
+  subtitle: { marginTop: 2 },
   readOnlyBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -473,19 +508,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 4,
   },
-  addBtnText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 14 },
+  addBtnText: { color: '#FFFFFF', fontWeight: 'bold' },
   chartCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 22,
     padding: 16,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#0A2540',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
   },
   chartTopRow: {
     flexDirection: 'row',
@@ -493,8 +521,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  chartTitle: { fontSize: 15, fontWeight: '700', color: '#0A2540' },
-  refText: { fontSize: 11, color: '#64748B', fontWeight: '500' },
+  chartTitle: { fontWeight: '700' },
+  refText: { fontWeight: '500' },
   tabsRow: {
     flexDirection: 'row',
     gap: 8,
@@ -531,7 +559,6 @@ const styles = StyleSheet.create({
   },
   pointHint: {
     fontSize: 12,
-    color: '#64748B',
     fontWeight: '500',
   },
   emptyChartBox: {
@@ -540,24 +567,19 @@ const styles = StyleSheet.create({
   },
   emptyChartText: {
     fontSize: 13,
-    color: '#64748B',
     textAlign: 'center',
   },
   sectionTitle: {
-    fontSize: 16,
     fontWeight: 'bold',
-    color: '#0A2540',
     marginBottom: 12,
   },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
     borderRadius: 18,
     padding: 15,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
   iconBox: {
     width: 46,
@@ -568,8 +590,8 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   cardInfo: { flex: 1 },
-  cardTitle: { fontSize: 15, fontWeight: 'bold', color: '#0A2540' },
-  cardDate: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  cardTitle: { fontWeight: 'bold' },
+  cardDate: { marginTop: 2 },
   badgeRow: { flexDirection: 'row', marginTop: 6 },
   badge: {
     flexDirection: 'row',
@@ -584,14 +606,13 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 11, fontWeight: '600' },
   badgeTextDevice: { color: '#0F766E' },
   badgeTextManual: { color: '#475569' },
-  valorText: { fontSize: 17, fontWeight: 'bold', color: '#0A2540', marginLeft: 8 },
+  valorText: { fontWeight: 'bold', marginLeft: 8 },
   emptyBox: {
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 36,
     marginTop: 8,
   },
-  emptyTitle: { fontSize: 16, fontWeight: 'bold', color: '#0A2540', marginTop: 12 },
-  emptySub: { fontSize: 13, color: '#64748B', textAlign: 'center', marginTop: 4 },
+  emptyTitle: { fontWeight: 'bold', marginTop: 12 },
+  emptySub: { textAlign: 'center', marginTop: 4 },
 });
