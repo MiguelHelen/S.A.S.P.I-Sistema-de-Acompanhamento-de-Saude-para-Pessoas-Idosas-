@@ -7,10 +7,10 @@ import {
   FlatList,
   ActivityIndicator,
   Image,
-  DeviceEventEmitter,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../contexts/AuthContext';
+import { useAccessibility } from '../contexts/AccessibilityContext';
 import { apiFetch } from '../api/client';
 import { ChevronRight, CheckCircle2 } from 'lucide-react-native';
 
@@ -26,7 +26,8 @@ function calcularIdade(dataNasc?: string): string | null {
 }
 
 export default function SelectElderlyScreen({ navigation }: any) {
-  const { usuario, token, logout } = useAuth();
+  const { usuario, token, selecionarIdoso, logout } = useAuth();
+  const { colors, fs, highContrast } = useAccessibility();
   const [vinculos, setVinculos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [idAtivo, setIdAtivo] = useState<string | null>(null);
@@ -52,8 +53,7 @@ export default function SelectElderlyScreen({ navigation }: any) {
 
         if (listaValida.length > 0) {
           if (!podeVoltar && (perfilUpper === 'IDOSO' || listaValida.length === 1)) {
-            await AsyncStorage.setItem('saspi_active_elderly', JSON.stringify(listaValida[0].idoso));
-            DeviceEventEmitter.emit('saspi_elderly_changed');
+            await selecionarIdoso(listaValida[0].idoso);
             navigation.replace('MainTabs');
           } else {
             setVinculos(listaValida);
@@ -61,7 +61,6 @@ export default function SelectElderlyScreen({ navigation }: any) {
           return;
         }
 
-        // Fallback quando o próprio IDOSO entra sem linha na tabela usuario-idoso
         if (perfilUpper === 'IDOSO') {
           const resIdosos = await apiFetch('/idoso', {}, token);
           if (resIdosos.ok) {
@@ -74,8 +73,7 @@ export default function SelectElderlyScreen({ navigation }: any) {
                 (usuario?.nome && i.nome?.trim().toLowerCase() === usuario.nome.trim().toLowerCase())
             );
             if (proprio?.id) {
-              await AsyncStorage.setItem('saspi_active_elderly', JSON.stringify(proprio));
-              DeviceEventEmitter.emit('saspi_elderly_changed');
+              await selecionarIdoso(proprio);
             }
           }
         }
@@ -96,8 +94,7 @@ export default function SelectElderlyScreen({ navigation }: any) {
   const handleSelectElderly = async (idoso: any) => {
     if (!idoso?.id) return;
     setIdAtivo(idoso.id);
-    await AsyncStorage.setItem('saspi_active_elderly', JSON.stringify(idoso));
-    DeviceEventEmitter.emit('saspi_elderly_changed');
+    await selecionarIdoso(idoso);
     if (podeVoltar) {
       navigation.goBack();
     } else {
@@ -107,25 +104,31 @@ export default function SelectElderlyScreen({ navigation }: any) {
 
   if (loading) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color="#159B87" />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.blobTop} />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {!highContrast && <View style={styles.blobTop} />}
 
       <View style={styles.header}>
         <TouchableOpacity
           onPress={podeVoltar ? () => navigation.goBack() : logout}
           style={{ alignSelf: 'flex-start' }}
         >
-          <Text style={styles.logoutText}>{podeVoltar ? '← Voltar' : '← Sair'}</Text>
+          <Text style={[styles.logoutText, { fontSize: fs(15) }]}>
+            {podeVoltar ? '← Voltar' : '← Sair'}
+          </Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Selecionar idoso</Text>
-        <Text style={styles.subtitle}>Escolha o paciente que deseja acompanhar.</Text>
+        <Text style={[styles.title, { color: colors.textPrimary, fontSize: fs(26) }]}>
+          Selecionar idoso
+        </Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary, fontSize: fs(14) }]}>
+          Escolha o paciente que deseja acompanhar.
+        </Text>
       </View>
 
       <FlatList
@@ -147,7 +150,11 @@ export default function SelectElderlyScreen({ navigation }: any) {
 
           return (
             <TouchableOpacity
-              style={[styles.card, isSelected && styles.cardSelected]}
+              style={[
+                styles.card,
+                { backgroundColor: colors.card, borderColor: colors.border },
+                isSelected && (highContrast ? { borderColor: '#38BDF8', borderWidth: 2 } : styles.cardSelected),
+              ]}
               onPress={() => handleSelectElderly(idoso)}
             >
               {idoso.foto_url ? (
@@ -164,8 +171,12 @@ export default function SelectElderlyScreen({ navigation }: any) {
               )}
 
               <View style={styles.cardInfo}>
-                <Text style={styles.cardName}>{idoso.nome || 'Paciente'}</Text>
-                <Text style={styles.cardDetail}>{subInfo}</Text>
+                <Text style={[styles.cardName, { color: colors.textPrimary, fontSize: fs(17) }]}>
+                  {idoso.nome || 'Paciente'}
+                </Text>
+                <Text style={[styles.cardDetail, { color: colors.textSecondary, fontSize: fs(13) }]}>
+                  {subInfo}
+                </Text>
                 {isSelected && (
                   <View style={styles.badgeSelected}>
                     <CheckCircle2 size={12} color="#0F766E" />
@@ -179,7 +190,9 @@ export default function SelectElderlyScreen({ navigation }: any) {
         }}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Nenhum paciente associado à sua conta.</Text>
+            <Text style={[styles.emptyText, { color: colors.textSecondary, fontSize: fs(14) }]}>
+              Nenhum paciente associado à sua conta.
+            </Text>
           </View>
         }
       />
@@ -188,8 +201,8 @@ export default function SelectElderlyScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2F7FB' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F2F7FB' },
+  container: { flex: 1 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   blobTop: {
     position: 'absolute',
     top: -60,
@@ -201,23 +214,16 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   header: { paddingTop: 60, paddingHorizontal: 24, zIndex: 10 },
-  title: { fontSize: 26, fontWeight: 'bold', color: '#0A2540', marginTop: 20 },
-  subtitle: { fontSize: 14, color: '#64748B', marginTop: 4 },
-  logoutText: { fontSize: 15, color: '#159B87', fontWeight: 'bold' },
+  title: { fontWeight: 'bold', marginTop: 20 },
+  subtitle: { marginTop: 4 },
+  logoutText: { color: '#159B87', fontWeight: 'bold' },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
     padding: 16,
     borderRadius: 20,
     marginBottom: 14,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    shadowColor: '#0A2540',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
   },
   cardSelected: { borderColor: '#159B87', backgroundColor: '#F0FDFA' },
   avatarImg: {
@@ -242,8 +248,8 @@ const styles = StyleSheet.create({
   avatarText: { color: '#475569', fontWeight: 'bold', fontSize: 18 },
   avatarTextSelected: { color: '#FFFFFF' },
   cardInfo: { flex: 1, marginLeft: 14 },
-  cardName: { fontSize: 17, fontWeight: 'bold', color: '#0A2540' },
-  cardDetail: { fontSize: 13, color: '#64748B', marginTop: 2 },
+  cardName: { fontWeight: 'bold' },
+  cardDetail: { marginTop: 2 },
   badgeSelected: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -257,5 +263,5 @@ const styles = StyleSheet.create({
   },
   badgeTextSelected: { color: '#0F766E', fontSize: 11, fontWeight: 'bold' },
   emptyContainer: { padding: 24, alignItems: 'center' },
-  emptyText: { color: '#64748B', textAlign: 'center', fontSize: 14 },
+  emptyText: { textAlign: 'center' },
 });

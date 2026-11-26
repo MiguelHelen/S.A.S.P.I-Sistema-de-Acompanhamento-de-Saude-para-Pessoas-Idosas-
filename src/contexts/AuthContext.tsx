@@ -4,7 +4,7 @@ import * as SecureStore from "expo-secure-store";
 import { DeviceEventEmitter, Alert } from "react-native";
 import { API_URL } from "../api/client";
 
-interface Usuario {
+export interface Usuario {
   id: string;
   nome: string;
   email: string;
@@ -14,15 +14,25 @@ interface Usuario {
   foto_url?: string | null;
 }
 
+export interface IdosoAtivo {
+  id: string;
+  nome: string;
+  data_nascimento?: string;
+  sexo?: string;
+  foto_url?: string | null;
+}
+
 interface AuthContextData {
   usuario: Usuario | null;
   token: string | null;
+  idosoAtivo: IdosoAtivo | null;
   loading: boolean;
   login: (email: string, senha: string) => Promise<{ ok: boolean; message?: string }>;
   loginSSO: (
     providerToken: string,
     provider: "GOOGLE" | "MICROSOFT"
   ) => Promise<{ ok: boolean; message?: string }>;
+  selecionarIdoso: (idoso: IdosoAtivo) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -51,18 +61,25 @@ function decodificarJwt(token: string): any {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [idosoAtivo, setIdosoAtivo] = useState<IdosoAtivo | null>(null);
   const [loading, setLoading] = useState(true);
   const deslogandoRef = useRef(false);
 
   useEffect(() => {
     async function carregarSessao() {
       try {
-        const storedToken = await SecureStore.getItemAsync("saspi_secure_token");
-        const storedUser = await AsyncStorage.getItem("saspi_user");
+        const [storedToken, storedUser, storedElderly] = await Promise.all([
+          SecureStore.getItemAsync("saspi_secure_token"),
+          AsyncStorage.getItem("saspi_user"),
+          AsyncStorage.getItem("saspi_active_elderly"),
+        ]);
 
         if (storedToken && storedUser) {
           setToken(storedToken);
           setUsuario(JSON.parse(storedUser));
+        }
+        if (storedElderly) {
+          setIdosoAtivo(JSON.parse(storedElderly));
         }
       } catch (err) {
         console.error("Erro ao ler sessão criptografada:", err);
@@ -72,7 +89,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     carregarSessao();
 
-    const sub = DeviceEventEmitter.addListener("saspi_unauthorized", () => {
+    const subUnauthorized = DeviceEventEmitter.addListener("saspi_unauthorized", () => {
       if (deslogandoRef.current) return;
       deslogandoRef.current = true;
       Alert.alert("Sessão Expirada", "Por segurança, faça login novamente.");
@@ -81,8 +98,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     });
 
-    return () => sub.remove();
+    const subElderlyChanged = DeviceEventEmitter.addListener("saspi_elderly_changed", async () => {
+      try {
+        const stored = await AsyncStorage.getItem("saspi_active_elderly");
+        setIdosoAtivo(stored ? JSON.parse(stored) : null);
+      } catch {}
+    });
+
+    return () => {
+      subUnauthorized.remove();
+      subElderlyChanged.remove();
+    };
   }, []);
+
+  async function selecionarIdoso(idoso: IdosoAtivo) {
+    setIdosoAtivo(idoso);
+    await AsyncStorage.setItem("saspi_active_elderly", JSON.stringify(idoso));
+    DeviceEventEmitter.emit("saspi_elderly_changed");
+  }
 
   async function login(email: string, senha: string) {
     try {
@@ -130,7 +163,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const userId = userData.id || jwtPayload?.sub || jwtPayload?.id || "";
 
-    // Tenta buscar o registo individual pelo ID (não exige permissão de listagem global)
     if (accessToken && userId && (!userData.nome || !userData.perfil)) {
       try {
         const resById = await fetch(`${API_URL}/usuario/${userId}`, {
@@ -143,7 +175,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch {}
     }
 
-    // Fallback secundário por e-mail caso /usuario/:id não tenha respondido
     if (accessToken && (!userData.nome || !userData.perfil) && emailBuscado) {
       try {
         const userRes = await fetch(
@@ -214,14 +245,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   async function logout() {
     await SecureStore.deleteItemAsync("saspi_secure_token");
-    await AsyncStorage.removeItem("saspi_user");
-    await AsyncStorage.removeItem("saspi_active_elderly");
+    await AsyncStorage.multiRemove(["saspi_user", "saspi_active_elderly"]);
     setToken(null);
     setUsuario(null);
+    setIdosoAtivo(null);
   }
 
   return (
-    <AuthContext.Provider value={{ usuario, token, loading, login, loginSSO, logout }}>
+    <AuthContext.Provider
+      value={{
+        usuario,
+        token,
+        idosoAtivo,
+        loading,
+        login,
+        loginSSO,
+        selecionarIdoso,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
