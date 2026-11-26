@@ -118,7 +118,22 @@ export default function Login() {
       );
     }
 
-    router.push("/dashboard");
+    // Garante cookies enxutos (abaixo de 4 KB) para o guardião de rotas no servidor (src/proxy.ts)
+    const cookieUser = {
+      id: sessao.id,
+      nome: sessao.nome,
+      email: sessao.email,
+      perfil: sessao.perfil,
+      clinica_id: sessao.clinica_id,
+    };
+
+    const isHttps = window.location.protocol === "https:";
+    const secureFlag = isHttps ? "; Secure" : "";
+    document.cookie = `saspi_token=${encodeURIComponent(token)}; path=/; max-age=86400; SameSite=Lax${secureFlag}`;
+    document.cookie = `saspi_user=${encodeURIComponent(JSON.stringify(cookieUser))}; path=/; max-age=86400; SameSite=Lax${secureFlag}`;
+
+    router.replace("/dashboard");
+    router.refresh();
   }
 
   return (

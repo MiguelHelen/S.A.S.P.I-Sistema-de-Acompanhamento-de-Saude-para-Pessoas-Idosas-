@@ -65,12 +65,14 @@ export function proxy(req: NextRequest) {
   }
 
   const token = req.cookies.get("saspi_token")?.value;
-  const userCookie = req.cookies.get("saspi_user")?.value;
-  const role = extrairPerfilCookie(userCookie, token);
 
+  // Apenas a ausência do token derruba a sessão no servidor
   if (!token) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
+
+  const userCookie = req.cookies.get("saspi_user")?.value;
+  const role = extrairPerfilCookie(userCookie, token);
 
   if (role === "IDOSO") {
     const res = NextResponse.redirect(new URL("/login", req.url));
@@ -79,6 +81,7 @@ export function proxy(req: NextRequest) {
     return res;
   }
 
+  // Se saspi_user estiver ausente ou sem perfil no cookie, deixa carregar e validar no cliente
   if (!role) {
     return NextResponse.next();
   }
