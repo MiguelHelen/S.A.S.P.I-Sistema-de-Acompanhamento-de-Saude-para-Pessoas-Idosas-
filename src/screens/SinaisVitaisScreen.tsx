@@ -24,6 +24,7 @@ import {
   Droplets,
   Thermometer,
   TrendingUp,
+  Eye,
 } from 'lucide-react-native';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -72,12 +73,15 @@ const CONFIG_GRAFICO: Record<
 };
 
 export default function SinaisVitaisScreen({ navigation }: any) {
-  const { token } = useAuth();
+  const { usuario, token } = useAuth();
   const [registros, setRegistros] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [abaAtiva, setAbaAtiva] = useState<AbaGrafico>('fc');
   const [pontoSelecionado, setPontoSelecionado] = useState<{ valor: number; hora: string } | null>(null);
+
+  const perfil = (usuario?.perfil || 'FAMILIAR').toUpperCase();
+  const podeRegistrarSinal = perfil === 'IDOSO' || perfil === 'CUIDADOR';
 
   const carregarRegistros = useCallback(async () => {
     try {
@@ -143,7 +147,12 @@ export default function SinaisVitaisScreen({ navigation }: any) {
     const cfg = CONFIG_GRAFICO[abaAtiva];
     const filtrados = registros
       .filter((r) => {
-        const nome = (r.indicador?.nome || r.nome_indicador || '').toLowerCase();
+        const nome = (
+          r.indicador?.nome ||
+          r.indicador_saude?.nome ||
+          r.nome_indicador ||
+          ''
+        ).toLowerCase();
         return cfg.filtro(nome) && r.valor_numerico != null && !Number.isNaN(Number(r.valor_numerico));
       })
       .slice(0, 8)
@@ -190,24 +199,31 @@ export default function SinaisVitaisScreen({ navigation }: any) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.title}>Sinais Vitais</Text>
           <Text style={styles.subtitle}>Histórico clínico e leitura via Smartband</Text>
         </View>
-        <TouchableOpacity
-          style={styles.addBtn}
-          onPress={() => navigation.navigate('NovoRegistroSinal')}
-        >
-          <Plus color="#FFFFFF" size={20} />
-          <Text style={styles.addBtnText}>Novo</Text>
-        </TouchableOpacity>
+
+        {podeRegistrarSinal ? (
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={() => navigation.navigate('NovoRegistroSinal')}
+          >
+            <Plus color="#FFFFFF" size={20} />
+            <Text style={styles.addBtnText}>Novo</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.readOnlyBadge}>
+            <Eye size={14} color="#1D4ED8" />
+            <Text style={styles.readOnlyText}>Leitura</Text>
+          </View>
+        )}
       </View>
 
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#159B87']} />}
       >
-        {/* Card do Gráfico de Evolução */}
         <View style={styles.chartCard}>
           <View style={styles.chartTopRow}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -217,7 +233,6 @@ export default function SinaisVitaisScreen({ navigation }: any) {
             <Text style={styles.refText}>{cfgAtual.referencia}</Text>
           </View>
 
-          {/* Seletor de Indicador */}
           <View style={styles.tabsRow}>
             {(Object.keys(CONFIG_GRAFICO) as AbaGrafico[]).map((key) => {
               const item = CONFIG_GRAFICO[key];
@@ -329,30 +344,41 @@ export default function SinaisVitaisScreen({ navigation }: any) {
             <Activity color="#94A3B8" size={40} />
             <Text style={styles.emptyTitle}>Nenhum registro encontrado</Text>
             <Text style={styles.emptySub}>
-              Toque em "+ Novo" para registrar manualmente ou puxar da Smartband.
+              {podeRegistrarSinal
+                ? 'Toque em "+ Novo" para registrar manualmente ou puxar da Smartband.'
+                : 'As aferições registradas pelo cuidador ou equipe clínica aparecerão aqui.'}
             </Text>
           </View>
         ) : (
           registros.map((item) => {
-            const nomeInd = item.indicador?.nome || item.nome_indicador || 'Indicador Vital';
+            const nomeInd =
+              item.indicador?.nome ||
+              item.indicador_saude?.nome ||
+              item.nome_indicador ||
+              'Indicador Vital';
             const nomeLower = nomeInd.toLowerCase();
-            const unidade = item.indicador?.unidade || item.unidade || '';
+            const unidade =
+              item.indicador?.unidade_padrao ||
+              item.indicador?.unidade ||
+              item.unidade ||
+              '';
 
-            // Prioriza valor_numerico para evitar exibir texto antigo no lugar do número
             const temNumero = item.valor_numerico !== null && item.valor_numerico !== undefined;
             const valorExibido = temNumero
               ? `${item.valor_numerico} ${unidade}`.trim()
               : `${item.valor_categorico || '-'} ${unidade}`.trim();
 
+            const origemUpper = String(item.origem || item.origem_dado || '').toUpperCase();
             const isDispositivo =
-              item.origem_dado === 'DISPOSITIVO' ||
+              origemUpper === 'AUTOMATICO' ||
+              origemUpper === 'DISPOSITIVO' ||
               (item.observacao || '').toLowerCase().includes('smartband');
 
             let IconComp = HeartPulse;
             let iconColor = '#E11D48';
             let iconBg = '#FFF1F2';
 
-            if (nomeLower.includes('satur') || nomeLower.includes('spo2')) {
+            if (nomeLower.includes('satur') || nomeLower.includes('spo2') || nomeLower.includes('oxig')) {
               IconComp = Droplets;
               iconColor = '#0D9488';
               iconBg = '#F0FDFA';
@@ -428,6 +454,16 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 24, fontWeight: 'bold', color: '#0A2540' },
   subtitle: { fontSize: 13, color: '#64748B', marginTop: 2 },
+  readOnlyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 5,
+  },
+  readOnlyText: { fontSize: 12, fontWeight: '700', color: '#1D4ED8' },
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',

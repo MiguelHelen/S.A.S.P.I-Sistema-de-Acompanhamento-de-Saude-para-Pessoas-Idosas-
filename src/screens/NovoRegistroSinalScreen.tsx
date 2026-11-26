@@ -18,14 +18,14 @@ import {
   Thermometer,
   ArrowLeft,
   Save,
-  FileText,
   Watch,
   CheckCircle2,
+  Eye,
 } from "lucide-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "../contexts/AuthContext";
 import { useSocket } from "../contexts/SocketContext";
-import { API_URL } from "../api/client";
+import { apiFetch } from "../api/client";
 
 let HealthConnect: any = null;
 try {
@@ -58,12 +58,14 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
 
   const [indicadorSelecionado, setIndicadorSelecionado] = useState(INDICADORES[0]);
   const [valor, setValor] = useState("");
-  const [observacao, setObservacao] = useState("");
   const [statusSync, setStatusSync] = useState<string | null>(null);
 
   const [salvando, setSalvando] = useState(false);
   const [lendoRelogio, setLendoRelogio] = useState(false);
   const [origemDado, setOrigemDado] = useState<"MANUAL" | "AUTOMATICO">("MANUAL");
+
+  const perfil = (usuario?.perfil || "").toUpperCase();
+  const podeRegistrar = perfil === "IDOSO" || perfil === "CUIDADOR";
 
   useEffect(() => {
     async function carregarIdoso() {
@@ -76,7 +78,6 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
   const handleIndicadorChange = (item: any) => {
     setIndicadorSelecionado(item);
     setValor("");
-    setObservacao("");
     setStatusSync(null);
     setOrigemDado("MANUAL");
   };
@@ -152,7 +153,6 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
         return;
       }
 
-      // Busca nas últimas 6 horas e extrai a amostra individual mais recente
       const agora = new Date();
       const inicioJanela = new Date(agora.getTime() - 6 * 60 * 60 * 1000);
 
@@ -179,7 +179,6 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
       let dataAmostra: Date | null = null;
 
       if (recordTypeHC === "HeartRate") {
-        // Varre todas as amostras (samples) de todos os blocos para pegar a mais recente de verdade
         const amostras: { bpm: number; dt: Date }[] = [];
         for (const rec of registros) {
           if (Array.isArray(rec.samples) && rec.samples.length > 0) {
@@ -250,9 +249,8 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
   };
 
   const obterOuCriarIndicadorId = async (nomeIndicador: string, unidadePadrao: string) => {
-    const headersAuth = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
     try {
-      const resLista = await fetch(`${API_URL}/indicador-saude`, { headers: headersAuth });
+      const resLista = await apiFetch("/indicador-saude", {}, token);
       if (resLista.ok) {
         const lista = await resLista.json();
         const existente = (Array.isArray(lista) ? lista : []).find(
@@ -260,11 +258,14 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
         );
         if (existente?.id) return existente.id;
       }
-      const resCriar = await fetch(`${API_URL}/indicador-saude`, {
-        method: "POST",
-        headers: headersAuth,
-        body: JSON.stringify({ nome: nomeIndicador, unidade_padrao: unidadePadrao }),
-      });
+      const resCriar = await apiFetch(
+        "/indicador-saude",
+        {
+          method: "POST",
+          body: JSON.stringify({ nome: nomeIndicador, unidade_padrao: unidadePadrao }),
+        },
+        token
+      );
       if (resCriar.ok) {
         const criado = await resCriar.json();
         if (criado?.id) return criado.id;
@@ -275,11 +276,51 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
     return null;
   };
 
+  const obterOuCriarDispositivoId = async (idosoId: string): Promise<string | null> => {
+    try {
+      const resLista = await apiFetch(`/dispositivo-vestivel/idoso/${idosoId}`, {}, token);
+      if (resLista.ok) {
+        const lista = await resLista.json();
+        const arr = Array.isArray(lista) ? lista : lista?.data || [];
+        if (arr.length > 0 && arr[0]?.id) {
+          return arr[0].id;
+        }
+      }
+
+      const resCriar = await apiFetch(
+        "/dispositivo-vestivel",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            idoso_id: idosoId,
+            fabricante: "Xiaomi",
+            modelo: "Mi Band (Health Connect)",
+            identificador_dispositivo: `HC-${idosoId.slice(0, 8)}`,
+          }),
+        },
+        token
+      );
+      if (resCriar.ok) {
+        const criado = await resCriar.json();
+        if (criado?.id) return criado.id;
+      }
+    } catch (e) {
+      console.error("Erro ao buscar/criar dispositivo vestível:", e);
+    }
+    return null;
+  };
+
   const salvarRegistro = async () => {
+    if (!podeRegistrar) {
+      return Alert.alert(
+        "Acesso Somente Leitura",
+        "Apenas o idoso, cuidadores e profissionais vinculados podem registrar novos sinais vitais."
+      );
+    }
+
     if (!idoso) return Alert.alert("Erro", "Nenhum paciente selecionado!");
 
     const valorLimpo = valor.trim().replace(",", ".");
-    const obsLimpa = observacao.trim();
 
     if (!valorLimpo) {
       return Alert.alert("Atenção", "Por favor, insira ou puxe o valor da aferição.");
@@ -301,34 +342,49 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
       );
       if (!indicadorId) throw new Error("Falha de configuração do indicador no banco.");
 
-      // Mantém exatamente o schema Prisma do backend:
-      // - Sinais numéricos enviam valor_numerico (sem valor_categorico textual para não sobrescrever o número na Web)
-      // - Pressão arterial envia valor_categorico
-      const valorCategoricoFinal = !isNumerico
-        ? obsLimpa.length > 0
-          ? `${valorLimpo} (${obsLimpa})`
-          : valorLimpo
-        : undefined;
+      let origemFinal: "MANUAL" | "AUTOMATICO" = origemDado;
+      let dispositivoId: string | null = null;
 
-      const payload: any = {
+      if (origemFinal === "AUTOMATICO") {
+        dispositivoId = await obterOuCriarDispositivoId(idoso.id);
+        if (!dispositivoId) {
+          origemFinal = "MANUAL";
+        }
+      }
+
+      const payload: Record<string, any> = {
         idoso_id: idoso.id,
         indicador_id: indicadorId,
-        ...(isNumerico && { valor_numerico: numeroConvertido }),
-        ...(valorCategoricoFinal && { valor_categorico: valorCategoricoFinal }),
-        ...(obsLimpa.length > 0 && { observacao: obsLimpa }),
-        origem: origemDado,
-        ...(usuario?.id && { usuario_id: usuario.id }),
+        origem: origemFinal,
       };
 
-      const res = await fetch(`${API_URL}/registro-saude`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(payload),
-      });
+      if (isNumerico) {
+        payload.valor_numerico = numeroConvertido;
+      } else {
+        payload.valor_categorico = valorLimpo;
+      }
+
+      if (origemFinal === "AUTOMATICO" && dispositivoId) {
+        payload.dispositivo_id = dispositivoId;
+      } else if (usuario?.id) {
+        payload.usuario_id = usuario.id;
+      }
+
+      const res = await apiFetch(
+        "/registro-saude",
+        {
+          method: "POST",
+          body: JSON.stringify(payload),
+        },
+        token
+      );
 
       if (!res.ok) {
         const errData = await res.json().catch(() => null);
-        throw new Error(errData?.message || "Erro ao registrar o sinal vital no banco.");
+        const msg = Array.isArray(errData?.message)
+          ? errData.message.join("\n")
+          : errData?.message;
+        throw new Error(msg || "Erro ao registrar o sinal vital no banco.");
       }
 
       emitirAtualizacao("saspi_elderly_updated", {
@@ -336,7 +392,7 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
         tipo: "registro-saude",
       });
 
-      Alert.alert("Aferição Salva! ✅", "O registro foi gravado na nuvem S.A.S.P.I. com sucesso.", [
+      Alert.alert("Aferição Salva!", "O registro foi gravado na nuvem S.A.S.P.I. com sucesso.", [
         { text: "OK", onPress: () => navigation.goBack() },
       ]);
     } catch (err: any) {
@@ -362,6 +418,15 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {!podeRegistrar && (
+          <View style={styles.readOnlyBanner}>
+            <Eye size={18} color="#1D4ED8" />
+            <Text style={styles.readOnlyBannerText}>
+              Seu perfil possui acesso apenas de leitura para sinais vitais. Somente o idoso, cuidador ou equipe clínica pode registrar aferições.
+            </Text>
+          </View>
+        )}
+
         <Text style={styles.label}>O que você deseja aferir?</Text>
         <ScrollView
           horizontal
@@ -404,14 +469,15 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
               placeholder={indicadorSelecionado.nome === "Pressão Arterial" ? "120/80" : "0"}
               placeholderTextColor="#A0AEC0"
               maxLength={7}
+              editable={podeRegistrar}
             />
             <Text style={styles.unitText}>{indicadorSelecionado.unidade}</Text>
           </View>
 
           <TouchableOpacity
-            style={styles.btnWatch}
+            style={[styles.btnWatch, !podeRegistrar && { opacity: 0.5 }]}
             onPress={puxarDoRelogio}
-            disabled={lendoRelogio}
+            disabled={lendoRelogio || !podeRegistrar}
           >
             {lendoRelogio ? (
               <ActivityIndicator color="#159B87" size="small" />
@@ -429,30 +495,20 @@ export default function NovoRegistroSinalScreen({ navigation }: any) {
               <Text style={styles.syncBadgeText}>{statusSync}</Text>
             </View>
           )}
-
-          <View style={styles.obsWrapper}>
-            <FileText size={18} color="#718096" style={{ marginRight: 8 }} />
-            <TextInput
-              style={styles.obsInput}
-              placeholder="Observação opcional (Ex: Após o almoço, repouso)"
-              placeholderTextColor="#A0AEC0"
-              value={observacao}
-              onChangeText={setObservacao}
-              maxLength={100}
-            />
-          </View>
         </View>
 
-        <TouchableOpacity
-          style={[styles.saveButton, salvando && { opacity: 0.7 }]}
-          onPress={salvarRegistro}
-          disabled={salvando}
-        >
-          {salvando ? <ActivityIndicator color="#FFF" /> : <Save size={20} color="#FFF" />}
-          <Text style={styles.saveButtonText}>
-            {salvando ? "Enviando para a Nuvem..." : "Salvar no Prontuário"}
-          </Text>
-        </TouchableOpacity>
+        {podeRegistrar && (
+          <TouchableOpacity
+            style={[styles.saveButton, salvando && { opacity: 0.7 }]}
+            onPress={salvarRegistro}
+            disabled={salvando}
+          >
+            {salvando ? <ActivityIndicator color="#FFF" /> : <Save size={20} color="#FFF" />}
+            <Text style={styles.saveButtonText}>
+              {salvando ? "Enviando para a Nuvem..." : "Salvar no Prontuário"}
+            </Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -474,6 +530,21 @@ const styles = StyleSheet.create({
   backBtn: { width: 40, height: 40, justifyContent: "center" },
   headerTitle: { fontSize: 18, fontWeight: "bold", color: "#0A2540" },
   content: { padding: 20, paddingBottom: 40 },
+  readOnlyBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#DBEAFE",
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 16,
+    gap: 10,
+  },
+  readOnlyBannerText: {
+    flex: 1,
+    fontSize: 13,
+    color: "#1E40AF",
+    fontWeight: "600",
+  },
   label: { fontSize: 14, fontWeight: "600", color: "#4A5568", marginBottom: 12 },
   chipsContainer: { flexDirection: "row", marginBottom: 24, paddingBottom: 8 },
   chip: {
@@ -541,7 +612,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 11,
     borderRadius: 12,
-    marginBottom: 14,
+    marginBottom: 8,
   },
   btnWatchText: { color: "#0F766E", fontWeight: "700", marginLeft: 8 },
   syncBadge: {
@@ -552,21 +623,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
-    marginBottom: 16,
+    marginTop: 8,
   },
   syncBadgeText: { color: "#0F766E", fontSize: 12, fontWeight: "600" },
-  obsWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F8FBFE",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    height: 52,
-    width: "100%",
-  },
-  obsInput: { flex: 1, fontSize: 14, color: "#0A2540" },
   saveButton: {
     flexDirection: "row",
     alignItems: "center",
