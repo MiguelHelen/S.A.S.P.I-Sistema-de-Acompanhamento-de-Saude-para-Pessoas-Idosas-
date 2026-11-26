@@ -6,6 +6,7 @@ import {
   ScrollView,
   ActivityIndicator,
   RefreshControl,
+  DeviceEventEmitter,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -21,7 +22,8 @@ import {
 } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useAccessibility } from '../contexts/AccessibilityContext';
-import { API_URL } from '../api/client';
+import { apiFetch } from '../api/client';
+import { formatarDataHoraConsulta } from '../utils/alertasHelper';
 
 interface Consulta {
   id: string;
@@ -65,9 +67,8 @@ export default function AgendaConsultasScreen() {
 
       const idosoObj = JSON.parse(storedElderly);
       setIdosoNome(idosoObj.nome || '');
-      const headers = { Authorization: `Bearer ${token}` };
 
-      const res = await fetch(`${API_URL}/consulta/idoso/${idosoObj.id}`, { headers });
+      const res = await apiFetch(`/consulta/idoso/${idosoObj.id}`, {}, token);
 
       if (res.ok) {
         const data = await res.json();
@@ -85,48 +86,16 @@ export default function AgendaConsultasScreen() {
   useFocusEffect(
     useCallback(() => {
       carregarConsultas();
+      const sub = DeviceEventEmitter.addListener('saspi_realtime_update', () => {
+        carregarConsultas();
+      });
+      return () => sub.remove();
     }, [carregarConsultas])
   );
 
   const onRefresh = () => {
     setRefreshing(true);
     carregarConsultas();
-  };
-
-  const formatarDataHora = (c: Consulta) => {
-    if (c.data_hora) {
-      const dt = new Date(c.data_hora);
-      if (!Number.isNaN(dt.getTime())) {
-        return {
-          data: dt.toLocaleDateString('pt-BR', {
-            weekday: 'short',
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-          }),
-          hora: dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-        };
-      }
-    }
-    if (c.data) {
-      const dt = new Date(c.data);
-      if (!Number.isNaN(dt.getTime())) {
-        return {
-          data: dt.toLocaleDateString('pt-BR', {
-            timeZone: 'UTC',
-            weekday: 'short',
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-          }),
-          hora: c.horario || '',
-        };
-      }
-    }
-    return {
-      data: c.data || 'Data a confirmar',
-      hora: c.horario || '',
-    };
   };
 
   const consultasAgendadas = consultas.filter((c) => {
@@ -205,7 +174,7 @@ export default function AgendaConsultasScreen() {
         </View>
       ) : (
         consultasAgendadas.map((item) => {
-          const { data, hora } = formatarDataHora(item);
+          const { data, hora } = formatarDataHoraConsulta(item);
           const nomeMedico = item.profissional || item.medico;
           const localConsulta = item.localizacao || item.local || 'Unidade Clínica S.A.S.P.I.';
           const obsConsulta = item.observacao || item.observacoes;
@@ -283,7 +252,7 @@ export default function AgendaConsultasScreen() {
           </Text>
 
           {consultasAnteriores.map((item) => {
-            const { data, hora } = formatarDataHora(item);
+            const { data, hora } = formatarDataHoraConsulta(item);
             const realizada = (item.status || '').toUpperCase() === 'REALIZADA';
 
             return (
