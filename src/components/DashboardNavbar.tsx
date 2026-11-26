@@ -457,8 +457,18 @@ export default function DashboardNavbar() {
   function handleLogout() {
     setDropdownAberto(false);
     setMenuMobileAberto(false);
+
+    localStorage.removeItem("saspi_token");
+    localStorage.removeItem("saspi_user");
+    localStorage.removeItem("saspi_active_elderly");
+    localStorage.removeItem("saspi_elderly_list");
+
+    document.cookie = "saspi_token=; path=/; max-age=0; SameSite=Lax";
+    document.cookie = "saspi_user=; path=/; max-age=0; SameSite=Lax";
+
     limparSessao();
     router.replace("/login");
+    router.refresh();
   }
 
   function marcarComoLida(id: string, event: React.MouseEvent) {

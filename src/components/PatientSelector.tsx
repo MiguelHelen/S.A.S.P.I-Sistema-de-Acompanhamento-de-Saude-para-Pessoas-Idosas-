@@ -5,6 +5,7 @@ import {
   API_URL,
   getAuthHeaders,
   getUsuarioSessao,
+  normalizarPerfil,
 } from "@/lib/clinica";
 import {
   Users,
@@ -124,8 +125,11 @@ export default function PatientSelector({
     setErro("");
 
     const usuario = getUsuarioSessao();
-    if (!usuario?.id) {
-      setIdosos([]);
+    const userId = String(usuario?.id || "").trim();
+    const perfil = normalizarPerfil(usuario?.perfil);
+
+    // Evita marcar "sem vínculo" antes de o saspi_user estar disponível no estado
+    if (!userId && perfil !== "ADMINISTRADOR" && perfil !== "ADMIN") {
       setCarregando(false);
       return;
     }
@@ -135,37 +139,39 @@ export default function PatientSelector({
     try {
       let listaNormalizada: Idoso[] = [];
 
-      const resVinculos = await fetch(
-        `${API_URL}/usuario-idoso/usuario/${usuario.id}`,
-        { headers }
-      ).catch(() => null);
+      if (userId) {
+        const resVinculos = await fetch(
+          `${API_URL}/usuario-idoso/usuario/${userId}`,
+          { headers }
+        ).catch(() => null);
 
-      if (resVinculos?.ok) {
-        const dataVinculos = await resVinculos.json();
-        const arrVinculos = Array.isArray(dataVinculos)
-          ? dataVinculos
-          : dataVinculos?.data || [];
+        if (resVinculos?.ok) {
+          const dataVinculos = await resVinculos.json();
+          const arrVinculos = Array.isArray(dataVinculos)
+            ? dataVinculos
+            : dataVinculos?.data || [];
 
-        const extraidos = arrVinculos
-          .map((v: any) => v.idoso || (v.nome ? v : null))
-          .filter((item: any) => Boolean(item?.id))
-          .filter(
-            (item: any) =>
-              !usuario.clinica_id ||
-              !item.clinica_id ||
-              item.clinica_id === usuario.clinica_id
-          )
-          .map(normalizarIdoso);
+          const extraidos = arrVinculos
+            .map((v: any) => v.idoso || (v.nome ? v : null))
+            .filter((item: any) => Boolean(item?.id))
+            .filter(
+              (item: any) =>
+                !usuario?.clinica_id ||
+                !item.clinica_id ||
+                item.clinica_id === usuario.clinica_id
+            )
+            .map(normalizarIdoso);
 
-        const mapaUnico = new Map<string, Idoso>();
-        extraidos.forEach((i: Idoso) => mapaUnico.set(i.id, i));
-        listaNormalizada = Array.from(mapaUnico.values());
+          const mapaUnico = new Map<string, Idoso>();
+          extraidos.forEach((i: Idoso) => mapaUnico.set(i.id, i));
+          listaNormalizada = Array.from(mapaUnico.values());
+        }
       }
 
       if (
         listaNormalizada.length === 0 &&
-        usuario.clinica_id &&
-        usuario.perfil !== "FAMILIAR"
+        usuario?.clinica_id &&
+        perfil !== "FAMILIAR"
       ) {
         const resClinica = await fetch(
           `${API_URL}/idoso?clinica_id=${usuario.clinica_id}`,
@@ -188,6 +194,10 @@ export default function PatientSelector({
       }
 
       setIdosos(listaNormalizada);
+      localStorage.setItem(
+        "saspi_elderly_list",
+        JSON.stringify(listaNormalizada)
+      );
 
       if (listaNormalizada.length > 0) {
         let ativoStorage: Idoso | null = null;
@@ -210,6 +220,7 @@ export default function PatientSelector({
       } else {
         setAtivoId("");
         localStorage.removeItem("saspi_active_elderly");
+        localStorage.removeItem("saspi_elderly_list");
       }
     } catch {
       setErro("Não foi possível carregar a lista de pacientes vinculados.");
@@ -234,8 +245,10 @@ export default function PatientSelector({
       } catch {}
     }
 
+    window.addEventListener("saspi_user_updated", carregarIdosos);
     window.addEventListener("saspi_elderly_updated", handleAtualizacaoExterna);
     return () => {
+      window.removeEventListener("saspi_user_updated", carregarIdosos);
       window.removeEventListener(
         "saspi_elderly_updated",
         handleAtualizacaoExterna
