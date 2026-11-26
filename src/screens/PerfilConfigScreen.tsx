@@ -26,7 +26,7 @@ import {
 } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useAccessibility } from '../contexts/AccessibilityContext';
-import { API_URL } from '../api/client';
+import { uploadFotoPerfilUsuario } from '../api/storage';
 
 export default function PerfilConfigScreen({ navigation }: any) {
   const { usuario, token, logout } = useAuth();
@@ -63,37 +63,17 @@ export default function PerfilConfigScreen({ navigation }: any) {
     if (resultado.canceled || !resultado.assets?.length) return;
 
     const uri = resultado.assets[0].uri;
-    const fileName = uri.split('/').pop() || `avatar-${Date.now()}.jpg`;
-    const match = /\.(\w+)$/.exec(fileName);
-    const ext = match ? match[1].toLowerCase() : 'jpg';
-    const mimeType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
-
     setEnviandoFoto(true);
 
     try {
-      const formData = new FormData();
-      formData.append('file', {
-        uri,
-        name: fileName,
-        type: mimeType,
-      } as any);
+      const res = await uploadFotoPerfilUsuario(usuario.id, uri);
 
-      const response = await fetch(`${API_URL}/storage/usuario/${usuario.id}/foto-perfil`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      });
-
-      const data = await response.json().catch(() => null);
-
-      if (!response.ok || !data?.url) {
-        throw new Error(data?.message || 'Não foi possível enviar a foto de perfil.');
+      if (!res.ok || !res.url) {
+        throw new Error(res.message || 'Não foi possível enviar a foto de perfil.');
       }
 
-      setFotoUrl(data.url);
-      const atualizado = { ...usuario, foto_url: data.url };
+      setFotoUrl(res.url);
+      const atualizado = { ...usuario, foto_url: res.url };
       await AsyncStorage.setItem('saspi_user', JSON.stringify(atualizado));
       Alert.alert('Sucesso', 'Foto de perfil atualizada com sucesso!');
     } catch (error: any) {
@@ -134,7 +114,6 @@ export default function PerfilConfigScreen({ navigation }: any) {
         Perfil e Ajustes
       </Text>
 
-      {/* CARTÃO DE AVATAR E IDENTIFICAÇÃO */}
       <View style={[styles.profileCard, { backgroundColor: bgCard, borderColor: borderCard }]}>
         <TouchableOpacity
           style={styles.avatarWrapper}
@@ -172,7 +151,6 @@ export default function PerfilConfigScreen({ navigation }: any) {
         </View>
       </View>
 
-      {/* DADOS CADASTRAIS BLOQUEADOS PARA EDIÇÃO */}
       <View style={[styles.sectionCard, { backgroundColor: bgCard, borderColor: borderCard }]}>
         <View style={styles.lockedHeader}>
           <Text style={[styles.sectionTitle, { color: textPrimary, fontSize: textSize(16) }]}>
@@ -213,7 +191,7 @@ export default function PerfilConfigScreen({ navigation }: any) {
               VÍNCULO INSTITUCIONAL
             </Text>
             <Text style={[styles.fieldValue, { color: textPrimary, fontSize: textSize(14) }]}>
-              S.A.S.P.I. — Unidade Clínica
+              {usuario?.nomeClinica || 'S.A.S.P.I. — Unidade Clínica'}
             </Text>
           </View>
           <Lock size={15} color="#94A3B8" />
@@ -224,7 +202,6 @@ export default function PerfilConfigScreen({ navigation }: any) {
         </Text>
       </View>
 
-      {/* PREFERÊNCIAS E SUPORTE */}
       <View style={[styles.sectionCard, { backgroundColor: bgCard, borderColor: borderCard }]}>
         <Text
           style={[
@@ -307,7 +284,6 @@ export default function PerfilConfigScreen({ navigation }: any) {
         </TouchableOpacity>
       </View>
 
-      {/* BOTÃO DE LOGOUT */}
       <TouchableOpacity style={styles.logoutButton} onPress={confirmarLogout}>
         <LogOut size={20} color="#DC2626" />
         <Text style={[styles.logoutText, { fontSize: textSize(16) }]}>Encerrar Sessão</Text>

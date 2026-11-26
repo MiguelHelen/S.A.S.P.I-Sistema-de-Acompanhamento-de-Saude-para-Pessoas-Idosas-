@@ -11,7 +11,7 @@ import {
   Platform,
 } from "react-native";
 import { Mail } from "lucide-react-native";
-import { API_URL } from "../api/client";
+import { apiFetch } from "../api/client";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function RecuperarSenhaScreen({ navigation }: any) {
@@ -27,9 +27,8 @@ export default function RecuperarSenhaScreen({ navigation }: any) {
 
     setEnviando(true);
     try {
-      const res = await fetch(`${API_URL}/auth/recuperar-senha`, {
+      const res = await apiFetch("/auth/recuperar-senha", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim().toLowerCase() }),
       });
 
