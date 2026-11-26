@@ -44,7 +44,6 @@ export default function AcessibilidadeScreen({ navigation }: any) {
       style={[styles.container, { backgroundColor: bgMain }]}
       contentContainerStyle={styles.content}
     >
-      {/* CABEÇALHO */}
       <View style={styles.header}>
         <TouchableOpacity
           style={[styles.backBtn, { backgroundColor: bgCard, borderColor: borderCard }]}
@@ -58,7 +57,6 @@ export default function AcessibilidadeScreen({ navigation }: any) {
         </Text>
       </View>
 
-      {/* TAMANHO DA FONTE */}
       <View style={[styles.card, { backgroundColor: bgCard, borderColor: borderCard }]}>
         <View style={styles.cardTitleRow}>
           <Type size={22} color="#159B87" />
@@ -112,7 +110,6 @@ export default function AcessibilidadeScreen({ navigation }: any) {
         </View>
       </View>
 
-      {/* ALTO CONTRASTE */}
       <View style={[styles.card, { backgroundColor: bgCard, borderColor: borderCard }]}>
         <View style={styles.switchRow}>
           <View style={styles.switchInfo}>
@@ -136,7 +133,6 @@ export default function AcessibilidadeScreen({ navigation }: any) {
         </View>
       </View>
 
-      {/* MODO SIMPLIFICADO */}
       <View style={[styles.card, { backgroundColor: bgCard, borderColor: borderCard }]}>
         <View style={styles.switchRow}>
           <View style={styles.switchInfo}>
@@ -160,7 +156,6 @@ export default function AcessibilidadeScreen({ navigation }: any) {
         </View>
       </View>
 
-      {/* RESTAURAR PADRÕES */}
       <TouchableOpacity
         style={[styles.resetBtn, { borderColor: borderCard, backgroundColor: bgCard }]}
         onPress={restaurarPadrao}
