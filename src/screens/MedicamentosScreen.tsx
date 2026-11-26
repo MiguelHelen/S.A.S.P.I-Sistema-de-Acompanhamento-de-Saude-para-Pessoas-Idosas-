@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  DeviceEventEmitter,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -25,7 +26,7 @@ import {
 } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useAccessibility } from '../contexts/AccessibilityContext';
-import { API_URL } from '../api/client';
+import { apiFetch } from '../api/client';
 
 interface Prescricao {
   id: string;
@@ -92,11 +93,10 @@ export default function MedicamentosScreen() {
 
       const idosoObj = JSON.parse(storedElderly);
       setIdosoNome(idosoObj.nome || '');
-      const headers = { Authorization: `Bearer ${token}` };
 
       const [resPresc, resDoses] = await Promise.all([
-        fetch(`${API_URL}/prescricao/idoso/${idosoObj.id}`, { headers }).catch(() => null),
-        fetch(`${API_URL}/registro-dose/idoso/${idosoObj.id}`, { headers }).catch(() => null),
+        apiFetch(`/prescricao/idoso/${idosoObj.id}`, {}, token).catch(() => null),
+        apiFetch(`/registro-dose/idoso/${idosoObj.id}`, {}, token).catch(() => null),
       ]);
 
       if (resPresc && resPresc.ok) {
@@ -121,6 +121,10 @@ export default function MedicamentosScreen() {
   useFocusEffect(
     useCallback(() => {
       carregarDados();
+      const sub = DeviceEventEmitter.addListener('saspi_realtime_update', () => {
+        carregarDados();
+      });
+      return () => sub.remove();
     }, [carregarDados])
   );
 
@@ -151,21 +155,21 @@ export default function MedicamentosScreen() {
             setFeedback(null);
 
             try {
-              const res = await fetch(`${API_URL}/registro-dose`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${token}`,
+              const res = await apiFetch(
+                '/registro-dose',
+                {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    prescricao_id: prescricao.id,
+                    status: statusDose,
+                    observacao:
+                      statusDose === 'RECUSADA'
+                        ? 'Dose pulada ou recusada via aplicativo mobile.'
+                        : 'Dose confirmada via aplicativo mobile.',
+                  }),
                 },
-                body: JSON.stringify({
-                  prescricao_id: prescricao.id,
-                  status: statusDose,
-                  observacao:
-                    statusDose === 'RECUSADA'
-                      ? 'Dose pulada ou recusada via aplicativo mobile.'
-                      : 'Dose confirmada via aplicativo mobile.',
-                }),
-              });
+                token
+              );
 
               const data = await res.json().catch(() => null);
 
@@ -227,7 +231,6 @@ export default function MedicamentosScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#159B87" />
       }
     >
-      {/* CABEÇALHO */}
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
           <Text style={[styles.title, { color: textPrimary, fontSize: textSize(24) }]}>
@@ -246,7 +249,6 @@ export default function MedicamentosScreen() {
         )}
       </View>
 
-      {/* FEEDBACK DE REGISTRO */}
       {feedback && (
         <View
           style={[
@@ -273,7 +275,6 @@ export default function MedicamentosScreen() {
         </View>
       )}
 
-      {/* LISTA DE PRESCRIÇÕES ATIVAS */}
       <Text style={[styles.sectionTitle, { color: textPrimary, fontSize: textSize(17) }]}>
         Em Uso ({prescricoesAtivas.length})
       </Text>
@@ -347,7 +348,6 @@ export default function MedicamentosScreen() {
                 </View>
               )}
 
-              {/* AÇÕES DE CONFIRMAÇÃO (APENAS IDOSO E CUIDADOR - RN04) */}
               {podeConfirmarDose && (
                 <View style={styles.actionsRow}>
                   <TouchableOpacity
@@ -390,7 +390,6 @@ export default function MedicamentosScreen() {
         })
       )}
 
-      {/* HISTÓRICO DE DOSES CONFIRMADAS (RN04 / RN05) */}
       {historicoDoses.length > 0 && (
         <View style={{ marginTop: 12 }}>
           <View style={styles.sectionHeaderRow}>
@@ -455,7 +454,6 @@ export default function MedicamentosScreen() {
         </View>
       )}
 
-      {/* PRESCRIÇÕES ENCERRADAS (PRESERVAÇÃO HISTÓRICA RN08) */}
       {!simplifiedMode && prescricoesEncerradas.length > 0 && (
         <View style={{ marginTop: 18 }}>
           <Text style={[styles.sectionTitle, { color: textSecondary, fontSize: textSize(15) }]}>
