@@ -16,6 +16,11 @@ import { useAuth } from "../contexts/AuthContext";
 import { useSocket } from "../contexts/SocketContext";
 import { apiFetch } from "../api/client";
 import {
+  parseDataConsulta,
+  formatarDataHoraConsulta,
+  gerarAlertasClinicos,
+} from "../utils/alertasHelper";
+import {
   HeartPulse,
   Activity,
   Pill,
@@ -80,32 +85,32 @@ export default function HomeScreen({ navigation }: any) {
         return;
       }
 
-      const [resVitals, resPresc, resCons, resAlertas] = await Promise.all([
+      const [resVitals, resPresc, resCons] = await Promise.all([
         apiFetch(`/registro-saude/idoso/${idosoData.id}`, {}, token),
         apiFetch(`/prescricao/idoso/${idosoData.id}`, {}, token),
         apiFetch(`/consulta/idoso/${idosoData.id}`, {}, token),
-        apiFetch(`/alerta-saude/idoso/${idosoData.id}`, {}, token),
       ]);
 
       let fc = "--",
         spo2 = "--",
         pa = "--/--",
         ultimaHoraSinal = "";
+      let vitalsList: any[] = [];
 
       if (resVitals.ok) {
         const vitalsData = await resVitals.json();
-        const list = (Array.isArray(vitalsData) ? vitalsData : vitalsData?.data || []).sort(
+        vitalsList = (Array.isArray(vitalsData) ? vitalsData : vitalsData?.data || []).sort(
           (a: any, b: any) =>
             new Date(b.data_hora || b.criado_em).getTime() -
             new Date(a.data_hora || a.criado_em).getTime()
         );
 
-        if (list.length > 0) {
-          const dt = new Date(list[0].data_hora || list[0].criado_em);
+        if (vitalsList.length > 0) {
+          const dt = new Date(vitalsList[0].data_hora || vitalsList[0].criado_em);
           ultimaHoraSinal = dt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
         }
 
-        list.forEach((r: any) => {
+        vitalsList.forEach((r: any) => {
           const nome = String(
             r.indicador?.nome || r.indicador_saude?.nome || r.indicador_nome || ""
           ).toLowerCase();
@@ -122,39 +127,42 @@ export default function HomeScreen({ navigation }: any) {
 
       let proximoRemedio = null;
       let totalRemedios = 0;
+      let prescList: any[] = [];
       if (resPresc.ok) {
         const prescData = await resPresc.json();
-        const ativas = (Array.isArray(prescData) ? prescData : prescData?.data || []).filter(
-          (p: any) => p.status !== "INATIVA"
+        prescList = Array.isArray(prescData) ? prescData : prescData?.data || [];
+        const ativas = prescList.filter(
+          (p: any) => (p.status || "ATIVA").toUpperCase() === "ATIVA"
         );
         totalRemedios = ativas.length;
         if (ativas.length > 0) proximoRemedio = ativas[0];
       }
 
       let proximaConsulta = null;
+      let consList: any[] = [];
       if (resCons.ok) {
         const consData = await resCons.json();
-        const agora = new Date();
-        const futuras = (Array.isArray(consData) ? consData : consData?.data || [])
-          .filter(
-            (c: any) =>
-              new Date(c.data_consulta || c.data_hora) >= agora && c.status !== "CANCELADA"
-          )
-          .sort(
-            (a: any, b: any) =>
-              new Date(a.data_consulta || a.data_hora).getTime() -
-              new Date(b.data_consulta || b.data_hora).getTime()
-          );
+        consList = Array.isArray(consData) ? consData : consData?.data || [];
+        const inicioHoje = new Date();
+        inicioHoje.setHours(0, 0, 0, 0);
+
+        const futuras = consList
+          .filter((c: any) => {
+            const st = (c.status || "AGENDADA").toUpperCase();
+            if (st === "CANCELADA" || st === "REALIZADA") return false;
+            const dt = parseDataConsulta(c);
+            return dt !== null && dt >= inicioHoje;
+          })
+          .sort((a: any, b: any) => {
+            const da = parseDataConsulta(a)?.getTime() || 0;
+            const db = parseDataConsulta(b)?.getTime() || 0;
+            return da - db;
+          });
         if (futuras.length > 0) proximaConsulta = futuras[0];
       }
 
-      let alertasPendentes = 0;
-      if (resAlertas.ok) {
-        const alertasData = await resAlertas.json();
-        alertasPendentes = (Array.isArray(alertasData) ? alertasData : alertasData?.data || []).filter(
-          (a: any) => !a.lido && a.status !== "RESOLVIDO"
-        ).length;
-      }
+      const alertasGerados = gerarAlertasClinicos(vitalsList, prescList, consList);
+      const alertasPendentes = alertasGerados.filter((a) => a.prioridade === "ALTA").length;
 
       setResumo({
         fc,
@@ -194,6 +202,12 @@ export default function HomeScreen({ navigation }: any) {
     return nomeCompleto.split(" ")[0];
   };
 
+  const formatarResumoConsulta = (consulta: any) => {
+    const { data, hora } = formatarDataHoraConsulta(consulta);
+    const dataHoraStr = hora ? `${data} às ${hora}` : data;
+    return [dataHoraStr, consulta?.especialidade || "Consulta"].filter(Boolean).join(" • ");
+  };
+
   const iniciaisIdoso = (idoso?.nome || "ID")
     .split(" ")
     .slice(0, 2)
@@ -202,9 +216,7 @@ export default function HomeScreen({ navigation }: any) {
     .toUpperCase();
 
   const saudacao =
-    perfil === "IDOSO"
-      ? `Bom dia, ${getPrimeiroNome(usuario?.nome)}!`
-      : perfil === "CUIDADOR"
+    perfil === "IDOSO" || perfil === "CUIDADOR"
       ? `Bom dia, ${getPrimeiroNome(usuario?.nome)}!`
       : `Olá, ${getPrimeiroNome(usuario?.nome)}!`;
 
@@ -217,9 +229,6 @@ export default function HomeScreen({ navigation }: any) {
       </View>
     );
 
-  // =========================================================================
-  // RENDER: HOME DO IDOSO
-  // =========================================================================
   const renderHomeIdoso = () => (
     <View style={styles.content}>
       <Text style={styles.welcomeText}>{saudacao}</Text>
@@ -271,10 +280,17 @@ export default function HomeScreen({ navigation }: any) {
       <View style={styles.gridFastAccess}>
         <TouchableOpacity
           style={styles.fastAccessBtn}
-          onPress={() => navigation.navigate("Vitais")}
+          onPress={() => navigation.navigate("Saúde")}
         >
           <HeartPulse size={24} color="#159B87" />
           <Text style={styles.fastAccessText}>Minha saúde</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.fastAccessBtn}
+          onPress={() => navigation.navigate("NovoRegistroSinal")}
+        >
+          <Plus size={24} color="#159B87" />
+          <Text style={styles.fastAccessText}>Aferir sinais</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.fastAccessBtn}
@@ -287,9 +303,6 @@ export default function HomeScreen({ navigation }: any) {
     </View>
   );
 
-  // =========================================================================
-  // RENDER: HOME DO CUIDADOR
-  // =========================================================================
   const renderHomeCuidador = () => (
     <View style={styles.content}>
       <Text style={styles.welcomeText}>{saudacao}</Text>
@@ -350,9 +363,7 @@ export default function HomeScreen({ navigation }: any) {
           <Text style={styles.taskCardTitle}>Próxima consulta</Text>
           <Text style={styles.taskCardSub}>
             {resumo.proximaConsulta
-              ? `${resumo.proximaConsulta.especialidade || "Consulta"} • ${new Date(
-                  resumo.proximaConsulta.data_consulta || resumo.proximaConsulta.data_hora
-                ).toLocaleDateString("pt-BR")}`
+              ? formatarResumoConsulta(resumo.proximaConsulta)
               : "Nenhuma consulta agendada"}
           </Text>
         </View>
@@ -387,9 +398,6 @@ export default function HomeScreen({ navigation }: any) {
     </View>
   );
 
-  // =========================================================================
-  // RENDER: HOME DA FAMÍLIA (Somente Leitura)
-  // =========================================================================
   const renderHomeFamilia = () => (
     <View style={styles.content}>
       <Text style={styles.welcomeText}>{saudacao}</Text>
@@ -413,7 +421,7 @@ export default function HomeScreen({ navigation }: any) {
       <View style={styles.healthSummaryGrid}>
         <TouchableOpacity
           style={styles.healthSummaryCard}
-          onPress={() => navigation.navigate("Vitais")}
+          onPress={() => navigation.navigate("Saúde")}
         >
           <View style={styles.rowCenter}>
             <HeartPulse size={14} color="#159B87" />
@@ -429,7 +437,7 @@ export default function HomeScreen({ navigation }: any) {
 
         <TouchableOpacity
           style={styles.healthSummaryCard}
-          onPress={() => navigation.navigate("Vitais")}
+          onPress={() => navigation.navigate("Saúde")}
         >
           <View style={styles.rowCenter}>
             <Activity size={14} color="#187BC0" />
@@ -445,7 +453,7 @@ export default function HomeScreen({ navigation }: any) {
 
         <TouchableOpacity
           style={styles.healthSummaryCard}
-          onPress={() => navigation.navigate("Vitais")}
+          onPress={() => navigation.navigate("Saúde")}
         >
           <View style={styles.rowCenter}>
             <Droplet size={14} color="#6554D9" />
@@ -468,9 +476,7 @@ export default function HomeScreen({ navigation }: any) {
           <Text style={styles.taskCardTitle}>Próxima consulta</Text>
           <Text style={styles.taskCardSub}>
             {resumo.proximaConsulta
-              ? `${new Date(
-                  resumo.proximaConsulta.data_consulta || resumo.proximaConsulta.data_hora
-                ).toLocaleDateString("pt-BR")} • ${resumo.proximaConsulta.especialidade || "Consulta"}`
+              ? formatarResumoConsulta(resumo.proximaConsulta)
               : "Nenhuma consulta futura"}
           </Text>
         </View>
@@ -611,11 +617,9 @@ const styles = StyleSheet.create({
   },
   bellBadgeText: { color: "#FFF", fontSize: 10, fontWeight: "bold" },
   content: { paddingHorizontal: 20, paddingBottom: 40 },
-
   welcomeText: { fontSize: 26, fontWeight: "bold", color: "#102F50" },
   subtitleText: { fontSize: 15, color: "#577187", marginTop: 4, marginBottom: 24 },
   sectionTitle: { fontSize: 16, fontWeight: "bold", color: "#102F50", marginTop: 24, marginBottom: 12 },
-
   patientSelector: {
     flexDirection: "row",
     alignItems: "center",
@@ -652,7 +656,6 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 8,
   },
-
   greenCard: {
     backgroundColor: "#159B87",
     borderRadius: 20,
@@ -673,7 +676,6 @@ const styles = StyleSheet.create({
   },
   badgeGreenText: { color: "#FFF", fontSize: 12, fontWeight: "bold" },
   greenCardIcon: { position: "absolute", right: -10, bottom: -10 },
-
   actionCard: {
     backgroundColor: "#FFF",
     borderRadius: 16,
@@ -693,7 +695,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
   },
-
   primaryButton: {
     backgroundColor: "#159B87",
     borderRadius: 12,
@@ -701,20 +702,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   primaryButtonText: { color: "#FFF", fontSize: 15, fontWeight: "bold" },
-
-  gridFastAccess: { flexDirection: "row", gap: 12 },
+  gridFastAccess: { flexDirection: "row", gap: 10 },
   fastAccessBtn: {
     flex: 1,
     backgroundColor: "#FFF",
     borderRadius: 16,
-    padding: 16,
+    padding: 14,
     borderWidth: 1,
     borderColor: "#DCEAF2",
     alignItems: "center",
     gap: 8,
   },
-  fastAccessText: { fontSize: 14, fontWeight: "bold", color: "#102F50" },
-
+  fastAccessText: { fontSize: 13, fontWeight: "bold", color: "#102F50", textAlign: "center" },
   taskCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -727,7 +726,6 @@ const styles = StyleSheet.create({
   },
   taskCardTitle: { fontSize: 15, fontWeight: "bold", color: "#102F50" },
   taskCardSub: { fontSize: 13, color: "#577187", marginTop: 2 },
-
   alertBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -741,7 +739,6 @@ const styles = StyleSheet.create({
   },
   alertBannerTitle: { fontSize: 14, fontWeight: "bold", color: "#B91C1C" },
   alertBannerSub: { fontSize: 12, color: "#DC2626", marginTop: 2 },
-
   primaryButtonFull: {
     flexDirection: "row",
     backgroundColor: "#159B87",
@@ -751,7 +748,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
   },
-
   healthSummaryGrid: { flexDirection: "row", gap: 10 },
   healthSummaryCard: {
     flex: 1,
@@ -766,7 +762,6 @@ const styles = StyleSheet.create({
   healthSummaryValue: { fontSize: 18, fontWeight: "bold", color: "#102F50", marginTop: 8 },
   healthSummaryUnit: { fontSize: 12, fontWeight: "normal", color: "#577187" },
   healthSummaryStatus: { fontSize: 10, color: "#159B87", fontWeight: "bold", marginTop: 4 },
-
   infoCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -777,7 +772,6 @@ const styles = StyleSheet.create({
     borderColor: "#DCEAF2",
     marginBottom: 12,
   },
-
   alertBannerGreen: {
     flexDirection: "row",
     alignItems: "center",
@@ -796,7 +790,6 @@ const styles = StyleSheet.create({
   },
   alertBannerGreenTitle: { fontSize: 14, fontWeight: "bold", color: "#159B87" },
   alertBannerGreenSub: { fontSize: 12, color: "#159B87", marginTop: 2 },
-
   iconWrapperBlue: {
     width: 44,
     height: 44,
