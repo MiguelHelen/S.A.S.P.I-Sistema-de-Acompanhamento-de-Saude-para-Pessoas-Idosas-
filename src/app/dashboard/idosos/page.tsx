@@ -270,7 +270,6 @@ export default function IdososPage() {
         ...(formEdicao.data_nascimento
           ? { data_nascimento: formEdicao.data_nascimento }
           : {}),
-        ...(idadeCalculada > 0 ? { idade: idadeCalculada } : {}),
         ...(formEdicao.sexo ? { sexo: formEdicao.sexo } : {}),
         ...(cpfDigitos ? { cpf: cpfDigitos } : {}),
         telefone: formEdicao.telefone.trim(),
