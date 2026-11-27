@@ -1,11 +1,11 @@
 "use client";
+import Image from "next/image";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { API_URL, limparSessao } from "@/lib/clinica";
 import {
-  HeartPulse,
   Mail,
   ArrowLeft,
   Loader2,
@@ -57,7 +57,7 @@ export default function RecuperarSenhaPage() {
   }
 
   async function verificarEmailExisteNoSistema(
-    emailBusca: string
+    emailBusca: string,
   ): Promise<boolean | null> {
     try {
       const res = await fetch(`${API_URL}/usuario`);
@@ -69,7 +69,7 @@ export default function RecuperarSenhaPage() {
         (u: any) =>
           String(u.email || "")
             .trim()
-            .toLowerCase() === emailBusca
+            .toLowerCase() === emailBusca,
       );
     } catch {
       return null;
@@ -95,7 +95,7 @@ export default function RecuperarSenhaPage() {
       const existe = await verificarEmailExisteNoSistema(emailLimpo);
       if (existe === false) {
         setErro(
-          "Este e-mail não está cadastrado no S.A.S.P.I. Verifique o endereço digitado ou solicite o cadastro ao administrador da clínica."
+          "Este e-mail não está cadastrado no S.A.S.P.I. Verifique o endereço digitado ou solicite o cadastro ao administrador da clínica.",
         );
         setEnviando(false);
         return;
@@ -121,7 +121,7 @@ export default function RecuperarSenhaPage() {
     } catch (err: any) {
       setErro(
         err?.message ||
-          "Não foi possível enviar o link de redefinição de senha no momento."
+          "Não foi possível enviar o link de redefinição de senha no momento.",
       );
       setCooldown(30);
     } finally {
@@ -142,8 +142,14 @@ export default function RecuperarSenhaPage() {
         </button>
 
         <div className="mt-6 flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#1565C0] text-white">
-            <HeartPulse size={22} />
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-gray-100 bg-white p-2.5 shadow-xs">
+            <Image
+              src="/logosemtexto.png"
+              alt="S.A.S.P.I."
+              width={36}
+              height={36}
+              className="h-full w-full object-contain"
+            />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-[#0A2540]">

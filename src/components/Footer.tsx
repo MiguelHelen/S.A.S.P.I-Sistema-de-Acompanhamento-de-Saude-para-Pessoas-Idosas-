@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { HeartPulse, ShieldCheck } from "lucide-react";
+import Image from "next/image";
+import { ShieldCheck } from "lucide-react";
 
 export default function Footer() {
   const anoAtual = new Date().getFullYear();
@@ -10,8 +11,14 @@ export default function Footer() {
         <div className="grid gap-10 md:grid-cols-4">
           <div className="md:col-span-2">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1565C0] text-white">
-                <HeartPulse size={22} />
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-gray-100 bg-white p-1.5 shadow-xs">
+                <Image
+                  src="/logosemtexto.png"
+                  alt="S.A.S.P.I."
+                  width={32}
+                  height={32}
+                  className="h-full w-full object-contain"
+                />
               </div>
               <div>
                 <span className="block text-lg font-bold text-[#0A2540]">
@@ -26,8 +33,7 @@ export default function Footer() {
             <p className="mt-4 max-w-md text-sm leading-relaxed text-gray-600">
               Plataforma institucional dedicada ao monitoramento contínuo de
               sinais vitais, controle de prescrições medicamentosas, agenda de
-              consultas e integração segura entre equipes clínicas e
-              familiares.
+              consultas e integração segura entre equipes clínicas e familiares.
             </p>
 
             <div className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#E8F1FB] px-3.5 py-2 text-xs font-medium text-[#1565C0]">

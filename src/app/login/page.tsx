@@ -5,7 +5,6 @@ import Link from "next/link";
 import Image from "next/image";
 import {
   ArrowLeft,
-  HeartPulse,
   KeyRound,
   Mail,
   Loader2,
@@ -14,11 +13,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import {
-  API_URL,
-  limparSessao,
-  resolverESalvarSessao,
-} from "@/lib/clinica";
+import { API_URL, limparSessao, resolverESalvarSessao } from "@/lib/clinica";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -59,9 +54,7 @@ export default function Login() {
         const msg = Array.isArray(data?.message)
           ? data.message.join(", ")
           : data?.message;
-        throw new Error(
-          msg || "E-mail ou senha inválidos. Tente novamente."
-        );
+        throw new Error(msg || "E-mail ou senha inválidos. Tente novamente.");
       }
 
       await salvarSessaoERedirecionar(data, emailLower);
@@ -111,7 +104,7 @@ export default function Login() {
     if (sessao.perfil === "IDOSO") {
       limparSessao();
       throw new Error(
-        "Esta conta é exclusiva para o Aplicativo Mobile S.A.S.P.I."
+        "Esta conta é exclusiva para o Aplicativo Mobile S.A.S.P.I.",
       );
     }
 
@@ -168,8 +161,14 @@ export default function Login() {
               </div>
             </div>
             <div className="flex items-center gap-3 text-sm text-blue-100">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10">
-                <HeartPulse size={20} />
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white p-1.5">
+                <Image
+                  src="/logosemtexto.png"
+                  alt="S.A.S.P.I."
+                  width={28}
+                  height={28}
+                  className="h-full w-full object-contain"
+                />
               </div>
               <p>O acesso unificado protege as informações clínicas.</p>
             </div>
