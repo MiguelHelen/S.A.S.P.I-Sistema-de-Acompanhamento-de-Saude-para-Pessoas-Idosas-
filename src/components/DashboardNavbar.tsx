@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { io, Socket } from "socket.io-client";
 import { gerarAlertasClinicos } from "@/components/MetricCard";
 import {
@@ -79,7 +79,6 @@ function formatarPapelVinculo(tipo?: string): string {
 
 export default function DashboardNavbar() {
   const pathname = usePathname();
-  const router = useRouter();
   const [dropdownAberto, setDropdownAberto] = useState(false);
   const [notificacoesAbertas, setNotificacoesAbertas] = useState(false);
   const [menuMobileAberto, setMenuMobileAberto] = useState(false);
@@ -355,7 +354,7 @@ export default function DashboardNavbar() {
     function handleStorageEntreAbas(event: StorageEvent) {
       if (event.key === "saspi_token" && !event.newValue) {
         setUsuario(null);
-        router.push("/login");
+        window.location.href = "/login";
         return;
       }
 
@@ -407,7 +406,7 @@ export default function DashboardNavbar() {
       window.removeEventListener("storage", handleStorageEntreAbas);
       document.removeEventListener("mousedown", handleClickFora);
     };
-  }, [carregarUsuario, carregarNotificacoes, router]);
+  }, [carregarUsuario, carregarNotificacoes]);
 
   useEffect(() => {
     const token = getTokenSessao();
@@ -467,8 +466,7 @@ export default function DashboardNavbar() {
     document.cookie = "saspi_user=; path=/; max-age=0; SameSite=Lax";
 
     limparSessao();
-    router.replace("/login");
-    router.refresh();
+    window.location.href = "/login";
   }
 
   function marcarComoLida(id: string, event: React.MouseEvent) {
@@ -517,6 +515,7 @@ export default function DashboardNavbar() {
         <div className="flex items-center gap-3.5">
           <Link
             href="/dashboard"
+            prefetch={false}
             className="group flex items-center rounded-xl transition-transform duration-200 hover:scale-[1.02]"
           >
             <Image
@@ -565,6 +564,7 @@ export default function DashboardNavbar() {
               <Link
                 key={link.href}
                 href={link.href}
+                prefetch={false}
                 className={`group relative flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition-all duration-200 ${
                   ativo
                     ? "bg-[#E8F1FB]/85 font-semibold text-[#1565C0]"
@@ -647,6 +647,7 @@ export default function DashboardNavbar() {
                       <div key={n.id} className="group relative">
                         <Link
                           href={n.href}
+                          prefetch={false}
                           onClick={() => {
                             setNotificacoesAbertas(false);
                             if (!notificacoesLidas.includes(n.id)) {
@@ -775,6 +776,7 @@ export default function DashboardNavbar() {
                 <div className="py-1">
                   <Link
                     href="/dashboard/perfil"
+                    prefetch={false}
                     onClick={() => setDropdownAberto(false)}
                     className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-gray-700 transition hover:bg-[#F2F7FB] hover:text-[#1565C0]"
                   >
@@ -786,6 +788,7 @@ export default function DashboardNavbar() {
                     <>
                       <Link
                         href="/dashboard/usuarios"
+                        prefetch={false}
                         onClick={() => setDropdownAberto(false)}
                         className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-gray-700 transition hover:bg-[#F2F7FB] hover:text-[#1565C0]"
                       >
@@ -795,6 +798,7 @@ export default function DashboardNavbar() {
 
                       <Link
                         href="/dashboard/idosos"
+                        prefetch={false}
                         onClick={() => setDropdownAberto(false)}
                         className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-gray-700 transition hover:bg-[#F2F7FB] hover:text-[#1565C0]"
                       >
@@ -804,6 +808,7 @@ export default function DashboardNavbar() {
 
                       <Link
                         href="/dashboard/vinculos"
+                        prefetch={false}
                         onClick={() => setDropdownAberto(false)}
                         className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-gray-700 transition hover:bg-[#F2F7FB] hover:text-[#1565C0]"
                       >
@@ -813,6 +818,7 @@ export default function DashboardNavbar() {
 
                       <Link
                         href="/dashboard/clinica"
+                        prefetch={false}
                         onClick={() => setDropdownAberto(false)}
                         className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-gray-700 transition hover:bg-[#F2F7FB] hover:text-[#1565C0]"
                       >
@@ -862,6 +868,7 @@ export default function DashboardNavbar() {
                 <Link
                   key={link.href}
                   href={link.href}
+                  prefetch={false}
                   onClick={() => setMenuMobileAberto(false)}
                   className={`flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-sm font-medium transition ${
                     ativo

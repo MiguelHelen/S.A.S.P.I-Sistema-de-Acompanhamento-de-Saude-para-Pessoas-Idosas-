@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -22,8 +21,6 @@ import {
 } from "@/lib/clinica";
 
 export default function Login() {
-  const router = useRouter();
-
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [mostrarSenha, setMostrarSenha] = useState(false);
@@ -132,8 +129,11 @@ export default function Login() {
     document.cookie = `saspi_token=${encodeURIComponent(token)}; path=/; max-age=86400; SameSite=Lax${secureFlag}`;
     document.cookie = `saspi_user=${encodeURIComponent(JSON.stringify(cookieUser))}; path=/; max-age=86400; SameSite=Lax${secureFlag}`;
 
-    router.replace("/dashboard");
-    router.refresh();
+    // Navegação completa: zera o Router Cache do Next.js e envia os cookies imediatamente
+    const params = new URLSearchParams(window.location.search);
+    const destino = params.get("redirect");
+    window.location.href =
+      destino && destino.startsWith("/dashboard") ? destino : "/dashboard";
   }
 
   return (
