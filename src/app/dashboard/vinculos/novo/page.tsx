@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import DashboardNavbar from "@/components/DashboardNavbar";
@@ -35,13 +35,41 @@ interface IdosoOption {
   cpf?: string | null;
 }
 
-function mapearPerfilParaTipoVinculo(perfil?: string): string {
+interface VinculoExistente {
+  id?: string;
+  usuario_id?: string;
+  idoso_id?: string;
+  usuario?: { id?: string };
+  idoso?: { id?: string };
+}
+
+function obterTipoVinculoAutomatico(perfil?: string): {
+  valor: string;
+  descricao: string;
+} {
   const p = normalizarPerfil(perfil);
-  if (p === "MEDICO") return "MEDICO_RESPONSAVEL";
-  if (p === "ENFERMEIRO") return "ENFERMEIRO";
-  if (p === "CUIDADOR") return "CUIDADOR";
-  if (p === "FAMILIAR") return "FAMILIAR";
-  return "MEDICO_RESPONSAVEL";
+  if (p === "MEDICO") {
+    return {
+      valor: "MEDICO_RESPONSAVEL",
+      descricao: "Médico Responsável (Acompanhamento Clínico)",
+    };
+  }
+  if (p === "ENFERMEIRO") {
+    return {
+      valor: "ENFERMEIRO",
+      descricao: "Enfermeiro(a) Responsável (Cuidados de Enfermagem)",
+    };
+  }
+  if (p === "CUIDADOR") {
+    return {
+      valor: "CUIDADOR",
+      descricao: "Cuidador (Assistência diária e medicação)",
+    };
+  }
+  return {
+    valor: "FAMILIAR",
+    descricao: "Familiar (Acompanhamento e notificações)",
+  };
 }
 
 export default function NovoVinculoPage() {
@@ -50,11 +78,11 @@ export default function NovoVinculoPage() {
   const [autorizado, setAutorizado] = useState<boolean | null>(null);
   const [usuarios, setUsuarios] = useState<UsuarioOption[]>([]);
   const [idosos, setIdosos] = useState<IdosoOption[]>([]);
+  const [vinculosExistentes, setVinculosExistentes] = useState<VinculoExistente[]>([]);
   const [carregandoDados, setCarregandoDados] = useState(true);
 
   const [usuarioId, setUsuarioId] = useState<string>("");
   const [idosoId, setIdosoId] = useState<string>("");
-  const [tipoVinculo, setTipoVinculo] = useState<string>("MEDICO_RESPONSAVEL");
 
   const [salvando, setSalvando] = useState(false);
   const [sucesso, setSucesso] = useState(false);
@@ -76,13 +104,19 @@ export default function NovoVinculoPage() {
       const clinicaId = validarEObterClinicaId(sessao);
       const headers = getAuthHeaders(false);
 
-      const [resUsuarios, resIdosos] = await Promise.all([
+      const [resUsuarios, resIdosos, resVinculos] = await Promise.all([
         fetch(`${API_URL}/usuario?clinica_id=${clinicaId}`, { headers }),
         fetch(`${API_URL}/idoso?clinica_id=${clinicaId}`, { headers }),
+        fetch(`${API_URL}/usuario-idoso?clinica_id=${clinicaId}`, { headers }).catch(
+          () => null
+        ),
       ]);
 
       const dataUsuarios = await resUsuarios.json().catch(() => []);
       const dataIdosos = await resIdosos.json().catch(() => []);
+      const dataVinculos = resVinculos?.ok
+        ? await resVinculos.json().catch(() => [])
+        : [];
 
       if (!resUsuarios.ok || !resIdosos.ok) {
         setErro("Não foi possível carregar a lista de usuários e pacientes.");
@@ -102,16 +136,16 @@ export default function NovoVinculoPage() {
         ? dataIdosos
         : dataIdosos?.data || [];
 
+      const listaVinculos: VinculoExistente[] = Array.isArray(dataVinculos)
+        ? dataVinculos
+        : dataVinculos?.data || [];
+
       setUsuarios(elegiveis);
       setIdosos(listaIdosos);
+      setVinculosExistentes(listaVinculos);
 
       if (elegiveis.length > 0) {
         setUsuarioId(elegiveis[0].id);
-        setTipoVinculo(mapearPerfilParaTipoVinculo(elegiveis[0].perfil));
-      }
-
-      if (listaIdosos.length > 0) {
-        setIdosoId(listaIdosos[0].id);
       }
     } catch (err: any) {
       setErro(err?.message || "Erro de conexão ao carregar dados para vínculo.");
@@ -124,21 +158,51 @@ export default function NovoVinculoPage() {
     carregarListas();
   }, [carregarListas]);
 
-  function handleUsuarioChange(novoUsuarioId: string) {
-    setUsuarioId(novoUsuarioId);
-    const selecionado = usuarios.find((u) => u.id === novoUsuarioId);
-    if (selecionado) {
-      setTipoVinculo(mapearPerfilParaTipoVinculo(selecionado.perfil));
+  const usuarioSelecionado = useMemo(
+    () => usuarios.find((u) => u.id === usuarioId) || null,
+    [usuarios, usuarioId]
+  );
+
+  const tipoVinculoAuto = useMemo(
+    () => obterTipoVinculoAutomatico(usuarioSelecionado?.perfil),
+    [usuarioSelecionado]
+  );
+
+  // Filtra apenas idosos que ainda NÃO estão vinculados ao usuário selecionado
+  const idososDisponiveis = useMemo(() => {
+    if (!usuarioId) return idosos;
+
+    const idsJaVinculados = new Set(
+      vinculosExistentes
+        .filter(
+          (v) => String(v.usuario_id || v.usuario?.id || "") === String(usuarioId)
+        )
+        .map((v) => String(v.idoso_id || v.idoso?.id || ""))
+        .filter(Boolean)
+    );
+
+    return idosos.filter((idoso) => !idsJaVinculados.has(String(idoso.id)));
+  }, [idosos, vinculosExistentes, usuarioId]);
+
+  // Mantém o idoso selecionado sincronizado com a lista filtrada
+  useEffect(() => {
+    if (idososDisponiveis.length === 0) {
+      setIdosoId("");
+      return;
     }
-  }
+    const aindaDisponivel = idososDisponiveis.some((i) => i.id === idosoId);
+    if (!aindaDisponivel) {
+      setIdosoId(idososDisponiveis[0].id);
+    }
+  }, [idososDisponiveis, idosoId]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErro(null);
     setSucesso(false);
 
-    if (!usuarioId || !idosoId || !tipoVinculo) {
-      setErro("Selecione o profissional/cuidador/familiar, o paciente e o tipo de vínculo.");
+    if (!usuarioId || !idosoId) {
+      setErro("Selecione um usuário e um paciente disponível para vincular.");
       return;
     }
 
@@ -151,7 +215,7 @@ export default function NovoVinculoPage() {
         body: JSON.stringify({
           usuario_id: usuarioId,
           idoso_id: idosoId,
-          tipo_vinculo: tipoVinculo,
+          tipo_vinculo: tipoVinculoAuto.valor,
         }),
       });
 
@@ -272,7 +336,10 @@ export default function NovoVinculoPage() {
                   <select
                     id="usuario"
                     value={usuarioId}
-                    onChange={(e) => handleUsuarioChange(e.target.value)}
+                    onChange={(e) => {
+                      setErro(null);
+                      setUsuarioId(e.target.value);
+                    }}
                     disabled={usuarios.length === 0}
                     className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10 disabled:bg-gray-100"
                   >
@@ -300,14 +367,21 @@ export default function NovoVinculoPage() {
                   <select
                     id="idoso"
                     value={idosoId}
-                    onChange={(e) => setIdosoId(e.target.value)}
-                    disabled={idosos.length === 0}
+                    onChange={(e) => {
+                      setErro(null);
+                      setIdosoId(e.target.value);
+                    }}
+                    disabled={idososDisponiveis.length === 0}
                     className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10 disabled:bg-gray-100"
                   >
                     {idosos.length === 0 ? (
                       <option value="">Nenhum paciente cadastrado</option>
+                    ) : idososDisponiveis.length === 0 ? (
+                      <option value="">
+                        Todos os pacientes já estão vinculados a este usuário
+                      </option>
                     ) : (
-                      idosos.map((i) => (
+                      idososDisponiveis.map((i) => (
                         <option key={i.id} value={i.id}>
                           {i.nome}
                         </option>
@@ -317,31 +391,14 @@ export default function NovoVinculoPage() {
                 </div>
 
                 <div>
-                  <label
-                    htmlFor="tipo_vinculo"
-                    className="mb-2 block text-sm font-medium text-[#0A2540]"
-                  >
-                    Papel / Tipo de Vínculo *
+                  <label className="mb-2 block text-sm font-medium text-[#0A2540]">
+                    Papel / Tipo de Vínculo (Automático)
                   </label>
-                  <select
-                    id="tipo_vinculo"
-                    value={tipoVinculo}
-                    onChange={(e) => setTipoVinculo(e.target.value)}
-                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-[#1565C0] focus:ring-4 focus:ring-[#1565C0]/10"
-                  >
-                    <option value="MEDICO_RESPONSAVEL">
-                      Médico Responsável (Acompanhamento Clínico)
-                    </option>
-                    <option value="ENFERMEIRO">
-                      Enfermeiro(a) Responsável (Cuidados de Enfermagem)
-                    </option>
-                    <option value="CUIDADOR">
-                      Cuidador (Assistência diária e medicação)
-                    </option>
-                    <option value="FAMILIAR">
-                      Familiar (Acompanhamento e notificações)
-                    </option>
-                  </select>
+                  <div className="flex min-h-11.5 items-center rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700">
+                    {usuarioSelecionado
+                      ? tipoVinculoAuto.descricao
+                      : "Selecione um usuário"}
+                  </div>
                 </div>
               </div>
             )}
@@ -361,7 +418,7 @@ export default function NovoVinculoPage() {
                 salvando ||
                 carregandoDados ||
                 usuarios.length === 0 ||
-                idosos.length === 0
+                idososDisponiveis.length === 0
               }
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1565C0] px-6 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0A2540] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
             >
