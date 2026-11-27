@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CommonActions } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
 import { useAccessibility } from '../contexts/AccessibilityContext';
 import { apiFetch } from '../api/client';
@@ -33,12 +34,30 @@ export default function SelectElderlyScreen({ navigation }: any) {
   const [idAtivo, setIdAtivo] = useState<string | null>(null);
 
   const podeVoltar = navigation.canGoBack();
+  const jaNavegouRef = useRef(false);
+
+  const irParaMainTabs = () => {
+    if (jaNavegouRef.current) return;
+
+    const rotasDisponiveis = navigation.getState?.()?.routeNames || [];
+    if (!rotasDisponiveis.includes('MainTabs')) return;
+
+    jaNavegouRef.current = true;
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [{ name: 'MainTabs' }],
+      })
+    );
+  };
 
   useEffect(() => {
+    let ativo = true;
+
     async function fetchVinculos() {
       try {
         const stored = await AsyncStorage.getItem('saspi_active_elderly');
-        if (stored) {
+        if (stored && ativo) {
           const parsed = JSON.parse(stored);
           if (parsed?.id) setIdAtivo(parsed.id);
         }
@@ -49,12 +68,16 @@ export default function SelectElderlyScreen({ navigation }: any) {
           : null;
 
         const raw = response && response.ok ? await response.json() : [];
-        const listaValida = (Array.isArray(raw) ? raw : []).filter((v: any) => v?.idoso?.id);
+        const listaValida = (Array.isArray(raw) ? raw : []).filter(
+          (v: any) => v?.idoso?.id
+        );
+
+        if (!ativo) return;
 
         if (listaValida.length > 0) {
           if (!podeVoltar && (perfilUpper === 'IDOSO' || listaValida.length === 1)) {
             await selecionarIdoso(listaValida[0].idoso);
-            navigation.replace('MainTabs');
+            if (ativo) irParaMainTabs();
           } else {
             setVinculos(listaValida);
           }
@@ -63,14 +86,21 @@ export default function SelectElderlyScreen({ navigation }: any) {
 
         if (perfilUpper === 'IDOSO') {
           const resIdosos = await apiFetch('/idoso', {}, token);
-          if (resIdosos.ok) {
+          if (resIdosos.ok && ativo) {
             const idosos = await resIdosos.json();
-            const listaIdosos = Array.isArray(idosos) ? idosos : idosos?.data || [];
+            const listaIdosos = Array.isArray(idosos)
+              ? idosos
+              : idosos?.data || [];
             const proprio = listaIdosos.find(
               (i: any) =>
-                (usuario?.id && (i.usuario_id === usuario.id || i.usuario?.id === usuario.id)) ||
-                (usuario?.email && i.email?.toLowerCase() === usuario.email.toLowerCase()) ||
-                (usuario?.nome && i.nome?.trim().toLowerCase() === usuario.nome.trim().toLowerCase())
+                (usuario?.id &&
+                  (i.usuario_id === usuario.id ||
+                    i.usuario?.id === usuario.id)) ||
+                (usuario?.email &&
+                  i.email?.toLowerCase() === usuario.email.toLowerCase()) ||
+                (usuario?.nome &&
+                  i.nome?.trim().toLowerCase() ===
+                    usuario.nome.trim().toLowerCase())
             );
             if (proprio?.id) {
               await selecionarIdoso(proprio);
@@ -78,18 +108,23 @@ export default function SelectElderlyScreen({ navigation }: any) {
           }
         }
 
-        if (!podeVoltar) {
-          navigation.replace('MainTabs');
+        if (!podeVoltar && ativo) {
+          irParaMainTabs();
         }
       } catch (error) {
         console.error('Erro ao buscar vínculos:', error);
-        if (!podeVoltar) navigation.replace('MainTabs');
+        if (!podeVoltar && ativo) irParaMainTabs();
       } finally {
-        setLoading(false);
+        if (ativo) setLoading(false);
       }
     }
+
     fetchVinculos();
-  }, [usuario, token, navigation, podeVoltar]);
+
+    return () => {
+      ativo = false;
+    };
+  }, [usuario?.id, usuario?.perfil, token]);
 
   const handleSelectElderly = async (idoso: any) => {
     if (!idoso?.id) return;
@@ -98,7 +133,7 @@ export default function SelectElderlyScreen({ navigation }: any) {
     if (podeVoltar) {
       navigation.goBack();
     } else {
-      navigation.replace('MainTabs');
+      irParaMainTabs();
     }
   };
 
@@ -123,10 +158,17 @@ export default function SelectElderlyScreen({ navigation }: any) {
             {podeVoltar ? '← Voltar' : '← Sair'}
           </Text>
         </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.textPrimary, fontSize: fs(26) }]}>
+        <Text
+          style={[styles.title, { color: colors.textPrimary, fontSize: fs(26) }]}
+        >
           Selecionar idoso
         </Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary, fontSize: fs(14) }]}>
+        <Text
+          style={[
+            styles.subtitle,
+            { color: colors.textSecondary, fontSize: fs(14) },
+          ]}
+        >
           Escolha o paciente que deseja acompanhar.
         </Text>
       </View>
@@ -134,7 +176,11 @@ export default function SelectElderlyScreen({ navigation }: any) {
       <FlatList
         data={vinculos}
         keyExtractor={(item, idx) => item?.id || item?.idoso?.id || String(idx)}
-        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 30 }}
+        contentContainerStyle={{
+          paddingHorizontal: 24,
+          paddingTop: 20,
+          paddingBottom: 30,
+        }}
         renderItem={({ item }) => {
           const idoso = item?.idoso;
           if (!idoso?.id) return null;
@@ -146,51 +192,89 @@ export default function SelectElderlyScreen({ navigation }: any) {
             .join('')
             .toUpperCase();
           const idade = calcularIdade(idoso.data_nascimento);
-          const subInfo = [idade, idoso.sexo].filter(Boolean).join(' • ') || 'Visualizar prontuário e rotina';
+          const subInfo =
+            [idade, idoso.sexo].filter(Boolean).join(' • ') ||
+            'Visualizar prontuário e rotina';
 
           return (
             <TouchableOpacity
               style={[
                 styles.card,
                 { backgroundColor: colors.card, borderColor: colors.border },
-                isSelected && (highContrast ? { borderColor: '#38BDF8', borderWidth: 2 } : styles.cardSelected),
+                isSelected &&
+                  (highContrast
+                    ? { borderColor: '#38BDF8', borderWidth: 2 }
+                    : styles.cardSelected),
               ]}
               onPress={() => handleSelectElderly(idoso)}
             >
               {idoso.foto_url ? (
                 <Image
                   source={{ uri: idoso.foto_url }}
-                  style={[styles.avatarImg, isSelected && styles.avatarImgSelected]}
+                  style={[
+                    styles.avatarImg,
+                    isSelected && styles.avatarImgSelected,
+                  ]}
                 />
               ) : (
-                <View style={[styles.avatarBox, isSelected && styles.avatarBoxSelected]}>
-                  <Text style={[styles.avatarText, isSelected && styles.avatarTextSelected]}>
+                <View
+                  style={[
+                    styles.avatarBox,
+                    isSelected && styles.avatarBoxSelected,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.avatarText,
+                      isSelected && styles.avatarTextSelected,
+                    ]}
+                  >
                     {iniciais}
                   </Text>
                 </View>
               )}
 
               <View style={styles.cardInfo}>
-                <Text style={[styles.cardName, { color: colors.textPrimary, fontSize: fs(17) }]}>
+                <Text
+                  style={[
+                    styles.cardName,
+                    { color: colors.textPrimary, fontSize: fs(17) },
+                  ]}
+                >
                   {idoso.nome || 'Paciente'}
                 </Text>
-                <Text style={[styles.cardDetail, { color: colors.textSecondary, fontSize: fs(13) }]}>
+                <Text
+                  style={[
+                    styles.cardDetail,
+                    { color: colors.textSecondary, fontSize: fs(13) },
+                  ]}
+                >
                   {subInfo}
                 </Text>
                 {isSelected && (
                   <View style={styles.badgeSelected}>
                     <CheckCircle2 size={12} color="#0F766E" />
-                    <Text style={styles.badgeTextSelected}>Em acompanhamento</Text>
+                    <Text style={styles.badgeTextSelected}>
+                      Em acompanhamento
+                    </Text>
                   </View>
                 )}
               </View>
-              <ChevronRight color={isSelected ? '#159B87' : '#A0AEC0'} size={22} />
+              <ChevronRight
+                color={isSelected ? '#159B87' : '#A0AEC0'}
+                size={22}
+              />
             </TouchableOpacity>
           );
         }}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyText, { color: colors.textSecondary, fontSize: fs(14) }]}>
+            <Text
+              style={[
+                styles.emptyText,
+                { color: colors.textSecondary, fontSize: fs(14) },
+              ]}
+            >
               Nenhum paciente associado à sua conta.
             </Text>
           </View>
