@@ -45,3 +45,5 @@ saspi-mobile.txt
 *.txtrepomix-output.json 
 .env
 .vscode/
+.env
+.vscode/
