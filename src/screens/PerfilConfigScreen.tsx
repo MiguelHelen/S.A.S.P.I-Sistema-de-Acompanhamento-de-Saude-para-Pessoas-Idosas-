@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -29,11 +29,39 @@ import { useAccessibility } from '../contexts/AccessibilityContext';
 import { uploadFotoPerfilUsuario } from '../api/storage';
 
 export default function PerfilConfigScreen({ navigation }: any) {
-  const { usuario, token, logout } = useAuth();
+  const { usuario, token, logout, recarregarUsuario } = useAuth();
   const { fontScale, highContrast } = useAccessibility();
 
-  const [fotoUrl, setFotoUrl] = useState<string | null>((usuario as any)?.foto_url || null);
+  const [fotoUrl, setFotoUrl] = useState<string | null>(usuario?.foto_url || null);
+  const [cacheBust, setCacheBust] = useState<number>(() => Date.now());
   const [enviandoFoto, setEnviandoFoto] = useState(false);
+
+  useEffect(() => {
+    setFotoUrl(usuario?.foto_url || null);
+  }, [usuario?.foto_url]);
+
+  useEffect(() => {
+    let ativo = true;
+
+    async function sincronizarPerfil() {
+      const atualizado = await recarregarUsuario();
+      if (ativo && atualizado) {
+        setFotoUrl(atualizado.foto_url || null);
+        setCacheBust(Date.now());
+      }
+    }
+
+    sincronizarPerfil();
+
+    const unsubscribe = navigation?.addListener?.('focus', () => {
+      sincronizarPerfil();
+    });
+
+    return () => {
+      ativo = false;
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, [navigation, recarregarUsuario]);
 
   const perfil = (usuario?.perfil || 'FAMILIAR').toUpperCase();
   const isIdoso = perfil === 'IDOSO';
@@ -73,8 +101,10 @@ export default function PerfilConfigScreen({ navigation }: any) {
       }
 
       setFotoUrl(res.url);
+      setCacheBust(Date.now());
       const atualizado = { ...usuario, foto_url: res.url };
       await AsyncStorage.setItem('saspi_user', JSON.stringify(atualizado));
+      await recarregarUsuario();
       Alert.alert('Sucesso', 'Foto de perfil atualizada com sucesso!');
     } catch (error: any) {
       Alert.alert('Erro no envio', error?.message || 'Falha de conexão ao atualizar a foto.');
@@ -105,6 +135,10 @@ export default function PerfilConfigScreen({ navigation }: any) {
       ? 'Familiar Responsável'
       : perfil;
 
+  const fotoUriComCache = fotoUrl
+    ? `${fotoUrl}${fotoUrl.includes('?') ? '&' : '?'}t=${cacheBust}`
+    : null;
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: bgMain }]}
@@ -122,8 +156,8 @@ export default function PerfilConfigScreen({ navigation }: any) {
           accessibilityRole="button"
           accessibilityLabel="Alterar foto de perfil"
         >
-          {fotoUrl ? (
-            <Image source={{ uri: fotoUrl }} style={styles.avatarImage} />
+          {fotoUriComCache ? (
+            <Image source={{ uri: fotoUriComCache }} style={styles.avatarImage} />
           ) : (
             <View style={styles.avatarCircle}>
               <User size={40} color="#159B87" />

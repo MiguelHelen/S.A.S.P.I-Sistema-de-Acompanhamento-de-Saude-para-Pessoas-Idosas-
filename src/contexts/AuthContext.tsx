@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext, useRef } from "react";
+import React, { createContext, useState, useEffect, useContext, useRef, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import { DeviceEventEmitter, Alert } from "react-native";
@@ -33,6 +33,7 @@ interface AuthContextData {
     provider: "GOOGLE" | "MICROSOFT"
   ) => Promise<{ ok: boolean; message?: string }>;
   selecionarIdoso: (idoso: IdosoAtivo) => Promise<void>;
+  recarregarUsuario: () => Promise<Usuario | null>;
   logout: () => Promise<void>;
 }
 
@@ -117,6 +118,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     DeviceEventEmitter.emit("saspi_elderly_changed");
   }
 
+  const recarregarUsuario = useCallback(async (): Promise<Usuario | null> => {
+    if (!token || !usuario) return usuario;
+
+    try {
+      let dadosBanco: any = null;
+
+      if (usuario.id) {
+        const resById = await fetch(`${API_URL}/usuario/${usuario.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (resById.ok) {
+          const found = await resById.json();
+          if (found?.id) dadosBanco = found;
+        }
+      }
+
+      if (!dadosBanco && usuario.email) {
+        const resByEmail = await fetch(
+          `${API_URL}/usuario?email=${encodeURIComponent(usuario.email)}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        if (resByEmail.ok) {
+          const list = await resByEmail.json();
+          const encontrado = Array.isArray(list)
+            ? list.find((u: any) => u.email?.toLowerCase() === usuario.email.toLowerCase())
+            : list;
+          if (encontrado) dadosBanco = encontrado;
+        }
+      }
+
+      if (dadosBanco) {
+        const atualizado: Usuario = {
+          ...usuario,
+          id: dadosBanco.id || usuario.id,
+          nome: dadosBanco.nome || usuario.nome,
+          email: dadosBanco.email || usuario.email,
+          perfil: String(dadosBanco.perfil || usuario.perfil).toUpperCase(),
+          clinica_id: dadosBanco.clinica_id || usuario.clinica_id,
+          nomeClinica: dadosBanco.clinica?.nome || usuario.nomeClinica,
+          foto_url: dadosBanco.foto_url ?? null,
+        };
+
+        setUsuario(atualizado);
+        await AsyncStorage.setItem("saspi_user", JSON.stringify(atualizado));
+        return atualizado;
+      }
+    } catch {}
+
+    return usuario;
+  }, [token, usuario]);
+
   async function login(email: string, senha: string) {
     try {
       const emailLower = email.trim().toLowerCase();
@@ -163,7 +217,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const userId = userData.id || jwtPayload?.sub || jwtPayload?.id || "";
 
-    if (accessToken && userId && (!userData.nome || !userData.perfil)) {
+    if (accessToken && userId && (!userData.nome || !userData.perfil || userData.foto_url === undefined)) {
       try {
         const resById = await fetch(`${API_URL}/usuario/${userId}`, {
           headers: { Authorization: `Bearer ${accessToken}` },
@@ -175,7 +229,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch {}
     }
 
-    if (accessToken && (!userData.nome || !userData.perfil) && emailBuscado) {
+    if (accessToken && (!userData.nome || !userData.perfil || userData.foto_url === undefined) && emailBuscado) {
       try {
         const userRes = await fetch(
           `${API_URL}/usuario?email=${encodeURIComponent(emailBuscado)}`,
@@ -261,6 +315,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         loginSSO,
         selecionarIdoso,
+        recarregarUsuario,
         logout,
       }}
     >
